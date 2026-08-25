@@ -1,0 +1,522 @@
+/* =========================================================================
+   motion.css — reusable motion-graphic toolkit
+   ---------------------------------------------------------------------------
+   Presentational, reusable pieces for every motion graphic: the 16:9 stage,
+   scenes, responsive type, diagram nodes, flow dots, and the control HUD.
+   Everything is themed off brand.css, so it automatically inherits the
+   website palette. Include it AFTER brand.css.
+
+   Usage:
+     <link rel="stylesheet" href="../css/brand.css">
+     <link rel="stylesheet" href="../css/motion.css">
+
+   Override freely: anything here can be re-declared (with higher specificity
+   or a more specific selector) in a graphic-specific stylesheet.
+   ========================================================================= */
+
+/* ---------- Reset & base ---------- */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow: hidden;
+}
+
+/* ---------- Stage (16:9 canvas) ---------- */
+#stage {
+    position: relative;
+    width: 100vw;
+    height: 56.25vw;
+    /* 16:9 */
+    max-height: 100vh;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    background: var(--grad-canvas);
+}
+
+/* ---------- Scenes ---------- */
+.scene {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    visibility: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 6% 8%;
+    text-align: center;
+    gap: 2.4%;
+    transition: opacity .5s ease;
+}
+
+.scene.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* ---------- Responsive typography ---------- */
+h1 {
+    font-size: 6.2vh;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+}
+
+h2 {
+    font-size: 4.4vh;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+}
+
+p {
+    font-size: 2.7vh;
+    line-height: 1.45;
+    color: var(--muted);
+    max-width: 80%;
+}
+
+.mono {
+    font-family: var(--font-mono);
+}
+
+/* Brand headline — green gradient, like the site hero (works on h1 or div) */
+.big {
+    font-size: 7vh;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    background: var(--grad-accent);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+/* ---------- Labels & pills ---------- */
+.label {
+    font-size: 1.9vh;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    padding: .35em .7em;
+    border-radius: var(--radius-pill);
+    display: inline-flex;
+    align-items: center;
+    gap: .5em;
+}
+
+.pill {
+    background: rgba(62, 207, 142, .12);
+    color: var(--accent);
+    border: 1px solid rgba(62, 207, 142, .35);
+}
+
+/* ---------- Diagram ---------- */
+.diagram {
+    position: relative;
+    width: 78%;
+    height: 52%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.row .diagram {
+    height: 100%;
+}
+
+/* Node = one box in a diagram. Base is neutral; tint via the modifier below. */
+.node {
+    position: relative;
+    border-radius: 14px;
+    padding: 3.2vh 3.4vh;
+    font-weight: 700;
+    font-size: 2.6vh;
+    display: flex;
+    align-items: center;
+    gap: 1.2vh;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border-strong);
+    white-space: nowrap;
+    color: var(--accent-on);
+    background: var(--grad-accent);
+}
+
+.node .dot {
+    width: 2.4vh;
+    height: 2.4vh;
+    border-radius: 50%;
+    flex: 0 0 auto;
+    background: currentColor;
+}
+
+/* Node tints — keep text on the node legible on each fill. */
+.node.tint-green {
+    background: var(--grad-accent);
+    color: var(--accent-on);
+}
+
+.node.tint-neural {
+    background: var(--surface);
+    border-color: var(--border-strong);
+    color: var(--text);
+}
+
+.node.tint-mute {
+    background: linear-gradient(135deg, #474747, #2a2a2a);
+    color: #f2f2f2;
+}
+
+.node.tint-fail {
+    background: linear-gradient(135deg, #f47272, #ef4444);
+    color: #2a0606;
+}
+
+/* Node states */
+.node.is-down {
+    opacity: .55;
+}
+
+.node.is-ok {
+    animation: pulseOk 2.2s infinite;
+}
+
+.node.is-fail {
+    animation: pulseFail 1.4s infinite;
+}
+
+@keyframes pulseOk {
+
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(62, 207, 142, .5);
+    }
+
+    50% {
+        box-shadow: 0 0 0 1.2vh rgba(62, 207, 142, .9);
+    }
+}
+
+@keyframes pulseFail {
+
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, .45);
+    }
+
+    50% {
+        box-shadow: 0 0 0 1.2vh rgba(239, 68, 68, .85);
+    }
+}
+
+/* Small status badge inside a node */
+.badge {
+    font-size: 1.6vh;
+    font-weight: 700;
+    padding: .15em .55em;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, .28);
+}
+
+.badge.badge-ok {
+    background: rgba(62, 207, 142, .35);
+    color: #eafff5;
+}
+
+.badge.badge-fail {
+    background: rgba(239, 68, 68, .35);
+    color: #ffe7e7;
+}
+
+/* ---------- Flow dots (traveling request markers) ---------- */
+.req {
+    position: absolute;
+    width: 3vh;
+    height: 3vh;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 10px rgba(62, 207, 142, .9);
+    opacity: 0;
+    transform: translate(-50%, -50%);
+}
+
+.req::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 150%;
+    border: 5px solid transparent;
+    border-top-color: var(--accent);
+}
+
+.req.fail {
+    background: var(--fail);
+    box-shadow: 0 0 10px rgba(239, 68, 68, .9);
+}
+
+.req.fail::after {
+    border-top-color: var(--fail);
+}
+
+@keyframes flow {
+    0% {
+        opacity: 0;
+        left: 3%;
+    }
+
+    6% {
+        opacity: 1;
+    }
+
+    90% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+        left: 97%;
+    }
+}
+
+/* ---------- Decorative ---------- */
+.spark {
+    display: flex;
+    gap: 1vh;
+    margin-top: .4vh;
+}
+
+.spark i {
+    width: 3vh;
+    height: 3vh;
+    border-radius: 50%;
+    background: var(--grad-accent);
+    animation: bob 1.3s ease-in-out infinite;
+}
+
+.spark i:nth-child(2) {
+    animation-delay: .15s
+}
+
+.spark i:nth-child(3) {
+    animation-delay: .3s
+}
+
+.spark i:nth-child(4) {
+    animation-delay: .45s
+}
+
+@keyframes bob {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-2vh);
+    }
+}
+
+/* Meter / progress bar */
+.meter {
+    width: 46%;
+}
+
+.meter .track {
+    height: 2.6vh;
+    background: rgba(255, 255, 255, .1);
+    border-radius: var(--radius-pill);
+    overflow: hidden;
+}
+
+.meter .fill {
+    height: 100%;
+    width: 0;
+    border-radius: var(--radius-pill);
+    background: var(--grad-accent);
+    transition: width 1s ease;
+}
+
+.meter .fill.danger {
+    background: linear-gradient(90deg, #ef4444, #b91c1c);
+}
+
+.meter .cap {
+    font-size: 2.2vh;
+    margin-top: .4vh;
+    color: var(--muted);
+}
+
+/* Big counter / stat */
+.counter {
+    font-size: 4vh;
+    font-weight: 800;
+    color: var(--accent);
+}
+
+.counter .small {
+    font-size: 2.2vh;
+    color: var(--muted);
+    font-weight: 600;
+}
+
+/* Caption */
+.caption {
+    font-size: 2.5vh;
+    color: var(--text);
+    font-weight: 600;
+    max-width: 74%;
+}
+
+.caption b {
+    color: var(--accent);
+}
+
+/* ---------- Entrance animation ---------- */
+.fade-up {
+    opacity: 0;
+    transform: translateY(1.4vh);
+    animation: fadeUp .7s forwards;
+}
+
+.fade-up:nth-child(2) {
+    animation-delay: .15s;
+}
+
+.fade-up:nth-child(3) {
+    animation-delay: .3s;
+}
+
+.fade-up:nth-child(4) {
+    animation-delay: .45s;
+}
+
+@keyframes fadeUp {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ---------- Control HUD ---------- */
+#hud {
+    position: fixed;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(9, 9, 9, .75);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-pill);
+    padding: 8px 16px;
+    z-index: 50;
+}
+
+#hud button {
+    background: var(--grad-accent);
+    border: 0;
+    color: var(--accent-on);
+    padding: 8px 16px;
+    border-radius: var(--radius-pill);
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+#hud button:hover {
+    filter: brightness(1.1);
+}
+
+#hud button.ghost {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+}
+
+#hud .scene-name {
+    font-size: 13px;
+    color: var(--muted);
+    min-width: 140px;
+    text-align: center;
+}
+
+#progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 4px;
+    background: var(--grad-accent);
+    width: 0;
+    z-index: 60;
+    transition: width .3s ease;
+}
+
+/* ---------- Responsive (small screens) ---------- */
+@media (max-width: 800px) {
+    #stage {
+        width: 100vw;
+        height: 56.25vw;
+    }
+
+    h1 {
+        font-size: 9vw;
+    }
+
+    .big {
+        font-size: 10vw;
+    }
+
+    h2 {
+        font-size: 6.5vw;
+    }
+
+    p {
+        font-size: 4vw;
+    }
+
+    .node {
+        font-size: 3.8vw;
+        padding: 4.6vw 4.8vw;
+    }
+
+    .label {
+        font-size: 2.7vw;
+    }
+}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+
+    .spark i,
+    .node.is-ok,
+    .node.is-fail,
+    .req {
+        animation: none !important;
+    }
+
+    .fade-up {
+        animation: none !important;
+        opacity: 1;
+        transform: none;
+    }
+}

@@ -1,0 +1,104 @@
+/* =========================================================================
+   brand.css — shared design tokens
+   ---------------------------------------------------------------------------
+   Single source of truth for branding, lifted from the personal website
+   (personal-website-v2 -> src/app/globals.css). Every motion graphic should
+   import this file FIRST so the palette, fonts and effects always match the
+   site. Do not duplicate hex values in individual graphics — reference the
+   CSS variables defined here instead.
+   ========================================================================= */
+
+:root {
+    /* ---- Core brand colors (match the website exactly) ---- */
+    --bg: #090909;
+    /* page / canvas background              */
+    --bg-2: #111111;
+    /* raised surface (card)                 */
+    --surface: #1c1c1c;
+    /* subtle accent surface                 */
+    --secondary: #171717;
+    /* secondary blocks                      */
+
+    --text: #ededed;
+    /* primary foreground                    */
+    --muted: #8f8f8f;
+    /* secondary / muted text                */
+    --muted-soft: #aaaaaa;
+    /* softest text / captions               */
+
+    /* ---- Primary green family (the brand accent) ---- */
+    --accent: #3ecf8e;
+    /* primary / ring                        */
+    --accent-deep: #2b9f6e;
+    /* bottom of the signature gradient      */
+    --green-2: #2da36e;
+    /* chart-2                               */
+    --green-3: #1a7a4e;
+    /* chart-3                               */
+    --green-4: #4ae0a0;
+    /* chart-4 (bright)                      */
+    --green-5: #5ef0b2;
+    /* chart-5 (brightest)                   */
+    --accent-on: #090909;
+    /* text to place ON a green fill         */
+
+    /* ---- Status ---- */
+    --fail: #ef4444;
+    /* destructive / error (site destructive)*/
+    --fail-on: #ededed;
+    /* text to place ON a red fill           */
+
+    /* ---- Line / structure ---- */
+    --border: rgba(255, 255, 255, 0.06);
+    --border-strong: rgba(255, 255, 255, 0.12);
+    --input: rgba(255, 255, 255, 0.06);
+
+    /* ---- Radii (site --radius is 0.5rem) ---- */
+    --radius-sm: 0.25rem;
+    --radius: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-xl: 1rem;
+    --radius-pill: 999px;
+
+    /* ---- Shadows / glows (site .glow-green utilities) ---- */
+    --glow: 0 0 20px rgba(62, 207, 142, 0.15), 0 0 60px rgba(62, 207, 142, 0.06);
+    --glow-lg: 0 0 30px rgba(62, 207, 142, 0.20), 0 0 80px rgba(62, 207, 142, 0.08);
+    --shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+
+    /* ---- Gradients ---- */
+    --grad-accent: linear-gradient(135deg, #3ecf8e 0%, #2b9f6e 100%);
+    /* site .text-gradient-green */
+    --grad-text: linear-gradient(to bottom right, #ededed 30%, #8f8f8f);
+    /* site .text-gradient */
+    --grad-canvas: radial-gradient(120% 120% at 50% 0%, #17201b 0%, var(--bg) 55%, #050505 100%);
+
+    /* ---- Type (site uses Inter + JetBrains Mono) ---- */
+    --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+        Ubuntu, Cantarell, sans-serif;
+    --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", monospace;
+}
+
+/* Convenience helpers that mirror the site utility classes ----------------- */
+.text-gradient {
+    background: var(--grad-text);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+}
+
+.text-gradient-green {
+    background: var(--grad-accent);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+}
+
+.glow-green {
+    box-shadow: var(--glow);
+}
+
+.glow-green-lg {
+    box-shadow: var(--glow-lg);
+}
