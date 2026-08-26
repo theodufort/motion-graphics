@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>5NF — Join Dependencies</title>
+    <link rel="stylesheet" href="../css/brand.css">
+    <link rel="stylesheet" href="../css/motion.css">
+    <style>
+        body {
+            margin: 0;
+            background: var(--bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="stage"></canvas>
+    <script>
+        "use strict";
+        /* ================= 5NF — decompose until no join dependency remains =================
+           flat(supplier, product, region) → supplier_products + product_regions + supplier_regions */
+        const canvas = document.getElementById('stage'), ctx = canvas.getContext('2d');
+
+        const cv = getComputedStyle(document.documentElement);
+        const tok = n => cv.getPropertyValue(n).trim();
+        function pc(s) {
+            s = s.trim();
+            if (s[0] === '#') {
+                let h = s.slice(1); if (h.length === 3) h = h.split('').map(c => c + c).join('');
+                return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
+            }
+            const m = s.match(/[\d.]+/g).map(Number); return m.length >= 3 ? m.slice(0, 3) : [255, 255, 255]
+        }
+        const P = {
+            accent: pc(tok('--accent')), g5: pc(tok('--green-5')), fail: pc(tok('--fail')),
+            text: pc(tok('--text')), muted: pc(tok('--muted')), surf: pc(tok('--surface')), bg2: pc(tok('--bg-2'))
+        };
+        const FS = tok('--font-sans'), FM = tok('--font-mono');
+        const R = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+        const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+        const lerp = (a, b, t) => a + (b - a) * t, cl = v => v < 0 ? 0 : v > 1 ? 1 : v;
+        const eio = t => t < .5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+        const flash = (t, t0, dur) => { const x = (t - t0) / dur; return x >= 0 && x <= 1 ? 1 - Math.abs(1 - 2 * x) : 0 };
+
+        let W, H;
+        function resize() {
+            const d = devicePixelRatio || 1;
+            W = Math.min(innerWidth - 32, 1100); H = Math.round(W * 9 / 16);
+            canvas.width = W * d; canvas.height = H * d; canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+            ctx.setTransform(d, 0, 0, d, 0, 0)
+        }
+        addEventListener('resize', resize); resize();
+
+        const LOOP = 24000;
+        function fw(t, s, d, f = 1200) { const x = ((t - s) % LOOP + LOOP) % LOOP; if (x > d) return 0; return Math.min(1, x / f, (d - x) / f) }
+        const fA = t => fw(t, 23000, 11200);
+        const fC = t => fw(t, 9000, 14400);
+
+        function rr(x, y, w, h, r) {
+            ctx.beginPath(); ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + r); ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath()
+        }
+        function grid() {
+            ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,.045)'; ctx.lineWidth = 1;
+            const s = Math.max(36, W * .042);
+            for (let x = 0; x < W; x += s) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke() }
+            for (let y = 0; y < H; y += s) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke() } ctx.restore()
+        }
+        function title(main, sub) {
+            ctx.save(); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+            ctx.font = `800 ${W * .05}px ${FM}`; ctx.fillStyle = R(P.accent, .95); ctx.fillText(main, W * .045, H * .105);
+            const mw = ctx.measureText(main).width;
+            ctx.font = `700 ${W * .0165}px ${FS}`; ctx.fillStyle = R(P.muted, 1);
+            ctx.fillText(sub, W * .045 + mw + W * .018, H * .105 - W * .002); ctx.restore()
+        }
+        function badge(x, y, txt, col, fs) {
+            fs = fs || W * .0155; ctx.save();
+            ctx.font = `700 ${fs}px ${FM}`;
+            const w = ctx.measureText(txt).width + fs * 1.7, h = fs * 2.0;
+            ctx.fillStyle = R(col, .13); rr(x, y, w, h, h / 2); ctx.fill();
+            ctx.strokeStyle = R(col, .55); ctx.lineWidth = 1; rr(x, y, w, h, h / 2); ctx.stroke();
+            ctx.fillStyle = R(col, .95); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(txt, x + w / 2, y + h / 2 + 1); ctx.restore(); return w
+        }
+        function stat(x, y, label, val, col) {
+            ctx.save(); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+            ctx.font = `700 ${W * .0135}px ${FS}`; ctx.fillStyle = R(P.muted, 1); ctx.fillText(label.toUpperCase(), x, y);
+            ctx.font = `800 ${W * .032}px ${FM}`; ctx.fillStyle = R(col, .95); ctx.fillText(val, x, y + W * .034); ctx.restore()
+        }
+        function pulseRing(x, y, r, col, ph) {
+            const p = .5 + .5 * Math.sin(ph);
+            ctx.strokeStyle = R(col, .14 + .14 * p); ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.arc(x, y, r * (1.25 + .18 * p), 0, 7); ctx.stroke()
+        }
+        function dot(x, y, c, rad) {
+            rad = rad || 5; const g = ctx.createRadialGradient(x, y, 0, x, y, rad * 2.4);
+            g.addColorStop(0, R(c, .9)); g.addColorStop(.45, R(c, .35)); g.addColorStop(1, R(c, 0));
+            ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, rad * 2.4, 0, 7); ctx.fill();
+            ctx.fillStyle = R(c, 1); ctx.beginPath(); ctx.arc(x, y, rad * .55, 0, 7); ctx.fill()
+        }
+        function rule(txt, col) {
+            ctx.save(); ctx.font = `600 ${W * .0135}px ${FS}`;
+            ctx.fillStyle = col ? R(col, .8) : 'rgba(255,255,255,.32)';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, W / 2, H * .945); ctx.restore()
+        }
+
+        function node(x, y, w, h, label, sub, ph) {
+            const r = h / 2;
+            const g = ctx.createRadialGradient(x, y, r * .4, x, y, r * .85);
+            g.addColorStop(0, R(P.accent, .12)); g.addColorStop(1, R(P.accent, 0));
+            ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * .85, 0, 7); ctx.fill();
+            ctx.fillStyle = R(P.surf, .95); ctx.strokeStyle = R(P.accent, .55); ctx.lineWidth = 1.5;
+            rr(x - w / 2, y - h / 2, w, h, 8); ctx.fill(); ctx.stroke();
+            if (sub) ctx.strokeStyle = R(P.accent, .18);
+            ctx.font = `700 ${h * .34}px ${FM}`; ctx.fillStyle = R(P.g5, .95);
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(label, x - w / 2 + 12, y - h * .1);
+            ctx.font = `600 ${h * .26}px ${FM}`; ctx.fillStyle = R(P.muted, .9);
+            ctx.fillText(sub || '', x + w * .04, y + h * .18);
+            pulseRing(x, y, Math.max(w, h) * .62, P.accent, ph);
+        }
+        function edge(ax, ay, bx, by, ph) {
+            const g = ctx.createLinearGradient(ax, ay, bx, by);
+            g.addColorStop(0, R(P.accent, .08)); g.addColorStop(1, R(P.accent, .3));
+            ctx.strokeStyle = g; ctx.setLineDash([6, 6]); ctx.lineWidth = 1.1;
+            ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); ctx.setLineDash([]);
+            for (let k = 0; k < 2; k++) {
+                const p = ((t_ / 2100) + k * .5) % 1;
+                dot(lerp(ax, bx, Math.sin(p * Math.PI)), lerp(ay, by, Math.sin(p * Math.PI) + -Math.sin(p * Math.PI) * 8), P.accent, 3.2);
+            }
+        }
+        let t_ = 0;
+
+        /* compact table */
+        function gridT(o) {
+            const x = o.x, y = o.y, w = o.w, hH = o.hH, rH = o.rH, cols = o.cols, rows = o.rows, ph = o.ph;
+            const ws = cols.map(c => c.w || 1), tot = ws.reduce((a, b) => a + b, 0);
+            const cw = ws.map(v => v * w / tot), X = [x]; for (let i = 0; i < cols.length; i++)X.push(X[i] + cw[i]);
+            ctx.save(); ctx.globalAlpha *= o.alpha == null ? 1 : o.alpha;
+            /* glow */
+            const g = ctx.createRadialGradient(x + w / 2, y + rows.length * rH / 2, 20, x + w / 2, y + rows.length * rH / 2, w * .75);
+            g.addColorStop(0, R(P.accent, .07)); g.addColorStop(1, R(P.accent, 0));
+            ctx.fillStyle = g; rr(x - 14, y - 14, w + 28, rows.length * rH + hH + 28, 14); ctx.fill();
+            for (let r = 0; r < rows.length; r++) {
+                const ry = y + hH + r * rH;
+                for (let c = 0; c < cols.length; c++) {
+                    const cx0 = X[c], ccw = cw[c];
+                    ctx.fillStyle = R(P.bg2, .5); rr(cx0 + 2, ry + 2, ccw - 4, rH - 4, 5); ctx.fill();
+                    ctx.strokeStyle = 'rgba(255,255,255,.06)'; ctx.lineWidth = 1; rr(cx0 + 2, ry + 2, ccw - 4, rH - 4, 5); ctx.stroke();
+                    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    ctx.font = `600 ${Math.min(rH * .44, w * .016)}px ${FM}`;
+                    ctx.fillStyle = R(P.text, .9);
+                    ctx.fillText(rows[r][c], cx0 + ccw / 2, ry + rH / 2 + 1);
+                }
+            }
+            for (let c = 0; c < cols.length; c++) {
+                const cx0 = X[c], ccw = cw[c], pk = cols[c].pk;
+                ctx.fillStyle = R(P.surf, .92); rr(cx0 + 2, y, ccw - 4, hH, 5); ctx.fill();
+                if (pk) { ctx.fillStyle = R(P.accent, .14); rr(cx0 + 2, y, ccw - 4, hH, 5); ctx.fill() }
+                ctx.strokeStyle = R(P.accent, pk ? .55 : .1); ctx.lineWidth = pk ? 1.4 : 1; rr(cx0 + 2, y, ccw - 4, hH, 5); ctx.stroke();
+                ctx.font = `700 ${hH * .42}px ${FM}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+                const label = cols[c].t, tw = ctx.measureText(label).width, dotW = pk ? 9 : 0;
+                let tx = cx0 + ccw / 2 - (tw + dotW) / 2;
+                if (pk) { ctx.fillStyle = R(P.accent, .95); ctx.beginPath(); ctx.arc(tx + 2, y + hH / 2, 2.6, 0, 7); ctx.fill(); tx += dotW }
+                ctx.fillStyle = pk ? R(P.accent, .95) : R(P.muted, 1);
+                ctx.fillText(label, tx, y + hH / 2 + .5);
+            }
+            ctx.restore();
+            return { X, cw, hH, rH, y, w };
+        }
+
+        /* ================= story data ================= */
+        const SUP = ['acme', 'globex'], PRD = ['widget', 'gadget'], REG = ['eu', 'us'];
+        const FLAT = []; for (const s of SUP) for (const p of PRD) for (const g of REG) FLAT.push([s, p, g]);
+
+        function draw(now) {
+            t_ = now % LOOP;
+            const t = t_, aA = fA(t), aC = fC(t);
+            ctx.clearRect(0, 0, W, H); grid();
+            title('5NF', 'kill the join dependency');
+
+            /* ---- problem: flat supplier × product × region, 8 rows ---- */
+            if (aA > 0.01) {
+                const hH = H * .04, rH = H * .034, w = W * .50, tx = W * .24, ty = H * .20;
+                const g = gridT({
+                    x: tx, y: ty, w, hH, rH, alpha: aA, cols:
+                        [{ t: 'supplier', k: 0, w: 1 }, { t: 'product', w: 1 }, { t: 'region', w: .9 }],
+                    rows: FLAT, ph: t
+                });
+                /* red brackets: supplier+product repeats per region */
+                const pulse = .4 + .4 * (.5 + .5 * Math.sin(t / 430));
+                ctx.save(); ctx.globalAlpha = aA;
+                const x0 = g.X[0] - 10;
+                const y1 = ty + hH + rH / 2, y2 = ty + hH + 2 * rH + rH / 2;
+                ctx.strokeStyle = R(P.fail, .55 * pulse + .2); ctx.lineWidth = 1.6;
+                ctx.beginPath(); ctx.moveTo(x0, y1); ctx.lineTo(x0 - 12, y1); ctx.lineTo(x0 - 12, y2); ctx.lineTo(x0, y2); ctx.stroke();
+                ctx.font = `700 ${W * .0135}px ${FM}`; ctx.fillStyle = R(P.fail, .9);
+                ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+                ctx.fillText('“acme+widget” ×2 regions', x0 - 20, (y1 + y2) / 2);
+                badge(W * .79, H * .16, '✗ 2×2×2 flat = 8 rows', P.fail);
+                rule('same pair repeats for every region — join dependency');
+                ctx.restore();
+            }
+
+            /* ---- transition ---- */
+            const cross = Math.min(aA, aC);
+            if (cross > 0.02) {
+                const p = eio(cl((t - 9300) / 1800));
+                for (let r = 0; r < 3; r++)dot(W * .93, lerp(H * .4, H * (.32 + r * .1), p), P.accent)
+            }
+
+            /* ---- solution: split into three junction tables, one fact each ---- */
+            if (aC > 0.01) {
+                const hH = H * .036, rH = H * .04, ty = H * .27;
+                /* supplier_products — the key junction (3 rows) */
+                const gS = gridT({
+                    x: W * .415, y: ty, w: W * .185, hH, rH, alpha: aC, ph: t, cols:
+                        [{ t: 'supplier', pk: 1, w: 1 }, { t: 'product', pk: 1, w: 1 }],
+                    rows: [['acme', 'widget'], ['acme', 'gadget'], ['globex', 'gadget']]
+                });
+                /* product_regions + supplier_regions (flattened, 3 rows each) */
+                const gA = gridT({
+                    x: W * .095, y: ty, w: W * .16, hH, rH, alpha: aC, ph: t, cols:
+                        [{ t: 'product', pk: 1, w: .95 }, { t: 'region', pk: 1, w: .85 }],
+                    rows: [['widget', 'eu'], ['widget', 'us'], ['gadget', 'eu']]
+                });
+                const gP = gridT({
+                    x: W * .745, y: ty, w: W * .16, hH, rH, alpha: aC, ph: t, cols:
+                        [{ t: 'supplier', pk: 1, w: 1 }, { t: 'region', pk: 1, w: .85 }],
+                    rows: [['acme', 'eu'], ['acme', 'us'], ['globex', 'eu']]
+                });
+                /* join connectors between adjacent tables */
+                const yR0 = ty + hH + 1.5 * rH;
+                edge(gA.X[0] + gA.w, yR0, gS.X[0], yR0);
+                edge(gS.X[0] + gS.w, yR0, gP.X[0], yR0);
+                /* entity note */
+                ctx.save(); ctx.globalAlpha = aC;
+                const yn = ty + hH + 4.6 * rH;
+                ctx.font = `600 ${W * .013}px ${FS}`; ctx.fillStyle = R(P.muted, .9);
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText('suppliers (2) and products (2) hold the flat id → name lookups', W / 2, yn);
+                badge(W * .48, H * .16, '✓ 3 junction tables · one fact each', P.accent);
+                const sw = eio(cl((t - 11000) / 1000));
+                stat(W * .335, H * .84, 'rows', Math.round(lerp(8, 11, sw)), P.accent);
+                stat(W * .575, H * .84, 'repeated pairs', Math.round(lerp(4, 0, sw)), P.accent);
+                rule('each (a,b) pair lives exactly once — no join dependency', P.accent);
+                ctx.restore();
+            }
+        }
+        let __seek = null; window.__time = (v) => { __seek = ((v % 24000) + 24000) % 24000 };
+        requestAnimationFrame(function frame(now) { draw(__seek == null ? now : __seek); requestAnimationFrame(frame) });
+    </script>
+</body>
+
+</html>

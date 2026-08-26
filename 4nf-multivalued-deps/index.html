@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>4NF — Break the Multivalued Explosion</title>
+    <link rel="stylesheet" href="../css/brand.css">
+    <link rel="stylesheet" href="../css/motion.css">
+    <style>
+        body {
+            margin: 0;
+            background: var(--bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="stage"></canvas>
+    <script>
+        "use strict";
+        /* ================= 4NF — independent multivalued deps → explosion =================
+           one row per (skill × cert) pair = 3 × 3 = 9 rows, each repeating the name */
+        const canvas = document.getElementById('stage'), ctx = canvas.getContext('2d');
+
+        const cv = getComputedStyle(document.documentElement);
+        const tok = n => cv.getPropertyValue(n).trim();
+        function pc(s) {
+            s = s.trim();
+            if (s[0] === '#') {
+                let h = s.slice(1); if (h.length === 3) h = h.split('').map(c => c + c).join('');
+                return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
+            }
+            const m = s.match(/[\d.]+/g).map(Number); return m.length >= 3 ? m.slice(0, 3) : [255, 255, 255]
+        }
+        const P = {
+            accent: pc(tok('--accent')), g5: pc(tok('--green-5')), fail: pc(tok('--fail')),
+            text: pc(tok('--text')), muted: pc(tok('--muted')), surf: pc(tok('--surface')), bg2: pc(tok('--bg-2'))
+        };
+        const FS = tok('--font-sans'), FM = tok('--font-mono');
+        const R = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+        const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+        const lerp = (a, b, t) => a + (b - a) * t, cl = v => v < 0 ? 0 : v > 1 ? 1 : v;
+        const eio = t => t < .5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+        /* 4NF connector geometry helpers (see draw solution) */
+        const yE = (yB, ty) => ty + hH * 0 + (yB - ty);          /* unused keep-aside */
+        const yJc = (yB, ty, hH) => yB - H * .02;                /* horizontal join bar */
+        const ySuck = (ty, hH, rH, rows) => ty + hH + rows * rH;    /* junction table bottom */
+
+        let W, H;
+        function resize() {
+            const d = devicePixelRatio || 1;
+            W = Math.min(innerWidth - 32, 1100); H = Math.round(W * 9 / 16);
+            canvas.width = W * d; canvas.height = H * d; canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+            ctx.setTransform(d, 0, 0, d, 0, 0)
+        }
+        addEventListener('resize', resize); resize();
+
+        const LOOP = 24000;
+        function fw(t, s, d, f = 1200) { const x = ((t - s) % LOOP + LOOP) % LOOP; if (x > d) return 0; return Math.min(1, x / f, (d - x) / f) }
+        const fA = t => fw(t, 23000, 11200);
+        const fC = t => fw(t, 9000, 14400);
+
+        function rr(x, y, w, h, r) {
+            ctx.beginPath(); ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + r); ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath()
+        }
+        function grid() {
+            ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,.045)'; ctx.lineWidth = 1;
+            const s = Math.max(36, W * .042);
+            for (let x = 0; x < W; x += s) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke() }
+            for (let y = 0; y < H; y += s) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke() } ctx.restore()
+        }
+        function title(main, sub) {
+            ctx.save(); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+            ctx.font = `800 ${W * .05}px ${FM}`; ctx.fillStyle = R(P.accent, .95); ctx.fillText(main, W * .045, H * .105);
+            const mw = ctx.measureText(main).width;
+            ctx.font = `700 ${W * .0165}px ${FS}`; ctx.fillStyle = R(P.muted, 1);
+            ctx.fillText(sub, W * .045 + mw + W * .018, H * .105 - W * .002); ctx.restore()
+        }
+        function badge(x, y, txt, col, fs) {
+            fs = fs || W * .0155; ctx.save();
+            ctx.font = `700 ${fs}px ${FM}`;
+            const w = ctx.measureText(txt).width + fs * 1.7, h = fs * 2.0;
+            ctx.fillStyle = R(col, .13); rr(x, y, w, h, h / 2); ctx.fill();
+            ctx.strokeStyle = R(col, .55); ctx.lineWidth = 1; rr(x, y, w, h, h / 2); ctx.stroke();
+            ctx.fillStyle = R(col, .95); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(txt, x + w / 2, y + h / 2 + 1); ctx.restore(); return w
+        }
+        function stat(x, y, label, val, col) {
+            ctx.save(); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+            ctx.font = `700 ${W * .0135}px ${FS}`; ctx.fillStyle = R(P.muted, 1); ctx.fillText(label.toUpperCase(), x, y);
+            ctx.font = `800 ${W * .032}px ${FM}`; ctx.fillStyle = R(col, .95); ctx.fillText(val, x, y + W * .034); ctx.restore()
+        }
+        function dot(x, y, c, rad) {
+            rad = rad || 5; const g = ctx.createRadialGradient(x, y, 0, x, y, rad * 2.4);
+            g.addColorStop(0, R(c, .9)); g.addColorStop(.45, R(c, .35)); g.addColorStop(1, R(c, 0));
+            ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, rad * 2.4, 0, 7); ctx.fill();
+            ctx.fillStyle = R(c, 1); ctx.beginPath(); ctx.arc(x, y, rad * .55, 0, 7); ctx.fill()
+        }
+        function rule(txt, col) {
+            ctx.save(); ctx.font = `600 ${W * .0135}px ${FS}`;
+            ctx.fillStyle = col ? R(col, .8) : 'rgba(255,255,255,.32)';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, W / 2, H * .945); ctx.restore()
+        }
+
+        /* compact grid: header cells + body cells; returns layout for annotations */
+        function gridT(o) {
+            const x = o.x, y = o.y, w = o.w, hH = o.hH, rH = o.rH, head = o.head, rows = o.rows;
+            const n = 0, cols = o.cols, ws = cols.map(c => c.w || 1), tot = ws.reduce((a, b) => a + b, 0);
+            const cw = ws.map(v => v * w / tot), X = [x]; for (let i = 0; i < cols.length; i++)X.push(X[i] + cw[i]);
+            ctx.save(); ctx.globalAlpha *= o.alpha == null ? 1 : o.alpha;
+            for (let r = 0; r < rows.length; r++) {
+                const ry = y + hH + r * rH;
+                for (let c = 0; c < cols.length; c++) {
+                    const cx0 = X[c], ccw = cw[c];
+                    ctx.fillStyle = R(P.bg2, .5); rr(cx0 + 2, ry + 2, ccw - 4, rH - 4, 5); ctx.fill();
+                    if (o.tint) for (const [c2, r2, col, amt] of o.tint) {
+                        if (r2 === r && c2 === c) { ctx.fillStyle = R(col, .16 * amt); rr(cx0 + 2, ry + 2, ccw - 4, rH - 4, 5); ctx.fill() }
+                    }
+                    ctx.strokeStyle = 'rgba(255,255,255,.06)'; ctx.lineWidth = 1; rr(cx0 + 2, ry + 2, ccw - 4, rH - 4, 5); ctx.stroke();
+                    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    ctx.font = `600 ${Math.min(rH * .42, w * .016)}px ${FM}`;
+                    ctx.fillStyle = R(P.text, .9);
+                    ctx.fillText(rows[r][c], cx0 + ccw / 2, ry + rH / 2 + 1);
+                }
+            }
+            for (let c = 0; c < cols.length; c++) {
+                const cx0 = X[c], ccw = cw[c], pk = cols[c].pk, kk = cols[c].k || 0;
+                ctx.fillStyle = R(P.surf, .92); rr(cx0 + 2, y, ccw - 4, hH, 5); ctx.fill();
+                if (pk) { ctx.fillStyle = R(P.accent, .14); rr(cx0 + 2, y, ccw - 4, hH, 5); ctx.fill() }
+                ctx.strokeStyle = R(P.accent, pk ? .55 : kk > .5 ? .4 : .1); ctx.lineWidth = pk ? 1.4 : 1; rr(cx0 + 2, y, ccw - 4, hH, 5); ctx.stroke();
+                ctx.font = `700 ${hH * .4}px ${FM}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+                const label = cols[c].t, tw = ctx.measureText(label).width, dotW = pk ? 9 : 0;
+                let tx = cx0 + ccw / 2 - (tw + dotW) / 2;
+                if (pk) { ctx.fillStyle = R(P.accent, .95); ctx.beginPath(); ctx.arc(tx + 2, y + hH / 2, 2.6, 0, 7); ctx.fill(); tx += dotW }
+                ctx.fillStyle = pk ? R(P.accent, .95) : R(P.muted, 1);
+                ctx.fillText(label, tx, y + hH / 2 + .5);
+            }
+            ctx.restore();
+            return { X, cw, hH, rH, y, w, cols };
+        }
+
+        /* ================= story data ================= */
+        const SKILLS = ['postgres', 'go', 'rust'];
+        const CERTS = ['cloud', 'secure', 'ml'];
+        const PAIRS = []; for (const s of SKILLS) for (const c of CERTS) PAIRS.push(['1', 'alice', s, c]);
+
+        function draw(now) {
+            const t = now % LOOP, aA = fA(t), aC = fC(t);
+            ctx.clearRect(0, 0, W, H); grid();
+            title('4NF', 'stop the row explosion');
+
+            /* ---- problem: 9 rows of skill × cert with the name repeated 9 times ---- */
+            if (aA > 0.01) {
+                const hH = H * .04, rH = H * .027, w = W * .56, tx = W * .10, ty = H * .21;
+                const g = gridT({
+                    x: tx, y: ty, w, hH, rH, alpha: aA, cols:
+                        [{ t: 'id', pk: 1, w: .5 }, { t: 'name', w: .7 }, { t: 'skill', w: 1 }, { t: 'cert', w: .9 }],
+                    rows: PAIRS,
+                    tint: PAIRS.map((p, i) => [1, i, P.fail, .35 + .3 * (.5 + .5 * Math.sin(t / 380 + i))])
+                });
+                /* "name × 9" callout */
+                ctx.save(); ctx.globalAlpha = aA;
+                const nameX = g.X[1] + g.cw[1] / 2;
+                ctx.strokeStyle = R(P.fail, .5); ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.moveTo(nameX, ty + hH); ctx.lineTo(nameX, ty + hH + 9 * rH); ctx.stroke();
+                ctx.setLineDash([]);
+                badge(tx + W * .60, H * .16, '✗ 3 skills × 3 certs = 9 rows', P.fail);
+                rule('skills and certs are independent — the grid multiplies');
+                ctx.restore();
+            }
+
+            /* ---- transition: dots fan from one point into two tables ---- */
+            const cross = Math.min(aA, aC);
+            if (cross > 0.02) {
+                const p = eio(cl((t - 9300) / 1800));
+                for (let r = 0; r < 3; r++)dot(W * .92, lerp(H * .44, H * (.3 + r * .09), p), P.accent)
+            }
+
+            /* ---- solution: two junction tables around the employee ---- */
+            if (aC > 0.01) {
+                const hH = H * .045, rH = H * .052, ty = H * .27;
+                const gE = gridT({
+                    x: W * .07, y: ty + hH * 1.2, w: W * .20, hH, rH, alpha: aC,
+                    cols: [{ t: 'id', pk: 1, w: .8 }, { t: 'name', w: 1.1 }],
+                    rows: [['1', 'alice'], ['2', 'bob'], ['3', 'carol']]
+                });
+                const gS = gridT({
+                    x: W * .325, y: ty, w: W * .30, hH, rH, alpha: aC,
+                    cols: [{ t: 'emp_id', k: 1, w: .8 }, { t: 'skill', pk: 1, w: 1.2 }],
+                    rows: [[1, 'postgres'], [1, 'go'], [1, 'rust'], [2, 'go'], [3, 'rust']]
+                });
+                const gC = gridT({
+                    x: W * .68, y: ty, w: W * .26, hH, rH, alpha: aC,
+                    cols: [{ t: 'emp_id', k: 1, w: .8 }, { t: 'cert', pk: 1, w: 1.2 }],
+                    rows: [[1, 'cloud'], [1, 'secure'], [1, 'ml'], [2, 'cloud'], [3, 'ml'], [3, 'secure']]
+                });
+                ctx.save(); ctx.globalAlpha = aC;
+                /* connectors — right of employees, below all tables, then up into each junction id column */
+                const xE = gE.X[0] + gE.w, yE = gE.y + hH + 1.5 * rH;
+                const yJty = ty + hH + 5 * rH + H * .03;
+                ctx.strokeStyle = R(P.accent, .3); ctx.setLineDash([6, 6]); ctx.lineWidth = 1.1;
+                const xS = gS.X[0] + gS.cw[0] * .6, xC = gC.X[0] + gC.cw[0] * .6;
+                const botS = ty + hH + 5 * rH, botC = ty + hH + 6 * rH;
+                ctx.beginPath(); ctx.moveTo(xE, yE); ctx.lineTo(xS, yE); ctx.lineTo(xS, botS); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(xE, yE); ctx.lineTo(xC, yE); ctx.lineTo(xC, botC); ctx.stroke();
+                ctx.setLineDash([]);
+                for (let k = 0; k < 2; k++) {
+                    const gx = k ? xC : xS, gb = k ? botC : botS;
+                    const p = ((t / 2400) + k * .5) % 1;
+                    let px, py;
+                    if (p < .7) { const q = p / .7; px = lerp(xE, gx, q); py = yE }
+                    else { const q = (p - .7) / .3; px = gx; py = lerp(yE, gb, q) }
+                    dot(px, py, P.accent, 3.5);
+                }
+                badge(W * .48, H * .16, '✓ (emp, skill) + (emp, cert) — composite PKs', P.accent);
+                /* counter: 9 → 5+6 */
+                const sw = eio(cl((t - 11000) / 1000));
+                stat(W * .07, H * .80, 'rows', Math.round(lerp(9, 11, sw)), P.accent);
+                stat(W * .27, H * .80, 'name copies', Math.round(lerp(9, 1, sw)), P.accent);
+                rule('each multivalued dependency gets its own table', P.accent);
+                ctx.restore();
+            }
+        }
+        let __seek = null; window.__time = (v) => { __seek = ((v % 24000) + 24000) % 24000 };
+        requestAnimationFrame(function frame(now) { draw(__seek == null ? now : __seek); requestAnimationFrame(frame) });
+    </script>
+</body>
+
+</html>

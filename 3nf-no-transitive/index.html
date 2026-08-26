@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>3NF — No Transitive Dependencies</title>
+    <link rel="stylesheet" href="../css/brand.css">
+    <link rel="stylesheet" href="../css/motion.css">
+    <style>
+        body {
+            margin: 0;
+            background: var(--bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="stage"></canvas>
+    <script>
+        "use strict";
+        /* ================= 3NF — non-key cols depend only on the key ================= */
+        const canvas = document.getElementById('stage'), ctx = canvas.getContext('2d');
+
+        const cv = getComputedStyle(document.documentElement);
+        const tok = n => cv.getPropertyValue(n).trim();
+        function pc(s) {
+            s = s.trim();
+            if (s[0] === '#') {
+                let h = s.slice(1); if (h.length === 3) h = h.split('').map(c => c + c).join('');
+                return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
+            }
+            const m = s.match(/[\d.]+/g).map(Number); return m.length >= 3 ? m.slice(0, 3) : [255, 255, 255]
+        }
+        const P = {
+            accent: pc(tok('--accent')), g5: pc(tok('--green-5')), fail: pc(tok('--fail')),
+            text: pc(tok('--text')), muted: pc(tok('--muted')), surf: pc(tok('--surface')), bg2: pc(tok('--bg-2'))
+        };
+        const FS = tok('--font-sans'), FM = tok('--font-mono');
+        const R = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+        const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+        const lerp = (a, b, t) => a + (b - a) * t, cl = v => v < 0 ? 0 : v > 1 ? 1 : v;
+        const eio = t => t < .5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+        const flash = (t, t0, dur) => { const x = (t - t0) / dur; return x >= 0 && x <= 1 ? 1 - Math.abs(1 - 2 * x) : 0 };
+
+        let W, H;
+        function resize() {
+            const d = devicePixelRatio || 1;
+            W = Math.min(innerWidth - 32, 1100); H = Math.round(W * 9 / 16);
+            canvas.width = W * d; canvas.height = H * d; canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+            ctx.setTransform(d, 0, 0, d, 0, 0)
+        }
+        addEventListener('resize', resize); resize();
+
+        const LOOP = 24000;
+        function fw(t, s, d, f = 1200) { const x = ((t - s) % LOOP + LOOP) % LOOP; if (x > d) return 0; return Math.min(1, x / f, (d - x) / f) }
+        const fA = t => fw(t, 23000, 11200);   /* problem   0 → 10.2s      */
+        const fC = t => fw(t, 9000, 14400);    /* solution  9s → 23.4s     */
+        const fMove = (t, k) => flash(t, 16200 + k * 650, 700); /* 3 dept flips at 16.2s+ */
+
+        function rr(x, y, w, h, r) {
+            ctx.beginPath(); ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + r); ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath()
+        }
+        function grid() {
+            ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,.045)'; ctx.lineWidth = 1;
+            const s = Math.max(36, W * .042);
+            for (let x = 0; x < W; x += s) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke() }
+            for (let y = 0; y < H; y += s) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke() } ctx.restore()
+        }
+        function title(main, sub) {
+            ctx.save(); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+            ctx.font = `800 ${W * .05}px ${FM}`; ctx.fillStyle = R(P.accent, .95); ctx.fillText(main, W * .045, H * .105);
+            const mw = ctx.measureText(main).width;
+            ctx.font = `700 ${W * .0165}px ${FS}`; ctx.fillStyle = R(P.muted, 1);
+            ctx.fillText(sub, W * .045 + mw + W * .018, H * .105 - W * .002); ctx.restore()
+        }
+        function badge(x, y, txt, col, fs) {
+            fs = fs || W * .015; ctx.save();
+            ctx.font = `700 ${fs}px ${FM}`;
+            const w = ctx.measureText(txt).width + fs * 1.7, h = fs * 2.0;
+            ctx.fillStyle = R(col, .13); rr(x, y, w, h, h / 2); ctx.fill();
+            ctx.strokeStyle = R(col, .55); ctx.lineWidth = 1; rr(x, y, w, h, h / 2); ctx.stroke();
+            ctx.fillStyle = R(col, .95); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(txt, x + w / 2, y + h / 2 + 1); ctx.restore(); return w
+        }
+        function stat(x, y, label, val, col) {
+            ctx.save(); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+            ctx.font = `700 ${W * .0135}px ${FS}`; ctx.fillStyle = R(P.muted, 1); ctx.fillText(label.toUpperCase(), x, y);
+            ctx.font = `800 ${W * .032}px ${FM}`; ctx.fillStyle = R(col, .95); ctx.fillText(val, x, y + W * .034); ctx.restore()
+        }
+        function dot(x, y, c, rad) {
+            rad = rad || 5; const g = ctx.createRadialGradient(x, y, 0, x, y, rad * 2.4);
+            g.addColorStop(0, R(c, .9)); g.addColorStop(.45, R(c, .35)); g.addColorStop(1, R(c, 0));
+            ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, rad * 2.4, 0, 7); ctx.fill();
+            ctx.fillStyle = R(c, 1); ctx.beginPath(); ctx.arc(x, y, rad * .55, 0, 7); ctx.fill()
+        }
+        function rule(txt, col) {
+            ctx.save(); ctx.font = `600 ${W * .0135}px ${FS}`;
+            ctx.fillStyle = col ? R(col, .8) : 'rgba(255,255,255,.32)';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, W / 2, H * .945); ctx.restore()
+        }
+        function chain(x, y, txt, col) { /* A → B → C pill chain */
+            ctx.save(); ctx.font = `700 ${W * .0155}px ${FM}`;
+            const parts = txt.split(' → ');
+            let cx = x; const yMid = y;
+            for (let i = 0; i < parts.length; i++) {
+                const w = ctx.measureText(parts[i]).width + 18;
+                ctx.fillStyle = R(col, i === 1 ? .14 : .07); rr(cx, yMid - 13, w, 26, 13); ctx.fill();
+                ctx.strokeStyle = R(col, .5); ctx.lineWidth = 1; rr(cx, yMid - 13, w, 26, 13); ctx.stroke();
+                ctx.fillStyle = R(col, .95); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(parts[i], cx + w / 2, yMid + 1);
+                cx += w;
+                if (i < parts.length - 1) {
+                    cx += 8; ctx.strokeStyle = R(P.muted, .6); ctx.lineWidth = 1.4;
+                    ctx.beginPath(); ctx.moveTo(cx - W * .006, yMid); ctx.lineTo(cx + W * .006, yMid); ctx.stroke();
+                    ctx.fillStyle = R(P.muted, .6); ctx.beginPath();
+                    ctx.moveTo(cx + W * .006, yMid); ctx.lineTo(cx - W * .001, yMid - 4); ctx.lineTo(cx - W * .001, yMid + 4); ctx.closePath(); ctx.fill();
+                    cx += 10;
+                }
+            }
+            ctx.restore();
+        }
+        function table(o) {
+            const x = o.x, y = o.y, w = o.w, hH = o.hH, rH = o.rH, head = o.head, rows = o.rows, cells = o.cells || {};
+            const n = head.length, ws = head.map(h => h.w || 1), tot = ws.reduce((a, b) => a + b, 0);
+            const cw = ws.map(v => v * w / tot), X = [x]; for (let i = 0; i < n; i++)X.push(X[i] + cw[i]);
+            ctx.save(); ctx.globalAlpha *= o.alpha == null ? 1 : o.alpha;
+            for (let r = 0; r < rows.length; r++) {
+                const ry = y + hH + r * rH;
+                for (let c = 0; c < n; c++) {
+                    const ov = cells[r + ',' + c], cx0 = X[c], ccw = cw[c];
+                    ctx.fillStyle = R(P.bg2, .5); rr(cx0 + 2, ry + 2, ccw - 4, rH - 4, 6); ctx.fill();
+                    if (ov) {
+                        ctx.fillStyle = R(ov.col, .2 * ov.amt); rr(cx0 + 2, ry + 2, ccw - 4, rH - 4, 6); ctx.fill();
+                        ctx.strokeStyle = R(ov.col, .3 + .6 * ov.amt); ctx.lineWidth = 1 + .8 * ov.amt
+                    }
+                    else { ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.lineWidth = 1 }
+                    rr(cx0 + 2, ry + 2, ccw - 4, rH - 4, 6); ctx.stroke();
+                    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    ctx.font = `600 ${Math.min(rH * .38, w * .017)}px ${FM}`;
+                    ctx.fillStyle = ov ? R(mix(P.text, ov.col, ov.amt), 1) : R(P.text, .92);
+                    ctx.fillText(rows[r][c], cx0 + ccw / 2, ry + rH / 2 + 1);
+                }
+            }
+            for (let c = 0; c < n; c++) {
+                const cx0 = X[c], ccw = cw[c], pk = head[c].pk;
+                ctx.fillStyle = R(P.surf, .92); rr(cx0 + 2, y, ccw - 4, hH, 6); ctx.fill();
+                if (pk) { ctx.fillStyle = R(P.accent, .15); rr(cx0 + 2, y, ccw - 4, hH, 6); ctx.fill() }
+                ctx.strokeStyle = R(P.accent, pk ? .6 : .14); ctx.lineWidth = pk ? 1.4 : 1; rr(cx0 + 2, y, ccw - 4, hH, 6); ctx.stroke();
+                ctx.font = `700 ${hH * .36}px ${FM}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+                const label = head[c].t, tw = ctx.measureText(label).width, dotW = pk ? 10 : 0;
+                let tx = cx0 + ccw / 2 - (tw + dotW) / 2;
+                if (pk) { ctx.fillStyle = R(P.accent, .95); ctx.beginPath(); ctx.arc(tx + 2, y + hH / 2, 3, 0, 7); ctx.fill(); tx += dotW }
+                ctx.fillStyle = pk ? R(P.g5, 1) : R(P.muted, 1);
+                ctx.fillText(label, tx, y + hH / 2 + .5);
+            }
+            ctx.restore();
+            return { X, cw, hH, rH, y, w };
+        }
+
+        /* ================= story data =================
+           Problem: department text is duplicated per employee —
+           id → dept → building is transitive (dept not a key).       */
+        const HEAD_A = [{ t: 'id', pk: 1, w: .7 }, { t: 'name', w: 1.0 }, { t: 'dept', w: 1.0 }, { t: 'building', w: 1.0 }];
+        const ROWS_A = [['1', 'alice', 'sales', 'HQ  ·  floor 2'],
+        ['2', 'bob', 'sales', 'HQ  ·  floor 2'],
+        ['3', 'carol', 'sales', 'HQ  ·  floor 2']];
+
+        const DEPTS = [['1', 'sales', 'HQ  ·  floor 2'], ['2', 'marketing', 'HQ  ·  floor 4'],
+        ['3', 'engineering', 'Remote']];
+
+        function drawTextSwap(x0, cy, from, to, amt) { /* crossfade two values inside one cell */
+            ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.font = `600 ${Math.min(H * .064 * .38, W * .017)}px ${FM}`;
+            ctx.fillStyle = R(P.text, .92 * (1 - amt)); ctx.fillText(from, x0, cy);
+            ctx.fillStyle = R(mix(P.text, P.accent, amt), amt); ctx.fillText(to, x0, cy);
+            ctx.restore();
+        }
+
+        function draw(now) {
+            const t = now % LOOP, aA = fA(t), aC = fC(t);
+            ctx.clearRect(0, 0, W, H); grid();
+            title('3NF', 'no transitive deps');
+
+            /* ---- problem: dept text duplicated + chain id → dept → building ---- */
+            if (aA > 0.01) {
+                const hH = H * .048, rH = H * .062, w = W * .72, tx = W * .08, ty = H * .28;
+                const pulse = .35 + .45 * (.5 + .5 * Math.sin(t / 430));
+                const cells = {};
+                for (let r = 0; r < 3; r++) { cells[r + ',2'] = { col: P.fail, amt: pulse }; cells[r + ',3'] = { col: P.fail, amt: pulse } }
+                const g = table({ x: tx, y: ty, w, hH, rH, alpha: aA, head: HEAD_A, rows: ROWS_A, cells });
+                ctx.save(); ctx.globalAlpha = aA;
+                badge(W * .52, H * .16, '✗ dept repeats 3×', P.fail);
+                chain(W * .39, H * .76, 'id  →  dept  →  building', P.fail);
+                ctx.font = `600 ${W * .0135}px ${FS}`; ctx.fillStyle = 'rgba(255,255,255,.34)';
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText('dept is not a key — change a building? update every row', W / 2, H * .86);
+                ctx.restore();
+            }
+
+            /* ---- transition ---- */
+            const cross = Math.min(aA, aC);
+            if (cross > 0.02) {
+                const p = eio(cl((t - 9300) / 1800));
+                for (let r = 0; r < 3; r++)dot(W * .915, lerp(H * .32, H * (.32 + r * .10), p), P.accent)
+            }
+
+            /* ---- solution: departments lookup + FK ---- */
+            if (aC > 0.01) {
+                const hH = H * .05, rH = H * .064, ty = H * .30;
+                /* departments table */
+                const fM1 = fMove(t, 0), fM2 = fMove(t, 1), fM3 = fMove(t, 2);
+                const gD = table({
+                    x: W * .44, y: ty, w: W * .40, hH, rH, alpha: aC,
+                    head: [{ t: 'id', pk: 1, w: .7 }, { t: 'name', w: 1.1 }, { t: 'building', w: 1.25 }],
+                    rows: DEPTS,
+                    cells: {}
+                });
+                /* employees table */
+                const gE = table({
+                    x: W * .06, y: ty, w: W * .33, hH, rH, alpha: aC,
+                    head: [{ t: 'id', pk: 1, w: .8 }, { t: 'name', w: 1.0 }, { t: 'dept_id ↦', w: 1.0 }],
+                    rows: [['1', 'alice', '1'], ['2', 'bob', '1'], ['3', 'carol', '2']]
+                });
+                /* FK connector */
+                const yM = ty + hH + rH * .55;
+                ctx.save(); ctx.globalAlpha = aC;
+                ctx.strokeStyle = R(P.accent, .35); ctx.setLineDash([6, 6]); ctx.lineWidth = 1.2;
+                ctx.beginPath(); ctx.moveTo(gE.X[0] + gE.w, yM); ctx.lineTo(gD.X[0], yM); ctx.stroke();
+                ctx.setLineDash([]);
+                for (let k = 0; k < 3; k++) {
+                    const p = ((t / 2600) + k / 3) % 1;
+                    dot(lerp(gE.X[0] + gE.w, gD.X[0], eio(p)), yM, P.accent, 4);
+                }
+                /* carol moves sales → marketing: dept_id flips, lookup row glows */
+                if (fM3 > .02) {
+                    const cx = gE.X[2] + gE.cw[2] / 2, cy = ty + hH + 2 * rH + rH / 2 + 1;
+                    drawTextSwap(cx, cy, '1', '2', fM3);
+                    const cyD = ty + hH + rH / 2 + 1, ccx = gD.X[1] + gD.cw[1] / 2;
+                    ctx.strokeStyle = R(P.accent, .5 * fM3); ctx.lineWidth = 2;
+                    rr(gD.X[1] + 1, ty + hH + rH + 1, gD.cw[1] - 2, rH - 2, 6); ctx.stroke();
+                    badge(W * .50, H * .16, 'carol → marketing · update ×1 id', P.accent);
+                } else {
+                    badge(W * .50, H * .16, '✓ dept lives in one place', P.accent);
+                }
+                const sw = eio(cl((t - 11000) / 900));
+                stat(W * .06, H * .76, 'rows for a move', Math.round(lerp(3, 1, sw)), P.accent);
+                rule('non-key columns depend on the key — nothing else', P.accent);
+                ctx.restore();
+            }
+        }
+        let __seek = null; window.__time = (v) => { __seek = ((v % 24000) + 24000) % 24000 };
+        requestAnimationFrame(function frame(now) { draw(__seek == null ? now : __seek); requestAnimationFrame(frame) });
+    </script>
+</body>
+
+</html>
