@@ -34,10 +34,9 @@ New graphic? Just link both files — you inherit the full brand theme:
 
 Then style any part you need differently in a small local `<style>` block
 (your rules come later in the cascade, so they win).
-`ha-proxy-motion-graphic/` is kept only as a reference for the `<link>`
-usage and diagram role tints (`.node.tint-client|tint-proxy|tint-backend`,
-`.pill-fail`, `.pill-ok`) — its slideshow/HUD pattern is **legacy, do not
-imitate it**.
+`ha-proxy-motion-graphic/` shows a compliant graphic in action: one
+continuously looping 32s timeline on a single canvas — no slideshow, no
+HUD.
 
 ## Brand palette (from the website)
 

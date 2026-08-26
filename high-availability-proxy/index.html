@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>High-Availability Proxy</title>
+    <link rel="stylesheet" href="../css/brand.css">
+    <link rel="stylesheet" href="../css/motion.css">
+    <style>
+        body {
+            margin: 0;
+            background: var(--bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        canvas {
+            display: block;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border);
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="stage"></canvas>
+    <script>
+        'use strict';
+        // ============================================================
+        // 1. SETUP — DPI-aware resize
+        // ============================================================
+        const canvas = document.getElementById('stage');
+        const ctx = canvas.getContext('2d');
+        let W, H;
+
+        // Read brand tokens straight from brand.css (never hardcode)
+        const cssVars = getComputedStyle(document.documentElement);
+        function tok(name) { return cssVars.getPropertyValue(name).trim(); }
+        function parseColor(str) {
+            str = str.trim();
+            if (str[0] === '#') {
+                let h = str.slice(1);
+                if (h.length === 3) h = h.split('').map(c => c + c).join('');
+                return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+            }
+            const m = str.match(/[\d.]+/g).map(Number);
+            return m.length >= 3 ? m.slice(0, 3) : [255, 255, 255];
+        }
+        const COL = {
+            accent: parseColor(tok('--accent')),
+            deep: parseColor(tok('--accent-deep')),
+            bright: parseColor(tok('--green-4')),
+            fail: parseColor(tok('--fail')),
+            text: parseColor(tok('--text')),
+            muted: parseColor(tok('--muted')),
+            bg: parseColor(tok('--bg')),
+            surface: parseColor(tok('--bg-2')),
+        };
+        const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+        const mix = (c1, c2, t) => [
+            Math.round(c1[0] + (c2[0] - c1[0]) * t),
+            Math.round(c1[1] + (c2[1] - c1[1]) * t),
+            Math.round(c1[2] + (c2[2] - c1[2]) * t),
+        ];
+        const FONT_SANS = tok('--font-sans');
+        const FONT_MONO = tok('--font-mono');
+
+        // ============================================================
+        // 2. LAYOUT — everything derived from W / H
+        // ============================================================
+        let L = {};
+        function buildLayout() {
+            L = {
+                clients: [{ x: W * 0.055, y: H * 0.30 }, { x: W * 0.055, y: H * 0.50 }, { x: W * 0.055, y: H * 0.70 }],
+                proxy: { x: W * 0.405, y: H * 0.50, w: W * 0.115, h: H * 0.155 },
+                nodes: [0, 1, 2].map(i => ({ x: W * 0.845, y: H * (0.24 + i * 0.26) })),
+                nodeW: W * 0.135,
+                nodeH: H * 0.130,
+            };
+        }
+
+        function resize() {
+            const dpr = window.devicePixelRatio || 1;
+            W = Math.min(window.innerWidth - 32, 1100);
+            H = Math.round(W * 9 / 16);
+            canvas.width = W * dpr;
+            canvas.height = H * dpr;
+            canvas.style.width = W + 'px';
+            canvas.style.height = H + 'px';
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            buildLayout();
+        }
+        window.addEventListener('resize', resize);
+
+        // ============================================================
+        // 3. EASING + path helpers
+        // ============================================================
+        function lerp(a, b, t) { return a + (b - a) * t; }
+        function easeInOut(t) { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; }
+        function quad(a, c, b, t) {
+            const u = 1 - t;
+            return {
+                x: u * u * a.x + 2 * u * t * c.x + t * t * b.x,
+                y: u * u * a.y + 2 * u * t * c.y + t * t * b.y
+            };
+        }
+        function roundRect(x, y, w, h, r) {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+            ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+            ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+            ctx.closePath();
+        }
+        // fitText — draw centered text, shrinking the font until it fits maxWidth
+        function fitText(text, x, y, baseSize, weight, font, maxWidth, fillStyle) {
+            let size = baseSize;
+            while (size > 6 && ctx.measureText(text).width > maxWidth && size > baseSize * 0.5) {
+                size *= 0.94;
+                ctx.font = `${weight} ${size}px ${font}`;
+            }
+            ctx.font = `${weight} ${size}px ${font}`;
+            ctx.fillStyle = fillStyle;
+            ctx.fillText(text, x, y);
+            return size;
+        }
+        // ============================================================
+        // 4. HA story — deterministic 24s cycle, one node down at a time
+        // ============================================================
+        const CYCLE = 24000;
+        const FAIL_START = 7000, FAIL_DIE = 7500, FAIL_END = 14000, RECOVER_END = 16000;
+        const NODE_NAMES = ['A', 'B', 'C'];
+
+        // status: 'ok' | 'dying' | 'fail' | 'recover'
+        function nodeState(i, now) {
+            if (i !== Math.floor(now / CYCLE) % 3) return { status: 'ok', failAmt: 0 };
+            const t = now % CYCLE;
+            if (t < FAIL_START) return { status: 'ok', failAmt: 0 };
+            if (t < FAIL_DIE) return { status: 'dying', failAmt: (t - FAIL_START) / (FAIL_DIE - FAIL_START) };
+            if (t < FAIL_END) return { status: 'fail', failAmt: 1 };
+            if (t < RECOVER_END) return { status: 'recover', failAmt: 0.45 };
+            return { status: 'ok', failAmt: 0 };
+        }
+
+        // live stats
+        const nodes = [0, 1, 2].map(i => ({ load: 0.25 + 0.1 * i, flashes: [], nextPing: 400 + i * 350, detected: 0 }));
+        const nodesByName = NODE_NAMES;
+        let packets = [], pings = [], proxyFlashes = [];
+        let served = 0, rerouted = 0;
+
+        // ============================================================
+        // 5. ENTITY SYSTEMS
+        // ============================================================
+        function spawnPacket(now) {
+            const c = L.clients[(Math.random() * 3) | 0];
+            packets.push({
+                phase: 'in', t: 0,
+                from: { x: c.x + W * 0.018, y: c.y },
+                tail: [], flashT: 0, target: -1,
+            });
+        }
+
+        function pickTarget(exclude) {
+            let best = -1, bestLoad = Infinity;
+            for (let i = 0; i < 3; i++) {
+                if (i === exclude) continue;
+                const st = nodeState(i, perfNow).status;
+                if (st === 'fail' || st === 'dying') continue;
+                if (nodes[i].load < bestLoad) { bestLoad = nodes[i].load; best = i; }
+            }
+            return best;
+        }
+
+        function updateEntities(dt, now) {
+            // spawn
+            spawnAcc += dt;
+            while (spawnAcc > 340) {
+                spawnAcc -= 340;
+                if (packets.length < 18) spawnPacket(now);
+            }
+
+            // health-check pings
+            for (let i = 0; i < 3; i++) {
+                if (now >= nodes[i].nextPing) {
+                    nodes[i].nextPing = now + 1900;
+                    pings.push({ i, t: 0 });
+                }
+            }
+            for (let k = pings.length - 1; k >= 0; k--) {
+                const p = pings[k];
+                p.t += dt / 550;
+                if (p.t >= 1) {
+                    const st = nodeState(p.i, now);
+                    if (st.status !== 'ok') nodes[p.i].detected = now; // red blip on failed node
+                    pings.splice(k, 1);
+                }
+            }
+
+            // packets
+            const proxyExit = { x: L.proxy.x + L.proxy.w / 2, y: L.proxy.y };
+            for (let k = packets.length - 1; k >= 0; k--) {
+                const p = packets[k];
+                p.flashT = Math.max(0, p.flashT - dt / 700);
+
+                if (p.phase === 'in') {
+                    p.t += dt / 950;
+                    if (p.t >= 1) {
+                        p.t = 0; p.phase = 'dwell';
+                        proxyFlashes.push({ x: proxyExit.x - W * 0.01, y: L.proxy.y, t0: now });
+                    }
+                } else if (p.phase === 'dwell') {
+                    p.t += dt / 260;
+                    if (p.t >= 1) { p.t = 0; p.phase = 'out'; p.target = pickTarget(-1); }
+                } else if (p.phase === 'out') {
+                    // failover: if the target node collapses, reroute mid-flight
+                    const st = nodeState(p.target, now);
+                    if (st.status === 'fail' || st.status === 'dying') {
+                        if (p.t > 0.3 || p.target === -1) {
+                            const nt = pickTarget(p.target);
+                            if (nt !== -1) { p.target = nt; p.flashT = 1; rerouted++; }
+                        }
+                    }
+                    p.t += dt / 1050;
+                    if (p.t >= 1 && p.target !== -1) {
+                        const n = nodes[p.target];
+                        n.load = Math.min(1, n.load + 0.16);
+                        n.flashes.push({ t0: now });
+                        served++;
+                        packets.splice(k, 1);
+                        continue;
+                    }
+                }
+
+                // position + tail
+                let pos;
+                if (p.phase === 'in') {
+                    const c = { x: (p.from.x + proxyExit.x) / 2, y: p.from.y };
+                    pos = quad(p.from, c, { x: L.proxy.x - L.proxy.w / 2 - 8, y: L.proxy.y }, easeInOut(Math.min(1, p.t)));
+                } else if (p.phase === 'dwell') {
+                    const a = now / 260 + k;
+                    pos = { x: L.proxy.x + Math.cos(a) * W * 0.016, y: L.proxy.y + Math.sin(a) * H * 0.05 };
+                } else {
+                    const n = L.nodes[p.target];
+                    const to = { x: n.x - L.nodeW / 2 - 8, y: n.y };
+                    const c = { x: (proxyExit.x + to.x) / 2, y: to.y };
+                    pos = quad(proxyExit, c, to, easeInOut(Math.min(1, p.t)));
+                }
+                p.pos = pos;
+                p.tail.push({ x: pos.x, y: pos.y });
+                if (p.tail.length > 13) p.tail.shift();
+            }
+
+            // load decay
+            for (let i = 0; i < 3; i++) {
+                nodes[i].load += (0.3 - nodes[i].load) * dt * 0.0004;
+                nodes[i].flashes = nodes[i].flashes.filter(f => now - f.t0 < 450);
+            }
+            proxyFlashes = proxyFlashes.filter(f => now - f.t0 < 450);
+        }
+
+        // ============================================================
+        // 6. DRAW LAYERS
+        // ============================================================
+        function drawBackground() {
+            ctx.fillStyle = rgba(COL.bg, 1);
+            ctx.fillRect(0, 0, W, H);
+            const g = ctx.createRadialGradient(W * 0.40, H * 0.5, 0, W * 0.40, H * 0.5, W * 0.45);
+            g.addColorStop(0, rgba(COL.accent, 0.05));
+            g.addColorStop(1, rgba(COL.accent, 0));
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, W, H);
+
+            ctx.strokeStyle = rgba([255, 255, 255], 0.035);
+            ctx.lineWidth = 1;
+            for (let x = 0; x < W; x += 44) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+            for (let y = 0; y < H; y += 44) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+        }
+
+        function drawConnections(now) {
+            const proxyExit = { x: L.proxy.x + L.proxy.w / 2, y: L.proxy.y };
+            const proxyEnter = { x: L.proxy.x - L.proxy.w / 2, y: L.proxy.y };
+            ctx.save();
+            ctx.setLineDash([6, 8]);
+            ctx.lineDashOffset = -(now * 0.02) % 14;
+            ctx.lineWidth = 1.2;
+
+            for (const c of L.clients) {
+                const g = ctx.createLinearGradient(c.x, c.y, proxyEnter.x, proxyEnter.y);
+                g.addColorStop(0, rgba(COL.accent, 0.06));
+                g.addColorStop(1, rgba(COL.accent, 0.30));
+                ctx.strokeStyle = g;
+                ctx.beginPath();
+                ctx.moveTo(c.x + W * 0.018, c.y);
+                const mx = (c.x + proxyEnter.x) / 2;
+                ctx.bezierCurveTo(mx, c.y, mx, L.proxy.y, proxyEnter.x, L.proxy.y);
+                ctx.stroke();
+            }
+            for (let i = 0; i < 3; i++) {
+                const n = L.nodes[i];
+                const st = nodeState(i, now);
+                const col = mix(COL.accent, COL.fail, st.failAmt);
+                const g = ctx.createLinearGradient(proxyExit.x, proxyExit.y, n.x, n.y);
+                g.addColorStop(0, rgba(col, 0.28));
+                g.addColorStop(1, rgba(col, 0.06));
+                ctx.strokeStyle = g;
+                const tx = n.x - L.nodeW / 2;
+                ctx.beginPath();
+                ctx.moveTo(proxyExit.x, L.proxy.y);
+                const mx = (proxyExit.x + tx) / 2;
+                ctx.bezierCurveTo(mx, L.proxy.y, mx, n.y, tx, n.y);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        function drawClients(now) {
+            for (const c of L.clients) {
+                const pulse = 0.5 + 0.5 * Math.sin(now / 600 + c.y);
+                const r = W * 0.009;
+                const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r * 4);
+                g.addColorStop(0, rgba(COL.muted, 0.18 + 0.1 * pulse));
+                g.addColorStop(1, rgba(COL.muted, 0));
+                ctx.fillStyle = g;
+                ctx.beginPath(); ctx.arc(c.x, c.y, r * 4, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = rgba(COL.surface, 0.9);
+                ctx.strokeStyle = rgba(COL.text, 0.35);
+                ctx.lineWidth = 1.2;
+                roundRect(c.x - r * 1.4, c.y - r * 1.4, r * 2.8, r * 2.8, r * 0.5);
+                ctx.fill(); ctx.stroke();
+                ctx.fillStyle = rgba(COL.accent, 0.6 + 0.4 * pulse);
+                ctx.beginPath(); ctx.arc(c.x, c.y, r * 0.55, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.fillStyle = rgba(COL.muted, 0.75);
+            ctx.font = `600 ${Math.round(W * 0.012)}px ${FONT_SANS}`;
+            ctx.textAlign = 'center';
+            ctx.fillText('C L I E N T S', W * 0.055, H * 0.30 - H * 0.088);
+        }
+
+        function drawProxy(now) {
+            const p = L.proxy;
+            const pulse = 0.5 + 0.5 * Math.sin(now / 700);
+
+            const g = ctx.createRadialGradient(p.x, p.y, p.w * 0.2, p.x, p.y, p.w * 1.6);
+            g.addColorStop(0, rgba(COL.accent, 0.13 + 0.05 * pulse));
+            g.addColorStop(1, rgba(COL.accent, 0));
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.w * 1.6, 0, Math.PI * 2); ctx.fill();
+
+            ctx.fillStyle = rgba(COL.surface, 0.95);
+            ctx.strokeStyle = rgba(COL.accent, 0.85);
+            ctx.lineWidth = 2;
+            roundRect(p.x - p.w / 2, p.y - p.h / 2, p.w, p.h, W * 0.012);
+            ctx.fill(); ctx.stroke();
+
+            // pulse ring
+            ctx.strokeStyle = rgba(COL.accent, 0.15 + 0.12 * pulse);
+            ctx.lineWidth = 1;
+            roundRect(p.x - p.w / 2 - 5 - 3 * pulse, p.y - p.h / 2 - 5 - 3 * pulse,
+                p.w + 10 + 6 * pulse, p.h + 10 + 6 * pulse, W * 0.014);
+            ctx.stroke();
+
+            // status dot
+            const r = W * 0.006;
+            const dg = ctx.createRadialGradient(p.x - p.w * 0.32, p.y - p.h * 0.24, 0,
+                p.x - p.w * 0.32, p.y - p.h * 0.24, r * 4);
+            dg.addColorStop(0, rgba(COL.accent, 0.7));
+            dg.addColorStop(1, rgba(COL.accent, 0));
+            ctx.fillStyle = dg;
+            ctx.beginPath(); ctx.arc(p.x - p.w * 0.32, p.y - p.h * 0.24, r * 4, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = rgba(COL.accent, 0.9);
+            ctx.beginPath(); ctx.arc(p.x - p.w * 0.32, p.y - p.h * 0.24, r, 0, Math.PI * 2); ctx.fill();
+
+            ctx.textAlign = 'left';
+            fitText('HA Proxy', p.x - p.w * 0.2, p.y - p.h * 0.08, W * 0.017, '700', FONT_SANS, p.w * 0.62, rgba(COL.text, 0.95));
+            ctx.textAlign = 'center';
+            fitText('active · load-balance', p.x, p.y + p.h * 0.2, W * 0.0115, '500', FONT_MONO, p.w * 0.86, rgba(COL.muted, 0.85));
+
+            // arrival flashes
+            for (const f of proxyFlashes) {
+                const tt = (now - f.t0) / 450;
+                ctx.strokeStyle = rgba(COL.accent, 0.5 * (1 - tt));
+                ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.arc(f.x, f.y, W * 0.008 + tt * W * 0.02, 0, Math.PI * 2); ctx.stroke();
+            }
+        }
+
+        function drawNodes(now) {
+            const nw = L.nodeW, nh = L.nodeH;
+            for (let i = 0; i < 3; i++) {
+                const n = L.nodes[i];
+                const st = nodeState(i, now);
+                const fail = st.failAmt;
+                const col = mix(COL.accent, COL.fail, fail);
+                const recover = st.status === 'recover';
+
+                // glow
+                const g = ctx.createRadialGradient(n.x, n.y, nw * 0.2, n.x, n.y, nw * 0.62);
+                g.addColorStop(0, rgba(col, 0.10 + 0.05 * fail));
+                g.addColorStop(1, rgba(col, 0));
+                ctx.fillStyle = g;
+                ctx.beginPath(); ctx.arc(n.x, n.y, nw * 0.62, 0, Math.PI * 2); ctx.fill();
+
+                // body
+                ctx.fillStyle = rgba(COL.surface, 0.95);
+                ctx.strokeStyle = rgba(col, 0.5 + 0.45 * fail);
+                ctx.lineWidth = 1.6 + fail;
+                roundRect(n.x - nw / 2, n.y - nh / 2, nw, nh, W * 0.011);
+                ctx.fill(); ctx.stroke();
+
+                // healthy heartbeat ring
+                if (fail < 0.5) {
+                    const pulse = 0.5 + 0.5 * Math.sin(now / 700 + i * 1.7);
+                    ctx.strokeStyle = rgba(COL.accent, (0.10 + 0.10 * pulse) * (1 - fail * 2));
+                    ctx.lineWidth = 1;
+                    roundRect(n.x - nw / 2 - 4 - 3 * pulse, n.y - nh / 2 - 4 - 3 * pulse,
+                        nw + 8 + 6 * pulse, nh + 8 + 6 * pulse, W * 0.013);
+                    ctx.stroke();
+                }
+
+                // down cross
+                if (fail > 0.05) {
+                    const a = fail * (0.45 + 0.25 * Math.sin(now / 160));
+                    ctx.strokeStyle = rgba(COL.fail, a);
+                    ctx.lineWidth = 2.5;
+                    const s = nw * 0.16;
+                    ctx.beginPath();
+                    ctx.moveTo(n.x + nw * 0.22 - s, n.y - nh * 0.28 - s); ctx.lineTo(n.x + nw * 0.22 + s, n.y - nh * 0.28 + s);
+                    ctx.moveTo(n.x + nw * 0.22 + s, n.y - nh * 0.28 - s); ctx.lineTo(n.x + nw * 0.22 - s, n.y - nh * 0.28 + s);
+                    ctx.stroke();
+                }
+
+                // labels
+                ctx.textAlign = 'center';
+                fitText('Node ' + nodesByName[i], n.x, n.y - nh * 0.16, W * 0.0155, '700', FONT_SANS, nw * 0.92, rgba(COL.text, 0.95));
+
+                const statusTxt = st.status === 'ok' ? 'ok' : st.status === 'recover' ? 'back online' : 'down';
+                const statusCol = st.status === 'ok' ? COL.accent : recover ? COL.bright : COL.fail;
+                fitText(statusTxt, n.x, n.y + nh * 0.02, W * 0.0115, '600', FONT_MONO, nw * 0.92, rgba(statusCol, 0.9));
+
+                // load bar
+                const bw = nw * 0.62, bh = Math.max(4, H * 0.008), bx = n.x - bw / 2, by = n.y + nh * 0.20;
+                ctx.fillStyle = rgba([255, 255, 255], 0.08);
+                roundRect(bx, by, bw, bh, bh / 2); ctx.fill();
+                if (fail > 0.5) {
+                    ctx.fillStyle = rgba(COL.fail, 0.85);
+                    roundRect(bx, by, bw, bh, bh / 2); ctx.fill();
+                } else {
+                    ctx.fillStyle = rgba(COL.accent, 0.85);
+                    roundRect(bx, by, bw * Math.max(0.03, nodes[i].load), bh, bh / 2); ctx.fill();
+                }
+
+                // arrival flashes
+                for (const f of nodes[i].flashes) {
+                    const tt = (now - f.t0) / 450;
+                    ctx.strokeStyle = rgba(COL.accent, 0.5 * (1 - tt));
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.arc(n.x - nw / 2 - 6, n.y, W * 0.006 + tt * W * 0.016, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+
+                // recovery flash rings
+                if (recover) {
+                    const tt = ((now % CYCLE) - FAIL_END) % 900 / 900;
+                    ctx.strokeStyle = rgba(COL.bright, 0.6 * (1 - tt));
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath(); ctx.arc(n.x, n.y, nw * 0.35 + tt * nw * 0.55, 0, Math.PI * 2); ctx.stroke();
+                }
+            }
+        }
+
+        function drawPings(now) {
+            const proxyExit = { x: L.proxy.x + L.proxy.w / 2, y: L.proxy.y };
+            for (const p of pings) {
+                const n = L.nodes[p.i];
+                const to = { x: n.x - L.nodeW / 2 - 4, y: n.y };
+                const c = { x: (proxyExit.x + to.x) / 2, y: to.y };
+                const pos = quad(proxyExit, c, to, easeInOut(Math.min(1, p.t)));
+                const st = nodeState(p.i, now);
+                const col = st.status !== 'ok' ? COL.fail : COL.bright;
+                const a = 0.5 + 0.5 * Math.sin(now / 90 + p.i);
+                const g = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, W * 0.011);
+                g.addColorStop(0, rgba(col, 0.9 * a));
+                g.addColorStop(1, rgba(col, 0));
+                ctx.fillStyle = g;
+                ctx.beginPath(); ctx.arc(pos.x, pos.y, W * 0.011, 0, Math.PI * 2); ctx.fill();
+            }
+            // "detected" blip on a failed node when a ping lands
+            for (let i = 0; i < 3; i++) {
+                const d = now - nodes[i].detected;
+                if (d < 400) {
+                    const st = nodeState(i, now);
+                    if (st.status !== 'ok') {
+                        const n = L.nodes[i];
+                        ctx.strokeStyle = rgba(COL.fail, 0.7 * (1 - d / 400));
+                        ctx.lineWidth = 2;
+                        ctx.beginPath(); ctx.arc(n.x, n.y - L.nodeH * 0.28, W * 0.012 + d / 400 * W * 0.014, 0, Math.PI * 2); ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        function drawPackets() {
+            for (const p of packets) {
+                if (!p.pos) continue;
+                const col = mix(COL.accent, COL.fail, p.flashT);
+                // tail
+                for (let i = 1; i < p.tail.length; i++) {
+                    const a = (i / p.tail.length) * (0.35 + p.flashT * 0.3);
+                    ctx.strokeStyle = rgba(col, a);
+                    ctx.lineWidth = (i / p.tail.length) * 3.5;
+                    ctx.beginPath();
+                    ctx.moveTo(p.tail[i - 1].x, p.tail[i - 1].y);
+                    ctx.lineTo(p.tail[i].x, p.tail[i].y);
+                    ctx.stroke();
+                }
+                const g = ctx.createRadialGradient(p.pos.x, p.pos.y, 0, p.pos.x, p.pos.y, W * 0.011);
+                g.addColorStop(0, rgba(col, 0.95));
+                g.addColorStop(1, rgba(col, 0));
+                ctx.fillStyle = g;
+                ctx.beginPath(); ctx.arc(p.pos.x, p.pos.y, W * 0.011, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = 'rgba(255,255,255,0.95)';
+                ctx.beginPath(); ctx.arc(p.pos.x, p.pos.y, 2.2, 0, Math.PI * 2); ctx.fill();
+            }
+        }
+
+        function drawHUD(now) {
+            ctx.textAlign = 'center';
+            ctx.fillStyle = rgba(COL.text, 0.96);
+            ctx.font = `700 ${Math.round(W * 0.027)}px ${FONT_SANS}`;
+            ctx.fillText('High-Availability Proxy', W / 2, H * 0.095);
+
+            fitText('requests in · routed to the healthiest node · failover out', W / 2, H * 0.145, W * 0.0135, '500', FONT_MONO, W * 0.6, rgba(COL.muted, 0.85));
+
+            // failover caption
+            let worst = { i: -1, st: null };
+            for (let i = 0; i < 3; i++) {
+                const st = nodeState(i, now);
+                if (st.status === 'fail' || st.status === 'dying') worst = { i, st };
+            }
+            if (worst.st) {
+                const t = now % CYCLE;
+                let a = 1;
+                if (t < FAIL_DIE + 300) a = Math.min(1, a, (t - FAIL_START) / 600);
+                if (t > FAIL_END - 300) a = Math.max(0, (FAIL_END - t) / 300);
+                fitText(`node ${nodesByName[worst.i]} down — traffic rerouted`, W / 2, H * 0.185, W * 0.013, '600', FONT_MONO, W * 0.5, rgba(COL.fail, 0.9 * a));
+            }
+
+            // bottom stats
+            const stats = [
+                ['served', served.toLocaleString(), COL.accent],
+                ['rerouted', String(rerouted), COL.bright],
+                ['uptime', '100%', COL.accent],
+            ];
+            const sx = W * 0.16, gap = W * 0.19;
+            stats.forEach(([label, value, col], i) => {
+                const x = sx + i * gap;
+                ctx.textAlign = 'left';
+                ctx.fillStyle = rgba(COL.muted, 0.7);
+                ctx.font = `600 ${Math.round(W * 0.0105)}px ${FONT_SANS}`;
+                ctx.fillText(label.toUpperCase(), x, H * 0.925);
+                ctx.fillStyle = rgba(col, 0.95);
+                ctx.font = `700 ${Math.round(W * 0.019)}px ${FONT_MONO}`;
+                ctx.fillText(value, x, H * 0.962);
+            });
+        }
+
+        // ============================================================
+        // 7. MAIN LOOP
+        // ============================================================
+        let spawnAcc = 0;
+        let last = 0;
+        let perfNow = 0;
+
+        function frame(now) {
+            perfNow = now;
+            const dt = Math.min(50, last ? now - last : 16);
+            last = now;
+
+            ctx.clearRect(0, 0, W, H);
+            drawBackground();
+            drawConnections(now);
+            updateEntities(dt, now);
+            drawPings(now);
+            drawClients(now);
+            drawPackets();
+            drawNodes(now);
+            drawProxy(now);
+            drawHUD(now);
+            requestAnimationFrame(frame);
+        }
+
+        resize();
+        requestAnimationFrame(frame);
+    </script>
+</body>
+
+</html>
