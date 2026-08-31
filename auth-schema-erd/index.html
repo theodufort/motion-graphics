@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Creator Pipe — auth schema ERD</title>
+    <link rel="stylesheet" href="../css/brand.css">
+    <link rel="stylesheet" href="../css/motion.css">
+    <style>
+        body {
+            margin: 0;
+            background: var(--bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border);
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="stage"></canvas>
+    <script>
+        'use strict';
+        // ============================================================
+        // 1. SETUP — DPI-aware resize + brand tokens
+        // ============================================================
+        const canvas = document.getElementById('stage');
+        const ctx = canvas.getContext('2d');
+        let W, H;
+
+        const cssVars = getComputedStyle(document.documentElement);
+        function tok(name) { return cssVars.getPropertyValue(name).trim(); }
+        function parseColor(str) {
+            str = str.trim();
+            if (str[0] === '#') {
+                let h = str.slice(1);
+                if (h.length === 3) h = h.split('').map(c => c + c).join('');
+                return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+            }
+            const m = str.match(/[\d.]+/g).map(Number);
+            return m.length >= 3 ? m.slice(0, 3) : [255, 255, 255];
+        }
+        const COL = {
+            accent: parseColor(tok('--accent')),
+            bright: parseColor(tok('--green-4')),
+            fail: parseColor(tok('--fail')),
+            text: parseColor(tok('--text')),
+            muted: parseColor(tok('--muted')),
+            bg: parseColor(tok('--bg')),
+            surface: parseColor(tok('--bg-2')),
+        };
+        // ERD semantic hues (not brand tokens): warm = identity/auth, cool = public
+        const AMBER = [255, 196, 102];
+        const BLUE = [130, 196, 255];
+        const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+        const mix = (c1, c2, t) => [
+            Math.round(c1[0] + (c2[0] - c1[0]) * t),
+            Math.round(c1[1] + (c2[1] - c1[1]) * t),
+            Math.round(c1[2] + (c2[2] - c1[2]) * t),
+        ];
+        const FONT_SANS = tok('--font-sans');
+        const FONT_MONO = tok('--font-mono');
+
+        // ============================================================
+        // 2. LAYOUT — everything derived from W / H
+        // ============================================================
+        let L = {};
+        function buildLayout() {
+            const tw = (p, cx, cy, w, h) => Object.assign({}, p, { cx, cy, w, h, x: cx - w / 2, y: cy - h / 2 });
+
+            // ---- panels -------------------------------------------------
+            // Both panels share the same top/bottom band so nothing pokes
+            // out of its border, with margin below the title chip (~0.173H)
+            // and above the legend (0.965H).
+            L.authPanel = { x: W * 0.035, y: H * 0.190, w: W * 0.330, h: H * 0.705 };
+            L.pubPanel = { x: W * 0.615, y: H * 0.190, w: W * 0.360, h: H * 0.705 };
+
+            // ---- auth schema tables --------------------------------------
+            L.users = tw(L, W * 0.1975, H * 0.450, W * 0.275, H * 0.340);
+            L.sessions = tw(L, W * 0.1275, H * 0.760, W * 0.135, H * 0.220);
+            L.reset = tw(L, W * 0.2750, H * 0.760, W * 0.120, H * 0.220);
+
+            // ---- app / SECURITY DEFINER nodes (middle gap between panels) --
+            L.proc = tw(L, W * 0.450, H * 0.270, W * 0.120, H * 0.065);
+            L.app = tw(L, W * 0.530, H * 0.410, W * 0.110, H * 0.150);
+
+            // ---- public schema tables --------------------------------------
+            L.profiles = tw(L, W * 0.705, H * 0.470, W * 0.140, H * 0.380);
+            L.messages = tw(L, W * 0.705, H * 0.780, W * 0.140, H * 0.180);
+            L.conv = tw(L, W * 0.880, H * 0.368, W * 0.150, H * 0.177);
+            L.bounties = tw(L, W * 0.880, H * 0.575, W * 0.150, H * 0.177);
+            L.payouts = tw(L, W * 0.880, H * 0.782, W * 0.150, H * 0.177);
+
+            L.legY = H * 0.965;
+
+            // connection anchors (pure geometry, fixed per resize)
+            L.appExit = { x: L.app.x, y: L.app.cy };
+            L.procEnter = { x: L.proc.x + L.proc.w / 2, y: L.proc.y + L.proc.h };
+            L.procExitL = { x: L.proc.x, y: L.proc.cy };
+            L.usersEnterR = { x: L.users.x + L.users.w, y: L.users.y + L.users.h * 0.30 }; // email row
+            L.usersTopR = { x: L.users.x + L.users.w, y: L.users.y };                       // token row
+            L.usersEnterL = { x: L.users.x, y: L.users.y + L.users.h * 0.42 }; // row 4
+            L.usersEnterB = { x: L.users.x + L.users.w * 0.60, y: L.users.y + L.users.h };
+            L.sessionsEnterTop = { x: L.users.cx, y: L.sessions.y };
+            L.sessionsEnterL = { x: L.sessions.x, y: L.sessions.cy };
+            L.sessionsEnterTR = { x: L.sessions.x + L.sessions.w, y: L.sessions.y + L.sessions.h * 0.35 };
+            L.usersExitB = { x: L.users.x + L.users.w * 0.30, y: L.users.y + L.users.h };
+            L.resetEnterTop = { x: L.users.cx, y: L.reset.y };
+            L.resetEnterL = { x: L.reset.x, y: L.reset.cy + L.reset.h * 0.18 };
+            L.usersExitBR = { x: L.users.x + L.users.w * 0.85, y: L.users.y + L.users.h };
+
+            L.profilesRight = { x: L.profiles.x + L.profiles.w, y: L.profiles.y + L.profiles.h * 0.12 };
+            L.convLeft = { x: L.conv.x, y: L.conv.y + L.conv.h * 0.18 };
+            L.profilesBottom = { x: L.profiles.cx + L.profiles.w * 0.28, y: L.profiles.y + L.profiles.h };
+            L.convLeftL = { x: L.conv.x, y: L.conv.cy + L.conv.h * 0.18 };
+            L.convBottomL = { x: L.conv.cx - L.conv.w * 0.25, y: L.conv.y + L.conv.h };
+            L.messagesTopR = { x: L.messages.cx + L.messages.w * 0.22, y: L.messages.y };
+            L.messagesTopL = { x: L.messages.cx - L.messages.w * 0.22, y: L.messages.y };
+            L.profilesBottomL = { x: L.profiles.cx - L.profiles.w * 0.30, y: L.profiles.y + L.profiles.h };
+            L.convBottom = { x: L.conv.cx, y: L.conv.y + L.conv.h };
+            L.bountiesTop = { x: L.bounties.cx, y: L.bounties.y };
+            L.bountiesLeft = { x: L.bounties.x, y: L.bounties.cy };
+            L.profilesBottomR = { x: L.profiles.cx + L.profiles.w * 0.38, y: L.profiles.y + L.profiles.h * 0.97 };
+            L.payoutsLeft = { x: L.payouts.x, y: L.payouts.cy };
+        }
+
+        function resize() {
+            const dpr = window.devicePixelRatio || 1;
+            W = Math.min(window.innerWidth - 32, 1100);
+            H = Math.round(W * 9 / 16);
+            canvas.width = W * dpr;
+            canvas.height = H * dpr;
+            canvas.style.width = W + 'px';
+            canvas.style.height = H + 'px';
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            buildLayout();
+        }
+        window.addEventListener('resize', resize);
+
+        // ============================================================
+        // 3. EASING + path + rng helpers
+        // ============================================================
+        function lerp(a, b, t) { return a + (b - a) * t; }
+        function clamp01(t) { return Math.max(0, Math.min(1, t)); }
+        function easeInOut(t) { return t < 0.5 ? 2 * t * t : -1 + (4 - 4 * t) * t; }
+        function quad(a, c, b, t) {
+            const u = 1 - t;
+            return { x: u * u * a.x + 2 * u * t * c.x + t * t * b.x, y: u * u * a.y + 2 * u * t * c.y + t * t * b.y };
+        }
+        function cubic(a, b, c, d, t) {
+            const u = 1 - t;
+            return {
+                x: u * u * u * a.x + 3 * u * u * t * b.x + 3 * u * t * t * c.x + t * t * t * d.x,
+                y: u * u * u * a.y + 3 * u * u * t * b.y + 3 * u * t * t * c.y + t * t * t * d.y,
+            };
+        }
+        function roundRect(x, y, w, h, r) {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+            ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+            ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+            ctx.closePath();
+        }
+        function mulberry32(seed) {
+            return function () {
+                seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+                let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+                t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+                return ((t ^ t >>> 14) >>> 0) / 4294966368;
+            };
+        }
+        // deterministic per-loop-constant tokens (stable across the seam)
+        const RND_A = mulberry32(7001), RND_B = mulberry32(7109), RND_C = mulberry32(7321);
+        const tokHex = (rnd, n) => { let s = ''; for (let i = 0; i < n; i++) s += ((rnd() * 16) | 0).toString(16); return s; };
+        const TOK_A = tokHex(RND_A, 10), TOK_B = tokHex(RND_B, 6) + '…', TOK_C = tokHex(RND_C, 10) + '…';
+
+        // ============================================================
+        // 4. STORY TIMELINE — one 30s loop, all state derived from `t`
+        //    beats: 0 schema(0–6) · 1 signup(6–12) · 2 session(12–18)
+        //           3 login(18–24) · 4 reset(24–30)
+        // ============================================================
+        const LOOP = 30000;
+        const T = (s) => s * 1000;
+        const BEAT = {
+            BEAT0_END: T(6), BEAT1_END: T(12), BEAT2_END: T(18), BEAT3_END: T(24), BEAT4_END: T(30),
+            A1: [T(8.0), T(9.9)],   // app → users (create)
+            A2: [T(9.2), T(10.5)],  // users → sessions (session row)
+            B3: [T(13.2), T(15.1)], // app → users (re-auth)
+            B4: [T(14.6), T(16.7)], // sessions → app (session id back)
+            C5: [T(19.4), T(21.3)], // app → users (re-auth)
+            C6: [T(21.0), T(22.7)], // users → sessions (revoke-all ripple)
+            D7: [T(25.4), T(27.1)], // app → reset (issue token)
+            D8: [T(26.2), T(28.3)], // reset → sessions (revoke on consume)
+        };
+        const pulse = (now, period, phase = 0) => 0.5 + 0.5 * Math.sin(now / period + phase);
+        const rowOf = (s, i) => s.y + s.h * (0.32 + 0.155 * i);
+        function inWin(t, s) { return (t - s) / 500; } // 0..1 ramp for a 500ms entrance
+
+        const TABLES = [
+            { id: 'users', name: 'users', col: AMBER, rows: [
+                ['id', 'uuid · PK'],
+                ['email', 'varchar · UNIQUE'],
+                ['password_hash', 'text · pgsodium'],
+                ['role', 'varchar · DFLT'],
+                ['metadata', 'jsonb'],
+                ['created_at', 'timestamptz'],
+            ] },
+            { id: 'sessions', name: 'sessions', col: AMBER, rows: [
+                ['id', 'uuid · PK'],
+                ['user_id', 'uuid · FK'],
+                ['token_hash', 'text · UNIQUE'],
+                ['revoked', 'bool · DFLT'],
+                ['expires_at', 'timestamptz'],
+                ['created_at', 'timestamptz'],
+            ] },
+            { id: 'reset', name: 'password_resets', col: AMBER, rows: [
+                ['id', 'uuid · PK'],
+                ['user_id', 'uuid · FK'],
+                ['token_hash', 'text · UNIQUE'],
+                ['expires_at', 'timestamptz'],
+                ['used_at', 'timestamptz · NULL'],
+            ] },
+            { id: 'profiles', name: 'profiles', col: BLUE, rows: [
+                ['id', 'serial · PK'],
+                ['uuid', 'uuid · FK→auth'],
+                ['handle', 'varchar · UNIQUE'],
+                ['display_name', 'varchar'],
+                ['bio', 'text'],
+                ['avatar_url', 'varchar'],
+                ['email_verified', 'bool · DFLT'],
+                ['bounty_cap_cents', 'int · DFLT'],
+                ['rev_share_tier', 'varchar'],
+            ] },
+            { id: 'conv', name: 'conversations', col: BLUE, rows: [
+                ['id', 'serial · PK'],
+                ['creator_id', 'int · FK'],
+                ['sender_id', 'int · FK'],
+                ['status', 'varchar · DFLT'],
+                ['created_at', 'timestamptz'],
+            ] },
+            { id: 'messages', name: 'messages', col: BLUE, rows: [
+                ['id', 'serial · PK'],
+                ['conversation_id', 'int · FK'],
+                ['sender_id', 'int · FK'],
+                ['body', 'text'],
+            ] },
+            { id: 'bounties', name: 'bounties', col: BLUE, rows: [
+                ['id', 'serial · PK'],
+                ['conversation_id', 'int · UNIQUE'],
+                ['amount_cents', 'int · CHECK'],
+                ['currency', 'varchar · DFLT'],
+                ['fee_cents', 'int'],
+                ['status', 'varchar · DFLT'],
+            ] },
+            { id: 'payouts', name: 'payouts', col: BLUE, rows: [
+                ['id', 'serial · PK'],
+                ['creator_id', 'int · FK'],
+                ['amount_cents', 'int · CHECK'],
+                ['currency', 'varchar · DFLT'],
+                ['stripe_transfer_id', 'varchar · UNQ'],
+                ['status', 'varchar · DFLT'],
+            ] },
+        ];
+        const EDGE_LABELS = [
+            ['users-profs', 'identity'],
+            ['users-sess', 'owns'],
+            ['users-reset', 'requests'],
+            ['conv-msgs', 'contains'],
+            ['profs-mssgs', 'authors'],
+        ];
+
+        // ============================================================
+        // 5. DRAW LAYERS
+        // ============================================================
+        function drawBackground(now) {
+            ctx.fillStyle = rgba(COL.bg, 1);
+            ctx.fillRect(0, 0, W, H);
+            const g = ctx.createRadialGradient(W * 0.5, H * 0.42, 0, W * 0.5, H * 0.42, W * 0.55);
+            g.addColorStop(0, rgba(COL.accent, 0.05));
+            g.addColorStop(1, rgba(COL.accent, 0));
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, W, H);
+            ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+            ctx.lineWidth = 1;
+            for (let x = 0; x < W; x += 44) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+            for (let y = 0; y < H; y += 44) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+        }
+
+        // ---- ERD tables -------------------------------------------------
+        function drawTable(tbl, now, t, hotRow, hotCol, flashT) {
+            const d = L[tbl.id];
+            const headH = d.h * 0.17;
+            // glow (hot tables pulse)
+            const p = pulse(now, 900, d.x * 0.01);
+            const glow = ctx.createRadialGradient(d.cx, d.cy, d.w * 0.2, d.cx, d.cy, Math.max(d.w, d.h) * 0.78);
+            glow.addColorStop(0, rgba(tbl.col, hotRow >= 0 ? 0.14 + 0.06 * p : 0.05 + 0.03 * p));
+            glow.addColorStop(1, rgba(tbl.col, 0));
+            ctx.fillStyle = glow;
+            ctx.beginPath(); ctx.arc(d.cx, d.cy, Math.max(d.w, d.h) * 0.78, 0, Math.PI * 2); ctx.fill();
+
+            // body
+            ctx.fillStyle = rgba(COL.surface, 0.96);
+            ctx.strokeStyle = rgba(tbl.col, 0.45 + (hotRow >= 0 ? 0.25 : 0) + (flashT > 0 && flashT < 1 ? 0.3 * (1 - flashT) : 0));
+            ctx.lineWidth = 1.5;
+            roundRect(d.x, d.y, d.w, d.h, W * 0.008);
+            ctx.fill(); ctx.stroke();
+
+            // header band
+            const hc = hotRow >= 0 || (flashT > 0 && flashT < 1) ? tbl.col : mix(tbl.col, COL.muted, 0.35);
+            ctx.fillStyle = rgba(hc, 0.14);
+            ctx.beginPath();
+            ctx.moveTo(d.x + W * 0.008, d.y);
+            ctx.lineTo(d.x + d.w - W * 0.008, d.y);
+            ctx.quadraticCurveTo(d.x + d.w, d.y, d.x + d.w, d.y + W * 0.008);
+            ctx.lineTo(d.x + d.w, d.y + headH);
+            ctx.lineTo(d.x, d.y + headH);
+            ctx.lineTo(d.x, d.y + W * 0.008);
+            ctx.quadraticCurveTo(d.x, d.y, d.x + W * 0.008, d.y);
+            ctx.closePath(); ctx.fill();
+            ctx.strokeStyle = rgba(hc, 0.4);
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(d.x, d.y + headH); ctx.lineTo(d.x + d.w, d.y + headH); ctx.stroke();
+
+            ctx.fillStyle = rgba(COL.text, 0.95);
+            ctx.font = `700 ${Math.round(W * 0.011)}px ${FONT_MONO}`;
+            ctx.textAlign = 'left';
+            ctx.fillText(tbl.name, d.x + d.w * 0.06, d.y + headH * 0.68);
+
+            // flash ring around whole table
+            if (flashT > 0 && flashT < 1) {
+                const e = 1 - flashT;
+                ctx.strokeStyle = rgba(tbl.col, 0.55 * e);
+                ctx.lineWidth = 2;
+                roundRect(d.x - 5 - 12 * flashT, d.y - 5 - 12 * flashT, d.w + 10 + 24 * flashT, d.h + 10 + 24 * flashT, W * 0.012);
+                ctx.stroke();
+            }
+
+            // rows (reveal with the owning panel; hot row glows)
+            const n = tbl.rows.length, bodyTop = d.y + headH, rowH = (d.h - headH) / n;
+            const padL = d.w * 0.06, colX = d.x + d.w * 0.52;
+            const rowFs = Math.round(d.h * 0.056);
+            for (let i = 0; i < n; i++) {
+                const ry = bodyTop + rowH * i;
+                if (hotRow === i) {
+                    ctx.fillStyle = rgba((hotCol === 1) ? COL.bright : tbl.col, 0.10);
+                    ctx.fillRect(d.x + 2, ry + 1, d.w - 4, rowH - 1);
+                    ctx.strokeStyle = rgba((hotCol === 1) ? COL.bright : tbl.col, 0.5);
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(d.x + 2, ry + rowH); ctx.lineTo(d.x + d.w - 2, ry + rowH);
+                    ctx.stroke();
+                } else if (i < n - 1) {
+                    ctx.strokeStyle = 'rgba(255,255,255,0.045)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(d.x + 2, ry + rowH); ctx.lineTo(d.x + d.w - 2, ry + rowH);
+                    ctx.stroke();
+                }
+                const [nm, ty] = tbl.rows[i];
+                const maxW = d.w * 0.42;
+                let nmS = nm;
+                ctx.font = `500 ${rowFs}px ${FONT_MONO}`;
+                while (nmS.length > 3 && ctx.measureText(nmS).width > maxW) nmS = nmS.slice(0, -1);
+                let tyS = ty;
+                while (tyS.length > 3 && ctx.measureText(tyS).width > maxW) tyS = tyS.slice(0, -1);
+                // beat overlays write live values into the type cell — leave it clear
+                const overlaid = (d.id === 'users' && i === 1)
+                    || (d.id === 'sessions' && (i === 2 || i === 3))
+                    || (d.id === 'sessions' && i === 2)
+                    || (d.id === 'reset' && i === 4);
+                ctx.fillStyle = rgba(COL.muted, hotRow === i ? 0.95 : 0.72);
+                ctx.textAlign = 'left';
+                ctx.fillText(nmS, d.x + padL, ry + rowH * 0.66);
+                if (!overlaid) {
+                    ctx.fillStyle = rgba(hotRow === i && hotCol === 1 ? COL.bright : COL.muted, hotRow === i ? 0.95 : 0.55);
+                    ctx.font = `400 ${rowFs - 2}px ${FONT_MONO}`;
+                    ctx.fillText(tyS, colX, ry + rowH * 0.66);
+                }
+            }
+        }
+        // ---- schema panels (auth / public) ------------------------------
+        function drawPanel(rect, label, col, now, gin, tag) {
+            if (gin <= 0) return;
+            ctx.save();
+            ctx.translate((1 - gin) * -W * 0.03, 0);
+            ctx.globalAlpha = gin;
+            const cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2;
+            const g = ctx.createRadialGradient(cx, cy, rect.w * 0.1, cx, cy, rect.w * 1.05);
+            g.addColorStop(0, rgba(col, 0.07));
+            g.addColorStop(1, rgba(col, 0));
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(cx, cy, rect.w * 1.05, 0, Math.PI * 2); ctx.fill();
+
+            ctx.fillStyle = rgba(COL.bg, 0.55);
+            ctx.strokeStyle = rgba(col, 0.30);
+            ctx.lineWidth = 1.2;
+            roundRect(rect.x, rect.y, rect.w, rect.h, W * 0.012);
+            ctx.fill(); ctx.stroke();
+
+            // package label + tag
+            const p = pulse(now, 1400, rect.x * 0.01);
+            ctx.fillStyle = rgba(col, 0.10 + 0.04 * p);
+            ctx.strokeStyle = rgba(col, 0.45);
+            ctx.lineWidth = 1;
+            const fs = Math.round(W * 0.011);
+            ctx.font = `700 ${fs}px ${FONT_MONO}`;
+            const lw = ctx.measureText(label).width;
+            roundRect(rect.x + W * 0.012, rect.y + H * 0.016, lw + W * 0.024, fs * 2.3, fs * 0.6);
+            ctx.fill(); ctx.stroke();
+            ctx.fillStyle = rgba(col, 0.95);
+            ctx.textAlign = 'left';
+            ctx.fillText(label, rect.x + W * 0.024, rect.y + H * 0.016 + fs * 1.62);
+            ctx.font = `500 ${Math.round(W * 0.008)}px ${FONT_MONO}`;
+            ctx.fillStyle = rgba(COL.muted, 0.7);
+            ctx.fillText(tag, rect.x + W * 0.024 + lw + W * 0.038, rect.y + H * 0.016 + fs * 1.55);
+            ctx.restore();
+        }
+
+        // ---- app node + proc chip ----------------------------------------
+        function drawApp(now, t, hot) {
+            const d = L.app;
+            const p = pulse(now, 950, 2);
+            const col = hot ? COL.bright : COL.accent;
+            const g = ctx.createRadialGradient(d.cx, d.cy, d.w * 0.2, d.cx, d.cy, d.w * 1.1);
+            g.addColorStop(0, rgba(col, hot ? 0.16 + 0.06 * p : 0.08 + 0.03 * p));
+            g.addColorStop(1, rgba(col, 0));
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(d.cx, d.cy, d.w * 1.1, 0, Math.PI * 2); ctx.fill();
+
+            ctx.fillStyle = rgba(COL.surface, 0.96);
+            ctx.strokeStyle = rgba(col, 0.7 + 0.2 * p);
+            ctx.lineWidth = 1.8;
+            roundRect(d.x, d.y, d.w, d.h, W * 0.012);
+            ctx.fill(); ctx.stroke();
+
+            // browser glyph: ring + dot
+            const s = W * 0.011;
+            ctx.strokeStyle = rgba(col, 0.9);
+            ctx.lineWidth = 1.6;
+            ctx.beginPath(); ctx.arc(d.cx - s * 0.6, d.cy - d.h * 0.16, s, 0, Math.PI * 2); ctx.stroke();
+            ctx.fillStyle = rgba(col, 0.9);
+            ctx.beginPath(); ctx.arc(d.cx + s * 0.8, d.cy - d.h * 0.16, s * 0.4, 0, Math.PI * 2); ctx.fill();
+
+            ctx.textAlign = 'center';
+            ctx.fillStyle = rgba(COL.text, 0.95);
+            ctx.font = `700 ${Math.round(W * 0.013)}px ${FONT_SANS}`;
+            ctx.fillText('web app', d.cx, d.cy + d.h * 0.14);
+            ctx.fillStyle = rgba(COL.muted, 0.8);
+            ctx.font = `500 ${Math.round(W * 0.008)}px ${FONT_MONO}`;
+            ctx.fillText('creator_pipe_app', d.cx, d.cy + d.h * 0.34);
+        }
+
+        function drawProc(now, t, hot) {
+            const d = L.proc;
+            const p = pulse(now, 1100, 5);
+            const col = hot ? COL.bright : COL.accent;
+            ctx.fillStyle = rgba(COL.surface, 0.96);
+            ctx.strokeStyle = rgba(col, 0.55 + 0.3 * p);
+            ctx.lineWidth = 1.4;
+            ctx.setLineDash([5, 4]);
+            ctx.lineDashOffset = -((now * 0.02) % 9);
+            roundRect(d.x, d.y, d.w, d.h, W * 0.008);
+            ctx.fill(); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.textAlign = 'center';
+            ctx.fillStyle = rgba(col, 0.95);
+            ctx.font = `700 ${Math.round(W * 0.0095)}px ${FONT_MONO}`;
+            ctx.fillText('SECURITY DEFINER', d.cx, d.cy - d.h * 0.09);
+            ctx.fillStyle = rgba(COL.muted, 0.85);
+            ctx.font = `500 ${Math.round(W * 0.008)}px ${FONT_MONO}`;
+            ctx.fillText('auth.* functions', d.cx, d.cy + d.h * 0.24);
+        }
+
+        // ---- dashed ERD connectors ---------------------------------------
+        // anchors are lazy property names (resolved from L at draw time)
+        const EDGES = [
+            ['users', 'profiles', 'usersEnterR', 'profilesRight', 0.06],
+            ['users', 'sessions', 'usersEnterB', 'sessionsEnterTop', 0.05],
+            ['users', 'reset', 'usersExitBR', 'resetEnterTop', 0.05],
+            ['profiles', 'conv', 'profilesRight', 'convLeft', 0.05],
+            ['profiles', 'messages', 'profilesBottomL', 'messagesTopL', 0.05],
+            ['conv', 'messages', 'convBottomL', 'messagesTopR', 0.05],
+            ['conv', 'bounties', 'convBottom', 'bountiesTop', 0.06],
+            ['profiles', 'payouts', 'profilesBottomR', 'payoutsLeft', 0.04],
+        ];
+
+        function edgePath(A, B, bend) {
+            const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
+            const dx = B.x - A.x, dy = B.y - A.y;
+            let c;
+            if (Math.abs(dy) > Math.abs(dx)) c = { x: mx + (dy > 0 ? -W * bend : W * bend), y: my };
+            else c = { x: mx, y: my + (dx > 0 ? H * bend : -H * bend) };
+            return { s: A, e: B, c };
+        }
+
+        function drawConnections(now, t, authOn, pubOn) {
+            ctx.save();
+            ctx.setLineDash([5, 7]);
+            ctx.lineDashOffset = -((now * 0.02) % 12);
+            ctx.lineWidth = 1.3;
+
+            // auth side: app → proc, proc → users
+            ctx.globalAlpha = authOn;
+            let g = ctx.createLinearGradient(L.appExit.x, L.appExit.y, L.procEnter.x, L.procEnter.y);
+            g.addColorStop(0, rgba(COL.accent, 0.4 * authOn));
+            g.addColorStop(1, rgba(COL.accent, 0.12 * authOn));
+            ctx.strokeStyle = g;
+            const pc = { x: (L.appExit.x + L.procEnter.x) / 2, y: L.appExit.y - H * 0.035 };
+            ctx.beginPath(); ctx.moveTo(L.appExit.x, L.appExit.y);
+            ctx.quadraticCurveTo(pc.x, pc.y, L.procEnter.x, L.procEnter.y); ctx.stroke();
+
+            g = ctx.createLinearGradient(L.procExitL.x, L.procExitL.y, L.usersEnterR.x, L.usersEnterR.y);
+            g.addColorStop(0, rgba(COL.accent, 0.12 * authOn));
+            g.addColorStop(1, rgba(COL.accent, 0.4 * authOn));
+            ctx.strokeStyle = g;
+            const uc = { x: (L.procExitL.x + L.usersEnterR.x) / 2, y: L.procExitL.y + H * 0.045 };
+            ctx.beginPath(); ctx.moveTo(L.procExitL.x, L.procExitL.y);
+            ctx.quadraticCurveTo(uc.x, uc.y, L.usersEnterR.x, L.usersEnterR.y); ctx.stroke();
+            ctx.globalAlpha = 1;
+
+            // users → sessions + users → resets (auth ERDs)
+            for (const [i, e] of EDGES.entries()) {
+                if (i < 3) continue;
+                const path = edgePath(L[e[2]], L[e[3]], e[4]);
+                const col = (e[0] === 'users') ? rgba(AMBER, 0.45) : rgba(BLUE, 0.4);
+                if (e[0] === 'users') { ctx.globalAlpha = authOn; } else { ctx.globalAlpha = pubOn; }
+                ctx.strokeStyle = col;
+                ctx.beginPath(); ctx.moveTo(path.s.x, path.s.y);
+                ctx.quadraticCurveTo(path.c.x, path.c.y, path.e.x, path.e.y); ctx.stroke();
+                ctx.globalAlpha = 1;
+            }
+
+            ctx.setLineDash([]);
+
+            // "reads: procedures only" — sits above the SECURITY DEFINER
+            // chip, in the empty gap between panels, clear of the app node.
+            ctx.save();
+            ctx.globalAlpha = authOn;
+            const fs = Math.round(W * 0.008);
+            ctx.font = `600 ${fs}px ${FONT_MONO}`;
+            ctx.textAlign = 'center';
+            ctx.fillStyle = rgba(COL.muted, 0.65);
+            ctx.fillText('reads: procedures only', L.proc.cx, L.proc.y - H * 0.018);
+            ctx.restore();
+
+            // "messages ⇒ app (via sender_id)" — sits below the app node,
+            // clear of its box and of the public-schema tables.
+            ctx.save();
+            ctx.globalAlpha = Math.min(authOn, pubOn);
+            ctx.font = `500 ${Math.round(W * 0.0078)}px ${FONT_MONO}`;
+            ctx.textAlign = 'center';
+            ctx.fillStyle = rgba(BLUE, 0.75);
+            ctx.fillText('messages ⇒ app (via sender_id)', L.app.cx, L.app.y + L.app.h + H * 0.028);
+            ctx.globalAlpha = 1;
+            ctx.restore();
+
+            // cardinality labels for the ERD edges
+            drawEdgeLabels(t, authOn, pubOn);
+            ctx.restore();
+        }
+
+        function drawEdgeLabels(t, authOn, pubOn) {
+            const items = [
+                { key: 'users-profs', a: L['usersEnterR'], b: L['profilesRight'], col: BLUE, on: Math.min(authOn, pubOn) },
+                { key: 'users-sess', a: L['usersEnterB'], b: L['sessionsEnterTop'], col: AMBER, on: authOn },
+                { key: 'users-reset', a: L['usersExitBR'], b: L['resetEnterTop'], col: AMBER, on: authOn },
+                { key: 'conv-msgs', a: L['convBottomL'], b: L['messagesTopR'], col: BLUE, on: pubOn },
+                { key: 'profs-mssgs', a: L['profilesBottomL'], b: L['messagesTopL'], col: BLUE, on: pubOn },
+            ];
+            const map = { 'users-profs': 'identity', 'users-sess': 'owns', 'users-reset': 'requests', 'conv-msgs': 'contains', 'profs-mssgs': 'authors' };
+            ctx.font = `600 ${Math.round(W * 0.0078)}px ${FONT_MONO}`;
+            for (const it of items) {
+                if (it.on <= 0) continue;
+                const mx = (it.a.x + it.b.x) / 2, my = (it.a.y + it.b.y) / 2;
+                const tw = ctx.measureText(map[it.key]).width;
+                const dx = it.b.x - it.a.x, dy = it.b.y - it.a.y;
+                const len = Math.hypot(dx, dy) || 1;
+                const off = Math.min(14, len * 0.2);
+                const lx = mx + (-dy / len) * off, ly = my + (dx / len) * off;
+                ctx.globalAlpha = it.on;
+                ctx.fillStyle = rgba(COL.bg, 0.85);
+                ctx.fillRect(lx - tw / 2 - 3, ly - W * 0.0085, tw + 6, W * 0.014);
+                ctx.fillStyle = rgba(it.col, 0.8);
+                ctx.textAlign = 'center';
+                ctx.fillText(map[it.key], lx, ly + W * 0.0028);
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        // ---- traveling packets (pure functions of `t`) ---------------------
+        function drawPacket(a, c, b, prog, color, label, curve2) {
+            if (prog <= 0 || prog >= 1) return;
+            const e = easeInOut(prog);
+            const P = curve2 ? cubic(a, curve2.c1, curve2.c2, b, e) : quad(a, c, b, e);
+            for (let k = 9; k >= 1; k--) {
+                const pp = e - k * 0.05;
+                if (pp <= 0) continue;
+                const tp = curve2 ? cubic(a, curve2.c1, curve2.c2, b, pp) : quad(a, c, b, pp);
+                ctx.strokeStyle = rgba(color, (1 - k / 10) * 0.4);
+                ctx.lineWidth = (1 - k / 10) * 3;
+                ctx.beginPath(); ctx.moveTo(P.x, P.y); ctx.lineTo(tp.x, tp.y); ctx.stroke();
+            }
+            const glow = ctx.createRadialGradient(P.x, P.y, 0, P.x, P.y, W * 0.016);
+            glow.addColorStop(0, rgba(color, 0.85));
+            glow.addColorStop(1, rgba(color, 0));
+            ctx.fillStyle = glow;
+            ctx.beginPath(); ctx.arc(P.x, P.y, W * 0.016, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(P.x, P.y, W * 0.004, 0, Math.PI * 2); ctx.fill();
+            if (label) {
+                ctx.fillStyle = rgba(color, 0.9);
+                ctx.font = `600 ${Math.round(W * 0.009)}px ${FONT_MONO}`;
+                ctx.textAlign = 'center';
+                ctx.fillText(label, P.x, P.y - W * 0.02);
+                ctx.textAlign = 'left';
+            }
+        }
+
+        function segP(t, s, e) { return clamp01((t - s) / (e - s)); }
+
+        function drawPackets(now, t) {
+            const appC = { x: (L.appExit.x + L.procEnter.x) / 2, y: L.appExit.y - H * 0.035 };
+            const procUC = { x: (L.procExitL.x + L.usersEnterR.x) / 2, y: L.procExitL.y + H * 0.045 };
+            const appProcP = segP(t, T(8.0), T(8.7)), procUserP = segP(t, T(8.6), T(9.35));
+            if (appProcP > 0 && appProcP < 1) drawPacket(L.appExit, appC, L.procEnter, appProcP, AMBER, 'signup');
+            if (procUserP > 0 && procUserP < 1) drawPacket(L.procExitL, procUC, L.usersEnterR, procUserP, AMBER);
+
+            const u2sC = { x: L.usersEnterB.x - W * 0.01, y: (L.usersEnterB.y + L.sessionsEnterTop.y) / 2 };
+            const p2uC = { x: (L.procExitL.x + L.usersEnterR.x) / 2, y: L.procExitL.y + H * 0.045 };
+            drawPacket(L.usersEnterB, u2sC, L.sessionsEnterTop, segP(t, BEAT.A2[0], BEAT.A2[1]), COL.bright, 'session');
+            for (let k = 0; k < 2; k++) {
+                const p = segP(t, BEAT.B3[0] + k * 500, BEAT.B3[1] + k * 500);
+                if (p > 0 && p < 1) drawPacket(L.appExit, appC, L.procEnter, p, COL.accent, k ? 'auth' : '');
+            }
+            if (segP(t, BEAT.B4[0], BEAT.B4[1]) > 0)
+                drawPacket(L.sessionsEnterTR, { x: (L.sessionsEnterTR.x + L.procExitL.x) / 2, y: L.sessionsEnterTR.y - H * 0.06 }, L.procExitL, segP(t, BEAT.B4[0], BEAT.B4[1]), COL.bright, 'session id');
+
+            const p3 = segP(t, BEAT.C5[0], BEAT.C5[1]);
+            if (p3 > 0 && p3 < 1) drawPacket(L.appExit, appC, L.procEnter, p3, COL.accent, 'logout');
+            const p4 = segP(t, BEAT.C6[0], BEAT.C6[1]);
+            if (p4 > 0 && p4 < 1) drawPacket(L.usersEnterB, u2sC, L.sessionsEnterTop, p4, COL.fail, 'revoke all', null);
+
+            const rC = { x: (L.usersExitBR.x + L.resetEnterTop.x) / 2, y: (L.usersExitBR.y + L.resetEnterTop.y) / 2 - H * 0.02 };
+            const p6 = segP(t, BEAT.D7[0], BEAT.D7[1]);
+            if (p6 > 0 && p6 < 1) drawPacket(L.appExit, { x: (L.appExit.x + L.usersExitBR.x) / 2, y: L.appExit.y + H * 0.07 }, L.usersExitBR, p6, COL.accent, 'reset?');
+            if (p6 >= 0 && p6 < 1) drawPacket(L.usersExitBR, rC, L.resetEnterTop, clamp01(p6 - 0.45) / 0.55, COL.bright, 'token');
+            const u2rC = { x: (L.usersEnterL.x + L.procExitL.x) / 2, y: (L.usersEnterL.y + L.procExitL.y) / 2 };
+            const p7 = segP(t, T(27.4), T(27.9));
+            if (p7 > 0 && p7 < 1) drawPacket(L.usersEnterL, u2rC, L.procExitL, p7, COL.bright, 'new pw');
+            const p8 = segP(t, BEAT.D8[0], BEAT.D8[1]);
+            if (p8 > 0 && p8 < 1) drawPacket(L.resetEnterL, { x: (L.resetEnterL.x + L.sessionsEnterL.x) / 2, y: (L.resetEnterL.y + L.sessionsEnterL.y) / 2 - H * 0.03 }, L.sessionsEnterL, p8, COL.fail, 'revoke all');
+        }
+
+        // ---- per-beat overlays ---------------------------------------------
+        function drawOverlays(now, t) {
+            // beat 1 — new user row: email + pgsodium hash in auth.users
+            const a1 = segP(t, BEAT.A1[0], BEAT.A1[1]);
+            if (a1 > 0 && t < T(11.2)) {
+                const d = L.users;
+                const bodyTop = d.y + d.h * 0.17, rowH = (d.h - d.h * 0.17) / 6;
+                const y1 = bodyTop + rowH * 2 + rowH * 0.66, y2 = bodyTop + rowH * 1 + rowH * 0.66;
+                const al = clamp01((t - T(9.7)) / 300);
+                ctx.globalAlpha = al * 0.95;
+                ctx.fillStyle = rgba(COL.bright, 0.9);
+                ctx.font = `500 ${Math.round(W * 0.009)}px ${FONT_MONO}`;
+                ctx.textAlign = 'left';
+                ctx.fillText('ada@pipe.dev', d.x + d.w * 0.52, y2);
+                ctx.globalAlpha = 1;
+            }
+            // beat 1 — token_hash row value in sessions (A2 window)
+            const a2 = segP(t, BEAT.A2[0], BEAT.A2[1]);
+            if (a2 > 0 && t < T(12)) {
+                const d = L.sessions, n = 6, bodyTop = d.y + d.h * 0.17, rowH = (d.h - d.h * 0.17) / n;
+                const yv = bodyTop + rowH * 2 + rowH * 0.66;
+                const al = clamp01((t - T(10.4)) / 300);
+                ctx.globalAlpha = al * 0.95;
+                ctx.fillStyle = rgba(COL.bright, 0.9);
+                ctx.font = `500 ${Math.round(W * 0.0085)}px ${FONT_MONO}`;
+                ctx.fillText(TOK_B, d.x + d.w * 0.48, yv);
+                ctx.globalAlpha = 1;
+            }
+            // beat 3 — revoke: fail tint + revoked=true in sessions.rows
+            if (t >= T(20.8) && t < T(23.2)) {
+                const k = clamp01((t - T(20.8)) / 500);
+                const d = L.sessions, n = 6, bodyTop = d.y + d.h * 0.17, rowH = (d.h - d.h * 0.17) / n;
+                ctx.fillStyle = rgba(COL.fail, 0.10 * k * (1 - segP(t, T(22.6), T(23.2))));
+                ctx.fillRect(d.x + 2, bodyTop + rowH * 3, d.w - 4, rowH);
+                ctx.fillStyle = rgba(COL.fail, 0.95 * k * (1 - segP(t, T(22.6), T(23.2))));
+                ctx.font = `600 ${Math.round(W * 0.009)}px ${FONT_MONO}`;
+                ctx.fillText('true', d.x + d.w * 0.52, bodyTop + rowH * 3 + rowH * 0.66);
+            }
+            // beat 4 — used_at set in password_resets
+            if (t >= T(28.2) && t < T(29.4)) {
+                const k = clamp01((t - T(28.2)) / 300) * (1 - segP(t, T(29.0), T(29.4)));
+                const d = L.reset, n = 5, bodyTop = d.y + d.h * 0.17, rowH = (d.h - d.h * 0.17) / n;
+                ctx.fillStyle = rgba(COL.fail, 0.95 * k);
+                ctx.font = `600 ${Math.round(W * 0.009)}px ${FONT_MONO}`;
+                ctx.fillText('now', d.x + d.w * 0.52, bodyTop + rowH * 4 + rowH * 0.66);
+            }
+        }
+
+        function drawHud(t) {
+            ctx.textAlign = 'center';
+            ctx.fillStyle = rgba(COL.text, 0.92);
+            ctx.font = `800 ${Math.round(W * 0.024)}px ${FONT_SANS}`;
+            ctx.fillText('Creator Pipe — auth schema', W / 2, H * 0.062);
+            ctx.fillStyle = rgba(COL.muted, 0.75);
+            ctx.font = `500 ${Math.round(W * 0.0105)}px ${FONT_MONO}`;
+            ctx.fillText('hand-rolled auth · token hashes only · SECURITY DEFINER access', W / 2, H * 0.10);
+
+            // beat chip
+            let chip = '', chipCol = COL.muted;
+            if (t < T(6)) { chip = '1 · schema'; chipCol = COL.muted; }
+            else if (t < T(12)) { chip = '2 · sign up'; chipCol = AMBER; }
+            else if (t < T(18)) { chip = '3 · session'; chipCol = COL.accent; }
+            else if (t < T(24)) { chip = '4 · login · logout'; chipCol = COL.bright; }
+            else { chip = '5 · password reset'; chipCol = COL.bright; }
+            const fs = Math.round(W * 0.0105);
+            ctx.font = `700 ${fs}px ${FONT_MONO}`;
+            const tw = ctx.measureText(chip).width;
+            const px = W / 2 - tw / 2 - W * 0.012, py = H * 0.128;
+            ctx.fillStyle = rgba(chipCol, 0.12);
+            ctx.strokeStyle = rgba(chipCol, 0.5);
+            ctx.lineWidth = 1;
+            roundRect(px, py, tw + W * 0.024, fs * 2.4, fs);
+            ctx.fill(); ctx.stroke();
+            ctx.fillStyle = rgba(chipCol, 0.95);
+            ctx.fillText(chip, W / 2, py + fs * 1.65);
+
+            // legend
+            const items = [
+                [AMBER, 'auth schema — hand-rolled, pgsodium'],
+                [COL.accent, 'app + SECURITY DEFINER fns'],
+                [BLUE, 'public schema — TypeORM'],
+            ];
+            let lx = W / 2;
+            ctx.font = `500 ${Math.round(W * 0.0085)}px ${FONT_MONO}`;
+            const widths = items.map(([c, s]) => W * 0.011 + W * 0.006 + ctx.measureText(s).width);
+            const total = widths.reduce((a, b) => a + b, 0) + widths.length * W * 0.024;
+            lx = W / 2 - total / 2;
+            for (let i = 0; i < items.length; i++) {
+                ctx.fillStyle = rgba(items[i][0], 0.85);
+                roundRect(lx, L.legY - W * 0.008, W * 0.011, W * 0.011, W * 0.003);
+                ctx.fill();
+                ctx.fillStyle = rgba(COL.muted, 0.8);
+                ctx.textAlign = 'left';
+                ctx.fillText(items[i][1], lx + W * 0.017, L.legY + W * 0.0035);
+                lx += widths[i] + W * 0.024;
+            }
+            ctx.textAlign = 'left';
+        }
+
+        // ============================================================
+        // 6. FRAME
+        // ============================================================
+        let nowRef = 0;
+        let __seek = null;
+        window.__time = (v) => { __seek = v; };
+
+        function frame(now) {
+            if (__seek != null) now = __seek;
+            nowRef = now;
+            const t = now % LOOP;
+
+            // panel gates: auth is on from t=0 (seam-safe), public fades in mid beat 0
+            const pubOn = clamp01((t - T(2.4)) / 800);
+
+            const appHot = t >= T(7.6) && t < T(9.9) || t >= T(12.8) && t < T(15.9) || t >= T(19.0) && t < T(21.7) || t >= T(25.0) && t < T(27.4);
+            const procHot = t >= T(8.3) && t < T(10.2) || t >= T(13.0) && t < T(15.5) || t >= T(19.2) && t < T(21.5) || t >= T(27.2) && t < T(28.0);
+            const usersHot = { row: -1, col: 0 };
+            if (t >= T(9.5) && t < T(11.2)) { usersHot.row = 1; usersHot.col = 1; }
+            if (t >= T(13.8) && t < T(15.6)) { usersHot.row = 0; usersHot.col = 0; }
+            if (t >= T(20.0) && t < T(21.8)) { usersHot.row = 0; usersHot.col = 0; }
+            const sessHot = (t >= T(10.0) && t < T(12) || t >= T(20.8) && t < T(23.2)) ? { row: 2, col: (t >= T(20.8) && t < T(23.2)) ? 1 : 1 } : -1;
+            const resetHot = (t >= T(26.6) && t < T(29.4)) ? { row: 2, col: 1 } : -1;
+            const convHot = (t >= T(5.6) && t < T(7.4)) ? { row: -1, col: 0 } : -1;
+            const msgHot = (t >= T(6.4) && t < T(8.2)) ? { row: -1, col: 0 } : -1;
+            const profsHot = (t >= T(4.8) && t < T(6.6)) ? { row: 1, col: 1 } : -1;
+
+            ctx.clearRect(0, 0, W, H);
+            drawBackground(now);
+            drawConnections(now, t, 1, pubOn);
+
+            drawPanel(L.authPanel, 'auth', AMBER, now, 1, 'hand-rolled');
+            drawPanel(L.pubPanel, 'public', BLUE, now, pubOn, 'TypeORM');
+
+            drawTable({ id: 'users', ...TABLES[0] }, now, t, usersHot.row >= 0 ? usersHot.row : -1, usersHot.row >= 0 ? usersHot.col : 0, 0);
+            drawTable({ id: 'sessions', ...TABLES[1] }, now, t, sessHot === -1 ? -1 : sessHot.row, sessHot === -1 ? 0 : sessHot.col, 0);
+            drawTable({ id: 'reset', ...TABLES[2] }, now, t, resetHot === -1 ? -1 : resetHot.row, resetHot === -1 ? 0 : resetHot.col, 0);
+            if (pubOn > 0) {
+                drawTable({ id: 'profiles', ...TABLES[3] }, now, t, profsHot, profsHot === -1 ? 0 : 1, 0);
+                drawTable({ id: 'conv', ...TABLES[4] }, now, t, convHot, 0, 0);
+                drawTable({ id: 'messages', ...TABLES[5] }, now, t, msgHot, 0, 0);
+                drawTable({ id: 'bounties', ...TABLES[6] }, now, t, -1, 0, 0);
+                drawTable({ id: 'payouts', ...TABLES[7] }, now, t, -1, 0, 0);
+            }
+
+            drawApp(now, t, appHot);
+            drawProc(now, t, procHot);
+            drawOverlays(now, t);
+            drawPackets(now, t);
+            drawHud(t);
+            requestAnimationFrame(frame);
+        }
+
+        resize();
+        requestAnimationFrame(frame);
+    </script>
+</body>
+
+</html>

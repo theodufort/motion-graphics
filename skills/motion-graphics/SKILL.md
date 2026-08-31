@@ -1,23 +1,39 @@
 ---
 name: motion-graphics
-description: Create a new branded motion graphic in the motion-graphics workspace (c:\Clones\motion-graphics). Use this skill whenever the user asks to make, build, create, animate or design a motion graphic, explainer animation, animated diagram, concept animation (e.g. "make a motion graphic about X", "animate how Y works", "create an explainer for Z"), even if they don't use the exact phrase "motion graphic". The output is always a single new folder containing only index.html, styled with the shared css/brand.css + css/motion.css, and it must be one continuously animating page — never a slideshow.
+description: Create or EDIT a branded motion graphic in the motion-graphics workspace (c:\Clones\motion-graphics). Use this skill whenever the user asks to make, build, create, animate, design, update, tweak or fix a motion graphic, explainer animation, animated diagram, concept animation (e.g. "make a motion graphic about X", "animate how Y works", "update the Y graphic"). ALWAYS check for an existing graphic covering the topic first and edit it in place; only create a new folder when the concept is genuinely new. The output is a single index.html styled with the shared css/brand.css + css/motion.css, one continuously animating page — never a slideshow. After creating or editing, ALWAYS run the motion-graphic-validation skill before reporting done.
 ---
 
 # Motion Graphics
 
-Create one self-contained, branded, continuously animating motion graphic.
+Create or edit one self-contained, branded, continuously animating motion graphic.
+
+## Step 0 — Edit before you generate (mandatory)
+
+New folders are expensive; most requests are tweaks to something that exists.
+
+1. **List the existing graphic folders first** (every folder with an
+   `index.html` at the workspace root).
+2. **Match the request against them.** If the topic matches or is a variant of
+   an existing graphic (e.g. the `1nf`–`5nf` series, `auth-schema-erd`,
+   `pgsodium-salted-hashing`, `high-availability-proxy`), **edit that
+   `index.html` in place** — do not fork it into a second folder.
+3. **Create a new folder only when the concept is distinct from every
+   existing graphic.** When in doubt, ask the user: extend an existing
+   graphic, or create a new one?
+4. A batch of related tweaks = a series of edits to one file, never several
+   new folders.
 
 ## Hard rules (non-negotiable)
 
-1. **One folder, one file.** Create exactly `<workspace>/<topic-kebab-case>/index.html`. Nothing else — no README, no extra CSS/JS files, no subfolders. Put all CSS in a `<style>` block and all JS in a `<script>` block inside that one `index.html`.
+1. **One folder, two files.** A graphic is exactly `<workspace>/<topic-kebab-case>/index.html` plus `<topic-kebab-case>/README.md` (the standard description file — see "Per-graphic README" below). Nothing else — no extra CSS/JS files, no subfolders. Put all CSS in a `<style>` block and all JS in a `<script>` block inside that one `index.html`.
 2. **Reuse the shared CSS for brand tokens only.** Always link the shared sheets:
 
 ```html
-   <link rel="stylesheet" href="../css/brand.css">
-   <link rel="stylesheet" href="../css/motion.css">
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
 ```
 
-   Read `css/brand.css` to know the available CSS variables (`--bg`, `--accent`, `--fail`, `--font-mono`, etc.). Reference them via `var(--...)` inside your local `<style>` block. Never hardcode brand hex values. `css/motion.css` provides optional helper classes you may use, but the primary rendering approach is canvas-based (see below).
+Read `css/brand.css` to know the available CSS variables (`--bg`, `--accent`, `--fail`, `--font-mono`, etc.). Reference them via `var(--...)` inside your local `<style>` block. Never hardcode brand hex values. `css/motion.css` provides optional helper classes you may use, but the primary rendering approach is canvas-based (see below).
 
 3. **One single page, never a slideshow.** The graphic must be one continuously playing canvas that loops. No play/pause, no next/previous, no scene switching, no keyboard navigation.
 
@@ -27,6 +43,59 @@ Create one self-contained, branded, continuously animating motion graphic.
 
 6. **Minimize text.** Use a short title (3–6 words) and at most a two-line subtitle drawn on canvas. Node labels are 2–4 words max. Never draw paragraphs. Prefer animated counters over sentences.
 
+7. **Validate before done.** After creating or editing, run the
+   `motion-graphic-validation` skill
+   (`skills/motion-graphic-validation/SKILL.md`). A graphic is only finished
+   when it passes that loop.
+
+## Per-graphic README (mandatory, kept in sync)
+
+Every graphic folder has a `README.md` that describes what the visual **is**
+(after a create) or **should be** (write it first when creating, so it acts
+as the spec you build against). It is the single human-readable description
+of the graphic.
+
+**Workflow:**
+
+- **Creating:** write `README.md` first (the intended visual), then build
+  `index.html` to match it.
+- **Editing:** whenever you change the visual — beats, labels, layout,
+  timing, colors, entities — update the same `README.md` in the same change
+  so it always matches the current `index.html`. If an existing graphic has
+  no `README.md` yet, create one describing what the graphic currently shows
+  before (or while) you edit it.
+
+**Standard template:**
+
+```markdown
+# <Title of the graphic>
+
+<One or two sentences: what concept this explains and the one-line takeaway.>
+
+## Story beats
+
+| Time (s) | Beat | What's on screen |
+| -------- | ---- | ---------------- |
+| 0–6      | …    | …                |
+| 6–12     | …    | …                |
+
+Loop length: <N>s.
+
+## Key elements
+
+- <element>: <what it is, its label, its color role (accent/fail/muted)>
+- …
+
+## Notes
+
+- <anything non-obvious: seek hook times worth parking at, known layout
+  constraints, why a label was shortened, etc.>
+```
+
+Keep it short — the README describes the visual, it doesn't duplicate the
+code. No implementation details beyond what helps someone understand or
+re-validate the graphic.
+
 ## Canvas architecture (required pattern)
 
 Every graphic uses this structure:
@@ -34,166 +103,109 @@ Every graphic uses this structure:
 ```html
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <link rel="stylesheet" href="../css/brand.css">
-  <link rel="stylesheet" href="../css/motion.css">
-  <style>
-    /* Only page-shell rules: body centering, canvas sizing */
-    body { margin:0; background: var(--bg); display:flex; align-items:center; justify-content:center; min-height:100vh; }
-    canvas { display:block; border-radius: var(--radius-lg); border: 1px solid var(--border); }
-  </style>
-</head>
-<body>
-<canvas id="stage"></canvas>
-<script>
-// 1. SETUP — DPI-aware resize
-const canvas = document.getElementById('stage');
-const ctx    = canvas.getContext('2d');
-let W, H;
+  <head>
+    <link rel="stylesheet" href="../css/brand.css" />
+    <link rel="stylesheet" href="../css/motion.css" />
+    <style>
+      /* Only page-shell rules: body centering, canvas sizing */
+      body {
+        margin: 0;
+        background: var(--bg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+      }
+      canvas {
+        display: block;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border);
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+    <script>
+      // 1. SETUP — DPI-aware resize
+      const canvas = document.getElementById("stage");
+      const ctx = canvas.getContext("2d");
+      const LOOP = 30000; // one full story cycle in ms — everything derives from t % LOOP
+      let W, H;
 
-function resize() {
-  const dpr = window.devicePixelRatio || 1;
-  // Choose your aspect — 16:9 recommended
-  W = Math.min(window.innerWidth - 32, 1100);
-  H = Math.round(W * 9/16);
-  canvas.width  = W * dpr;
-  canvas.height = H * dpr;
-  canvas.style.width  = W + 'px';
-  canvas.style.height = H + 'px';
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // setTransform, NOT ctx.scale — scales compound on every resize
-  buildLayout(); // recompute all positions from W/H
-}
-window.addEventListener('resize', resize);
+      function resize() {
+        const dpr = window.devicePixelRatio || 1;
+        // Choose your aspect — 16:9 recommended
+        W = Math.min(window.innerWidth - 32, 1100);
+        H = Math.round((W * 9) / 16);
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
+        canvas.style.width = W + "px";
+        canvas.style.height = H + "px";
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // setTransform, NOT ctx.scale — scales compound on every resize
+        buildLayout(); // recompute all positions from W/H
+      }
+      window.addEventListener("resize", resize);
 
-// Brand tokens for canvas — see "Reading brand tokens for canvas" below.
-// Resolve each --* token to an [r,g,b] array once, then draw with rgba(token, a).
-const PAL = { /* accent: [r,g,b], fail: [...], ... */ };
-const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
-const mix  = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t); // lerp two tokens, e.g. accent→fail
+      // Brand tokens for canvas — see references/drawing-techniques.md →
+      // "Reading brand tokens for canvas". Resolve each --* token to an [r,g,b]
+      // array once, then draw with rgba(token, a).
+      const PAL = {
+        /* accent: [r,g,b], fail: [...], ... */
+      };
+      const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+      const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t); // lerp two tokens, e.g. accent→fail
 
-// 2. LAYOUT — all positions derived from W and H, never hardcoded pixels
-function buildLayout() { /* ... */ }
+      // 2. LAYOUT — all positions derived from W and H, never hardcoded pixels
+      function buildLayout() {
+        /* ... */
+      }
 
-// 3. EASING
-function lerp(a, b, t) { return a + (b - a) * t; }
-function easeInOut(t)  { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
+      // 3. EASING
+      function lerp(a, b, t) {
+        return a + (b - a) * t;
+      }
+      function easeInOut(t) {
+        return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+      }
 
-// 4. ENTITY SYSTEMS — particles, packets, nodes all managed as arrays of plain objects
-let particles = [];
-// spawn, update, draw functions for each entity type
+      // 4. ENTITY SYSTEMS — particles, packets, nodes all managed as arrays of plain objects
+      let particles = [];
+      // spawn, update, draw functions for each entity type
 
-// 5. DRAW LAYERS — in order, every frame
-function frame(now) {
-  ctx.clearRect(0, 0, W, H);
-  drawBackground(now);   // subtle grid or gradient
-  drawConnections(now);  // lines between nodes
-  drawNodes(now);        // boxes/circles with glow and labels
-  drawParticles(now);    // traveling entities with trails
-  drawHUD(now);          // title + minimal stats, drawn on canvas
-  requestAnimationFrame(frame);
-}
+      // 5. SEEK HOOK — required by the motion-graphic-validation skill
+      let __seek = null;
+      window.__time = (ms) => {
+        __seek = ms;
+      }; // park the loop at an exact time
 
-resize();
-requestAnimationFrame(frame);
-</script>
-</body>
+      // 6. DRAW LAYERS — in order, every frame; everything a pure function of t
+      function frame(now) {
+        const t = (__seek != null ? __seek : now) % LOOP;
+        ctx.clearRect(0, 0, W, H);
+        drawBackground(t); // subtle grid or gradient
+        drawConnections(t); // lines between nodes
+        drawNodes(t); // boxes/circles with glow and labels
+        drawParticles(t); // traveling entities with trails
+        drawHUD(t); // title + minimal stats, drawn on canvas
+        if (__seek == null) requestAnimationFrame(frame);
+      }
+
+      resize();
+      requestAnimationFrame(frame);
+    </script>
+  </body>
 </html>
 ```
 
-## Drawing techniques (use these)
+## Drawing techniques (recipe library)
 
-The palette helpers below assume the brand-token block from the SETUP section.
-
-**Grid background (neutral structure — white with low alpha works over any brand bg):**
-```js
-function drawGrid() {
-  ctx.save();
-  ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 1;
-  for (let x = 0; x < W; x += 44) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
-  for (let y = 0; y < H; y += 44) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
-  ctx.restore();
-}
-```
-
-**Dashed connection lines with gradient:**
-```js
-const grad = ctx.createLinearGradient(ax, ay, bx, by);
-grad.addColorStop(0, 'rgba(0,212,255,0.05)');
-grad.addColorStop(1, 'rgba(0,212,255,0.3)');
-ctx.strokeStyle = grad; ctx.setLineDash([6,6]); ctx.lineWidth = 1;
-ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
-ctx.setLineDash([]);
-```
-
-**Glowing node (rounded-rect, brand tokens — no hex):**
-```js
-// Glow radius ≈ 0.5–0.7× the node's half-width. r*2 or bigger swallows
-// neighboring nodes and labels — keep it tight, or the diagram turns to mush.
-const glow = ctx.createRadialGradient(x,y,r*0.5, x,y,r*0.7);
-glow.addColorStop(0, rgba(PAL.accent, 0.12));
-glow.addColorStop(1, rgba(PAL.accent, 0));
-ctx.fillStyle = glow;
-ctx.beginPath(); ctx.arc(x,y,r*0.7,0,Math.PI*2); ctx.fill();
-// Body — surface fill + token-colored stroke keeps text legible
-ctx.fillStyle = rgba(PAL.surface, 0.95); ctx.strokeStyle = rgba(PAL.accent, 0.6); ctx.lineWidth = 1.6;
-roundRect(ctx, x-r, y-r, r*2, r*2, r*0.12); ctx.fill(); ctx.stroke();
-```
-
-**Traveling packet with tail:**
-```js
-// Store tail: p.tail.push({x,y}); if (p.tail.length > 14) p.tail.shift();
-for (let i = 1; i < p.tail.length; i++) {
-  const alpha = (i / p.tail.length) * 0.5;
-  ctx.strokeStyle = `rgba(255,209,102,${alpha})`;
-  ctx.lineWidth   = (i / p.tail.length) * 4;
-  ctx.beginPath(); ctx.moveTo(p.tail[i-1].x, p.tail[i-1].y); ctx.lineTo(p.tail[i].x, p.tail[i].y); ctx.stroke();
-}
-// Core glow dot
-const glow = ctx.createRadialGradient(px,py,0,px,py,10);
-glow.addColorStop(0, packetColor); glow.addColorStop(1,'transparent');
-ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(px,py,10,0,Math.PI*2); ctx.fill();
-ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(px,py,3,0,Math.PI*2); ctx.fill();
-```
-
-**Quadratic Bézier path (natural arcs between nodes):**
-```js
-const t  = easeInOut(p.progress); // 0→1
-const mx = (ax+bx)/2, my = (ay+by)/2 - H*0.05; // control point above midline
-const px = lerp(lerp(ax,mx,t), lerp(mx,bx,t), t);
-const py = lerp(lerp(ay,my,t), lerp(my,by,t), t);
-```
-
-**Pulse ring (node heartbeat):**
-```js
-const pulse = 0.5 + 0.5 * Math.sin(now / 700 + node.id);
-ctx.strokeStyle = `rgba(0,232,135,${0.15 + 0.1*pulse})`;
-ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x,y,r*(1.4+0.2*pulse),0,Math.PI*2); ctx.stroke();
-```
-
-**Load bar:**
-```js
-const bw = r*1.8, bh = 4, bx = x-bw/2, by = y+r*0.5;
-ctx.fillStyle = 'rgba(0,232,135,0.12)'; ctx.fillRect(bx,by,bw,bh);
-ctx.fillStyle = '#00E887'; ctx.fillRect(bx,by,bw*Math.min(1,node.load),bh);
-```
-
-**On-canvas title + stats (instead of DOM overlays):**
-```js
-ctx.font = `700 ${W*0.028}px var(--font-sans)`;
-ctx.fillStyle = '#D0DFF7'; ctx.textAlign = 'center';
-ctx.fillText('Your Title Here', W/2, H*0.08);
-```
-
-**Rounded rect helper (add once):**
-```js
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
-  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
-  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
-  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
-}
-```
+Read **`references/drawing-techniques.md`** when you are about to write the
+`<script>` of a graphic. It holds the layout-tested recipes — brand-token
+parsing for canvas (`PAL`, `rgba`, `mix`), grid background, glowing nodes,
+packets with tails, Bézier paths, pulse rings, load bars, on-canvas titles,
+and the `roundRect` helper. Reuse those recipes before inventing new drawing
+code: their glow radii, clearances, and font sizes already pass the
+validation loop.
 
 ## Story / timeline approach
 
@@ -221,13 +233,13 @@ When the story has entities that change state over time (a node failing and reco
 // of the next wrap — the seam is invisible.)
 const CYCLE = 24000;
 function nodeState(i, now) {
-  if (i !== Math.floor(now / CYCLE) % 3) return { status: 'ok', failAmt: 0 };
+  if (i !== Math.floor(now / CYCLE) % 3) return { status: "ok", failAmt: 0 };
   const t = now % CYCLE;
-  if (t < 7000)  return { status: 'ok', failAmt: 0 };            // window before failure
-  if (t < 7500)  return { status: 'dying', failAmt: (t - 7000) / 500 }; // ramp
-  if (t < 14000) return { status: 'fail', failAmt: 1 };          // down
-  if (t < 16000) return { status: 'recover', failAmt: 0.45 };    // back online
-  return { status: 'ok', failAmt: 0 };                            // healed window
+  if (t < 7000) return { status: "ok", failAmt: 0 }; // window before failure
+  if (t < 7500) return { status: "dying", failAmt: (t - 7000) / 500 }; // ramp
+  if (t < 14000) return { status: "fail", failAmt: 1 }; // down
+  if (t < 16000) return { status: "recover", failAmt: 0.45 }; // back online
+  return { status: "ok", failAmt: 0 }; // healed window
 }
 // Draw the down cross / status label; lerp the node's stroke+glow token:
 const col = mix(PAL.accent, PAL.fail, state.failAmt);
@@ -252,46 +264,23 @@ p.pos = quad(a, control, b, easeInOut(Math.min(1, p.t))); // quad = quadratic B�
 - Responsive: `buildLayout()` recomputes all positions from the current `W` / `H`
 - Must loop cleanly with no visible jump
 
-## Reading brand tokens for canvas
+## Validation (mandatory — separate skill)
 
-`var(--accent)` is allowed in the local `<style>` block, but **canvas cannot use it** — `ctx.fillStyle = 'var(--accent)'`, gradient color stops, and `rgba(var(...), a)` all fail. Resolve the tokens you need from `brand.css` into plain `[r,g,b]` values once at setup, then draw through helpers:
+After **every create and every edit**, run the **`motion-graphic-validation`**
+skill (`skills/motion-graphic-validation/SKILL.md`). It is vision-first: park
+the graphic at deterministic times with `window.__time`, screenshot, and
+inspect the screenshots with your vision for badly placed text, overlapping
+elements, and broken animation — then confirm anything suspicious with
+`measureText`/pixel probes. Do not report a graphic as done until it passes.
 
-```js
-const cssVars = getComputedStyle(document.documentElement);
-const tok = (name) => cssVars.getPropertyValue(name).trim();
-function parseColor(str) {
-  str = str.trim();
-  if (str[0] === '#') {
-    let h = str.slice(1);
-    if (h.length === 3) h = h.split('').map(c => c + c).join('');
-    return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
-  }
-  const m = str.match(/[\d.]+/g).map(Number);
-  return m.length >= 3 ? m.slice(0,3) : [255,255,255];
-}
-const PAL = {
-  accent: parseColor(tok('--accent')), deep: parseColor(tok('--accent-deep')),
-  bright: parseColor(tok('--green-4')), fail: parseColor(tok('--fail')),
-  text:   parseColor(tok('--text')),   muted: parseColor(tok('--muted')),
-  bg:     parseColor(tok('--bg')),     surface: parseColor(tok('--bg-2')),
-};
-const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
-const mix  = (c1, c2, t) => c1.map((v, i) => v + (c2[i] - v) * t); // lerp two tokens (e.g. accent → fail)
-// Fonts come from tokens too:
-const FONT_SANS = tok('--font-sans');
-const FONT_MONO = tok('--font-mono');
-```
-
-This satisfies "never hardcode brand hex": every brand hue still resolves from `brand.css`, and neutral structural values (grid lines, faint borders as white at low alpha) are fine as literal `rgba(255,255,255, x)` since they aren't brand colors.
-
-## Verifying in the built-in browser
-
-- **Idle tabs are throttled.** An unfocused integrated-browser tab stalls `requestAnimationFrame`, so the canvas freezes and counters look stuck — that is a browser quirk, not a code bug. Bring the tab to the foreground, or force a repaint (e.g. take a screenshot) before judging the animation. `pageerror`/`console` errors still surface regardless of focus.
-- **Screenshots of a "frozen" state can lie** (stale paint). Confirm actual entity motion — packet count / tail positions across two frames — rather than relying on a single frame.
-- Keep any in-browser `page.evaluate` payloads small; large inline snippets can come back as syntax errors.
+The seek hook in the template above (`window.__time`) is the prerequisite —
+if you edited an older graphic that lacks it, add it before validating.
 
 ## Anti-patterns (don't do these)
 
+- Creating a new folder when an existing graphic already covers the topic — edit in place instead
+- Reporting a graphic as done without running the motion-graphic-validation loop
+- Judging text placement/overlaps from downscaled screenshots alone — vision first, then confirm with `measureText` rects / pixel probes
 - CSS keyframe animations on DOM nodes as the primary rendering approach
 - `position:absolute` boxes flying around with `transition`
 - Static diagrams — if nothing moves, it's broken

@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pgsodium — salted password hashing</title>
+    <link rel="stylesheet" href="../css/brand.css">
+    <link rel="stylesheet" href="../css/motion.css">
+    <style>
+        body {
+            margin: 0;
+            background: var(--bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border);
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="stage"></canvas>
+    <script>
+        'use strict';
+        // ============================================================
+        // 1. SETUP — DPI-aware resize + brand tokens
+        // ============================================================
+        const canvas = document.getElementById('stage');
+        const ctx = canvas.getContext('2d');
+        let W, H;
+
+        const cssVars = getComputedStyle(document.documentElement);
+        function tok(name) { return cssVars.getPropertyValue(name).trim(); }
+        function parseColor(str) {
+            str = str.trim();
+            if (str[0] === '#') {
+                let h = str.slice(1);
+                if (h.length === 3) h = h.split('').map(c => c + c).join('');
+                return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+            }
+            const m = str.match(/[\d.]+/g).map(Number);
+            return m.length >= 3 ? m.slice(0, 3) : [255, 255, 255];
+        }
+        const COL = {
+            accent: parseColor(tok('--accent')),
+            bright: parseColor(tok('--green-4')),
+            fail: parseColor(tok('--fail')),
+            text: parseColor(tok('--text')),
+            muted: parseColor(tok('--muted')),
+            bg: parseColor(tok('--bg')),
+            surface: parseColor(tok('--bg-2')),
+        };
+        // semantic "raw plaintext" color — not a brand hue
+        const AMBER = [255, 196, 102];
+        // semantic "secret pepper / server key" color — not a brand hue
+        const PEPPER = [167, 139, 250];
+        const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+        const mix = (c1, c2, t) => [
+            Math.round(c1[0] + (c2[0] - c1[0]) * t),
+            Math.round(c1[1] + (c2[1] - c1[1]) * t),
+            Math.round(c1[2] + (c2[2] - c1[2]) * t),
+        ];
+        const FONT_SANS = tok('--font-sans');
+        const FONT_MONO = tok('--font-mono');
+
+        // ============================================================
+        // 2. LAYOUT — everything derived from W / H
+        // ============================================================
+        let L = {};
+        function buildLayout() {
+            L = {
+                user: { x: W * 0.145, y: H * 0.50, w: W * 0.150, h: H * 0.30 },
+                box: { x: W * 0.470, y: H * 0.50, w: W * 0.240, h: H * 0.52 },
+                core: { x: W * 0.470 - W * 0.120, y: H * 0.50 + H * 0.10 }, // key lands on box left edge
+                key: { x: W * 0.405, y: H * 0.875, w: W * 0.115, h: H * 0.085 },
+                db: { x: W * 0.665, y: H * 0.285, w: W * 0.270, h: H * 0.52 },
+            };
+            L.userExit = { x: L.user.x + L.user.w / 2, y: L.user.y };
+            L.boxEnter = { x: L.box.x - L.box.w / 2, y: L.box.y };
+            L.boxExit = { x: L.box.x + L.box.w / 2, y: L.box.y };
+            L.dbEnter = { x: L.db.x, y: L.db.y + L.db.h * 0.72 };
+            L.rowEmailY = L.db.y + L.db.h * 0.58;
+            L.rowHashY = L.db.y + L.db.h * 0.72;
+            L.hashCell = { x: L.db.x + L.db.w * 0.43, y: L.rowHashY, w: L.db.w * 0.57 };
+            L.rejectA = { x: L.user.x, y: L.user.y + L.user.h / 2 };
+            L.rejectB = { x: L.db.x + L.db.w * 0.5, y: L.db.y + L.db.h + H * 0.012 };
+        }
+
+        function resize() {
+            const dpr = window.devicePixelRatio || 1;
+            W = Math.min(window.innerWidth - 32, 1100);
+            H = Math.round(W * 9 / 16);
+            canvas.width = W * dpr;
+            canvas.height = H * dpr;
+            canvas.style.width = W + 'px';
+            canvas.style.height = H + 'px';
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            buildLayout();
+        }
+        window.addEventListener('resize', resize);
+
+        // ============================================================
+        // 3. EASING + path + text helpers
+        // ============================================================
+        function lerp(a, b, t) { return a + (b - a) * t; }
+        function clamp01(t) { return Math.max(0, Math.min(1, t)); }
+        function easeInOut(t) { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; }
+        function quad(a, c, b, t) {
+            const u = 1 - t;
+            return { x: u * u * a.x + 2 * u * t * c.x + t * t * b.x, y: u * u * a.y + 2 * u * t * c.y + t * t * b.y };
+        }
+        function roundRect(x, y, w, h, r) {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+            ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+            ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+            ctx.closePath();
+        }
+
+        // deterministic seeded rng → same salt/hash each loop of a given cycle
+        function mulberry32(seed) {
+            return function () {
+                seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+                let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+                t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+                return ((t ^ t >>> 14) >>> 0) / 4294966368;
+            };
+        }
+        const HEX = '0123456789abcdef';
+        function hexString(seed, n) {
+            const rnd = mulberry32(seed);
+            let s = '';
+            for (let i = 0; i < n; i++) s += HEX[(rnd() * 16) | 0];
+            return s;
+        }
+
+        // ============================================================
+        // 4. STORY TIMELINE — one 18s loop, all state derived from `t`
+        // ============================================================
+        const LOOP = 18000;
+        const A_START = 400, A_END = 2400;        // plaintext password user → pgsodium
+        const W_START = 2600, W_END = 9200;       // argon2id memory fill (hybrid)
+        const I_END = 5900;                        // first half-pass (Argon2i) ends
+        const C_START = 9400;                      // hash hex reveal (12 × 110ms)
+        const HEX_PER = 110, HEX_N = 12;
+        const DB_IN_START = W_END;                 // panel slides in right as argon2 finishes
+        const DB_IN_DUR = 600;
+        const D_START = 12500, D_END = 14300;      // login: candidate user → pgsodium
+        const FLASH_1 = 14300, FLASH_2 = 15500;    // verify flash in box
+        const CHECK_START = 14500, CHECK_END = 16500;
+        const OUT_START = 16300, OUT_END = 17050;  // fade content before the seam
+
+        // content written this cycle fades out before the wrap → seamless loop
+        function outAlpha(t) { return 1 - clamp01((t - OUT_START) / (OUT_END - OUT_START)); }
+        const pulse = (now, period, phase = 0) => 0.5 + 0.5 * Math.sin(now / period + phase);
+
+        // ============================================================
+        // 5. DRAW LAYERS
+        // ============================================================
+        function drawBackground(now) {
+            ctx.fillStyle = rgba(COL.bg, 1);
+            ctx.fillRect(0, 0, W, H);
+            const g = ctx.createRadialGradient(W * 0.47, H * 0.5, 0, W * 0.47, H * 0.5, W * 0.42);
+            g.addColorStop(0, rgba(COL.accent, 0.06));
+            g.addColorStop(1, rgba(COL.accent, 0));
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, W, H);
+            ctx.strokeStyle = 'rgba(255,255,255,0.035)';
+            ctx.lineWidth = 1;
+            for (let x = 0; x < W; x += 44) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+            for (let y = 0; y < H; y += 44) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+        }
+
+        function drawConnections(now) {
+            const t = now % LOOP;
+            const gin = easeInOut(clamp01((t - DB_IN_START) / DB_IN_DUR)); // DB-connections fade in with the panel
+            ctx.save();
+            ctx.setLineDash([6, 8]);
+            ctx.lineDashOffset = -(now * 0.02) % 14;
+            ctx.lineWidth = 1.4;
+
+            // user → box (primary)
+            let c = { x: (L.userExit.x + L.boxEnter.x) / 2, y: L.userExit.y - H * 0.06 };
+            let g = ctx.createLinearGradient(L.userExit.x, L.userExit.y, L.boxEnter.x, L.boxEnter.y);
+            g.addColorStop(0, rgba(COL.accent, 0.08));
+            g.addColorStop(1, rgba(COL.accent, 0.35));
+            ctx.strokeStyle = g;
+            ctx.beginPath(); ctx.moveTo(L.userExit.x, L.userExit.y);
+            ctx.quadraticCurveTo(c.x, c.y, L.boxEnter.x, L.boxEnter.y); ctx.stroke();
+
+            // box → db  (fades in with the panel)
+            if (gin > 0) {
+                c = { x: (L.boxExit.x + L.dbEnter.x) / 2, y: L.boxExit.y + H * 0.04 };
+                g = ctx.createLinearGradient(L.boxExit.x, L.boxExit.y, L.dbEnter.x, L.dbEnter.y);
+                g.addColorStop(0, rgba(COL.accent, 0.35 * gin));
+                g.addColorStop(1, rgba(COL.accent, 0.08 * gin));
+                ctx.strokeStyle = g;
+                ctx.beginPath(); ctx.moveTo(L.boxExit.x, L.boxExit.y);
+                ctx.quadraticCurveTo(c.x, c.y, L.dbEnter.x, L.dbEnter.y); ctx.stroke();
+            }
+
+            // rejected plaintext path: user → db, low & dashed red (fades in with the panel)
+            if (gin > 0) {
+            c = { x: (L.rejectA.x + L.rejectB.x) / 2, y: Math.max(L.rejectA.y, L.rejectB.y) + H * 0.035 };
+            g = ctx.createLinearGradient(L.rejectA.x, L.rejectA.y, L.rejectB.x, L.rejectB.y);
+            g.addColorStop(0, rgba(COL.fail, 0.25 * gin));
+            g.addColorStop(1, rgba(COL.fail, 0.08 * gin));
+            ctx.strokeStyle = g;
+            ctx.setLineDash([4, 7]);
+            ctx.beginPath(); ctx.moveTo(L.rejectA.x, L.rejectA.y);
+            ctx.quadraticCurveTo(c.x, c.y, L.rejectB.x, L.rejectB.y); ctx.stroke();
+            }
+
+            // key (pepper) → box left edge
+            g = ctx.createLinearGradient(L.key.x, L.key.y - L.key.h / 2, L.core.x, L.core.y);
+            g.addColorStop(0, rgba(PEPPER, 0.35));
+            g.addColorStop(1, rgba(PEPPER, 0.10));
+            ctx.strokeStyle = g;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath(); ctx.moveTo(L.key.x + L.key.w * 0.25, L.key.y - L.key.h / 2);
+            ctx.quadraticCurveTo((L.key.x + L.core.x) / 2, L.core.y + H * 0.08, L.core.x, L.core.y);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // the "plaintext never reaches the db" marker
+        function drawReject(now) {
+            const t = now % LOOP;
+            const gin = easeInOut(clamp01((t - DB_IN_START) / DB_IN_DUR));
+            if (gin <= 0) return;
+            const midY = Math.max(L.rejectA.y, L.rejectB.y) + H * 0.035;
+            const mid = quad(L.rejectA, { x: (L.rejectA.x + L.rejectB.x) / 2, y: midY }, L.rejectB, 0.55);
+            const flash = clamp01(1 - Math.abs((t - 3200) / 300)); // one blip mid-loop
+            const a = (0.35 + 0.25 * pulse(now, 1600) + 0.4 * flash) * gin;
+            const s = W * 0.010;
+            ctx.save();
+            ctx.translate(mid.x, mid.y);
+            ctx.strokeStyle = rgba(COL.fail, (0.5 + 0.4 * flash) * gin);
+            ctx.lineWidth = 1.6;
+            ctx.beginPath(); ctx.moveTo(-s, -s); ctx.lineTo(s, s); ctx.moveTo(s, -s); ctx.lineTo(-s, s); ctx.stroke();
+            ctx.fillStyle = rgba(COL.fail, a);
+            ctx.font = `600 ${Math.round(W * 0.0105)}px ${FONT_MONO}`;
+            ctx.textAlign = 'left';
+            ctx.fillText('plaintext? no', mid.x + s * 1.8, mid.y + s * 0.4);
+            ctx.restore();
+        }
+
+        function drawUser(now) {
+            const u = L.user;
+            const p = pulse(now, 900, 1);
+            const g = ctx.createRadialGradient(u.x, u.y, u.w * 0.15, u.x, u.y, u.w * 1.5);
+            g.addColorStop(0, rgba(AMBER, 0.10 + 0.05 * p));
+            g.addColorStop(1, rgba(AMBER, 0));
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(u.x, u.y, u.w * 1.5, 0, Math.PI * 2); ctx.fill();
+
+            ctx.fillStyle = rgba(COL.surface, 0.95);
+            ctx.strokeStyle = rgba(AMBER, 0.45 + 0.2 * p);
+            ctx.lineWidth = 1.6;
+            roundRect(u.x - u.w / 2, u.y - u.h / 2, u.w, u.h, W * 0.012);
+            ctx.fill(); ctx.stroke();
+
+            ctx.textAlign = 'center';
+            ctx.fillStyle = rgba(COL.text, 0.95);
+            ctx.font = `700 ${Math.round(W * 0.015)}px ${FONT_SANS}`;
+            ctx.fillText('new user', u.x, u.y - u.h * 0.24);
+
+            // password input field
+            const fw = u.w * 0.8, fh = u.h * 0.22;
+            ctx.fillStyle = 'rgba(255,255,255,0.05)';
+            ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+            ctx.lineWidth = 1;
+            roundRect(u.x - fw / 2, u.y - fh / 2, fw, fh, W * 0.008);
+            ctx.fill(); ctx.stroke();
+            // masked dots, shimmering
+            ctx.fillStyle = rgba(AMBER, 0.85);
+            const dots = 8, gap = fw * 0.11;
+            for (let i = 0; i < dots; i++) {
+                const a = 0.45 + 0.45 * Math.sin(now / 320 + i * 0.7);
+                ctx.globalAlpha = a;
+                ctx.beginPath();
+                ctx.arc(u.x - fw / 2 + fw * 0.1 + i * gap, u.y + fh * 0.02, W * 0.0042, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = rgba(COL.muted, 0.8);
+            ctx.font = `500 ${Math.round(W * 0.0105)}px ${FONT_MONO}`;
+            ctx.fillText('password', u.x, u.y + u.h * 0.35);
+        }
+
+        function drawBox(now, t, cycle) {
+            const b = L.box;
+
+            const tFlash = (t - FLASH_1) / (FLASH_2 - FLASH_1); // verify flash 0..1
+            const flashCol = (tFlash > 0 && tFlash < 1) ? mix(COL.accent, COL.bright, Math.sin(tFlash * Math.PI)) : COL.accent;
+
+            // glow
+            const p = pulse(now, 800, 2);
+            const bGlowR = Math.max(b.w, b.h) * 0.75;
+            const g = ctx.createRadialGradient(b.x, b.y, b.w * 0.2, b.x, b.y, bGlowR);
+            g.addColorStop(0, rgba(flashCol, 0.12 + 0.05 * p));
+            g.addColorStop(1, rgba(flashCol, 0));
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(b.x, b.y, bGlowR, 0, Math.PI * 2); ctx.fill();
+
+            // pulse ring during verify
+            if (tFlash > 0 && tFlash < 1) {
+                ctx.strokeStyle = rgba(COL.bright, 0.5 * (1 - tFlash));
+                ctx.lineWidth = 1.5;
+                roundRect(b.x - b.w / 2 - 6 - 8 * tFlash, b.y - b.h / 2 - 6 - 8 * tFlash,
+                    b.w + 12 + 16 * tFlash, b.h + 12 + 16 * tFlash, W * 0.016);
+                ctx.stroke();
+            }
+
+            ctx.fillStyle = rgba(COL.surface, 0.95);
+            ctx.strokeStyle = rgba(flashCol, 0.85);
+            ctx.lineWidth = 2;
+            roundRect(b.x - b.w / 2, b.y - b.h / 2, b.w, b.h, W * 0.014);
+            ctx.fill(); ctx.stroke();
+
+            // node label
+            ctx.textAlign = 'center';
+            ctx.fillStyle = rgba(COL.text, 0.95);
+            ctx.font = `700 ${Math.round(W * 0.017)}px ${FONT_SANS}`;
+            ctx.fillText('argon2id', b.x, b.y - b.h * 0.455);
+
+            // ---- input chips: password · salt · pepper ----
+            const chipY = b.y - b.h / 2 + b.h * 0.20;
+            const chipW = b.w * 0.26, chipH = H * 0.075;
+            const chips = [
+                { label: 'password', col: AMBER },
+                { label: 'salt', col: COL.accent },
+                { label: 'pepper', col: PEPPER },
+            ];
+            const chipGap = W * 0.008;
+            const totalW = chips.length * chipW + (chips.length - 1) * chipGap;
+            const cx0 = b.x - totalW / 2;
+            const inDigest = t > W_START && t < W_END;
+            chips.forEach((ch, i) => {
+                const cxp = cx0 + i * (chipW + chipGap) + chipW / 2;
+                const cp = pulse(now, 700 + i * 130, i);
+                ctx.fillStyle = 'rgba(255,255,255,0.045)';
+                ctx.strokeStyle = rgba(ch.col, 0.35 + 0.35 * cp);
+                ctx.lineWidth = 1.2;
+                roundRect(cxp - chipW / 2, chipY - chipH / 2, chipW, chipH, W * 0.008);
+                ctx.fill(); ctx.stroke();
+                ctx.fillStyle = rgba(ch.col, 0.9);
+                ctx.font = `600 ${Math.round(W * 0.0095)}px ${FONT_MONO}`;
+                ctx.textAlign = 'center';
+                ctx.fillText(ch.label, cxp, chipY + W * 0.003);
+            });
+            ctx.textAlign = 'left';
+
+            // ---- memory block (grid) — the memory-hard core ----
+            const cols = 6, rows = 3;
+            const cellGap = W * 0.006;
+            const cellW = (b.w * 0.74 - (cols - 1) * cellGap) / cols;
+            const cellH = cellW * 0.82;
+            const gridW = cols * cellW + (cols - 1) * cellGap;
+            const gridH = rows * cellH + (rows - 1) * cellGap;
+            const gx = b.x - gridW / 2;
+            const gy = b.y - b.h / 2 + b.h * 0.30;
+            const N = cols * rows; // 18
+            const mem = easeInOut(clamp01((t - W_START) / (W_END - W_START)));
+            const iCells = Math.floor(N / 2); // first half = Argon2i (data-independent)
+            const cellPos = (i) => {
+                const r = Math.floor(i / cols), c = i % cols;
+                return { x: gx + c * (cellW + cellGap) + cellW / 2, y: gy + r * (cellH + cellGap) + cellH / 2 };
+            };
+            // dependency arrows: each new block depends on a previous block in RAM
+            for (let i = 1; i < N; i++) {
+                if (mem <= i / N) break;
+                const cur = cellPos(i);
+                let src;
+                if (i < iCells) src = cellPos(i - 1);        // Argon2i: sequential, data-independent
+                else src = cellPos((i * 5 + 2) % i);         // Argon2d: jumps, data-dependent
+                const col = i < iCells ? COL.accent : COL.bright;
+                ctx.strokeStyle = rgba(col, 0.35);
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(src.x, src.y);
+                ctx.quadraticCurveTo((src.x + cur.x) / 2, Math.min(src.y, cur.y) - cellH * 0.6, cur.x, cur.y);
+                ctx.stroke();
+            }
+            // cells
+            for (let i = 0; i < N; i++) {
+                const pos = cellPos(i);
+                const filled = mem > i / N;
+                const isI = i < iCells;
+                const col = isI ? COL.accent : COL.bright;
+                ctx.fillStyle = filled ? rgba(col, 0.22 + 0.2 * Math.sin(now / 300 + i)) : 'rgba(255,255,255,0.04)';
+                ctx.strokeStyle = filled ? rgba(col, 0.7) : 'rgba(255,255,255,0.10)';
+                ctx.lineWidth = 1;
+                roundRect(pos.x - cellW / 2, pos.y - cellH / 2, cellW, cellH, W * 0.004);
+                ctx.fill(); ctx.stroke();
+            }
+
+            // ---- hybrid phase label under the grid ----
+            const phaseI = t > W_START && t < I_END;
+            const phaseD = t >= I_END && t < W_END;
+            const phaseCol = phaseI ? COL.accent : COL.bright;
+            ctx.textAlign = 'center';
+            ctx.fillStyle = rgba(phaseCol, 0.95);
+            ctx.font = `700 ${Math.round(W * 0.0105)}px ${FONT_MONO}`;
+            const phaseLabel = phaseI ? 'Argon2i · data-independent' : (phaseD ? 'Argon2d · data-dependent' : 'argon2id');
+            ctx.fillText(phaseLabel, b.x, gy + gridH + H * 0.022);
+            ctx.fillStyle = rgba(COL.muted, 0.7);
+            ctx.font = `500 ${Math.round(W * 0.0085)}px ${FONT_MONO}`;
+            ctx.fillText(phaseI ? 'resists side-channel' : (phaseD ? 'deters GPU / ASIC' : 'hybrid'), b.x, gy + gridH + H * 0.040);
+
+            // ---- memory-hard meter ----
+            const bw = b.w * 0.6, bh = 4, bx = b.x - bw / 2, by = b.y + b.h / 2 - H * 0.075;
+            ctx.fillStyle = 'rgba(255,255,255,0.08)';
+            ctx.fillRect(bx, by, bw, bh);
+            ctx.fillStyle = rgba(COL.bright, 0.9);
+            ctx.fillRect(bx, by, bw * mem, bh);
+            ctx.fillStyle = rgba(COL.muted, 0.75);
+            ctx.font = `500 ${Math.round(W * 0.0095)}px ${FONT_MONO}`;
+            ctx.textAlign = 'center';
+            ctx.fillText('memory-hard · RAM', b.x, by + H * 0.028);
+
+            // ---- input droplets: chips → memory block ----
+            if (inDigest) {
+                for (let k = 0; k < 6; k++) {
+                    const prog = clamp01((t - W_START - 100 - k * 300) / 900);
+                    if (prog <= 0 || prog >= 1) continue;
+                    const chipIdx = k % 3;
+                    const ch = chips[chipIdx];
+                    const cxp = cx0 + chipIdx * (chipW + chipGap) + chipW / 2;
+                    const px = lerp(cxp, gx + (k % cols) * (cellW + cellGap) + cellW / 2, prog);
+                    const py = lerp(chipY + chipH / 2, gy + cellH / 2, prog);
+                    ctx.fillStyle = rgba(ch.col, 0.75 * (1 - prog * 0.5));
+                    ctx.beginPath(); ctx.arc(px, py, W * 0.004, 0, Math.PI * 2); ctx.fill();
+                }
+            }
+            ctx.textAlign = 'left';
+        }
+
+        function drawKey(now) {
+            const k = L.key;
+            const p = pulse(now, 1100, 3);
+            ctx.fillStyle = rgba(COL.surface, 0.95);
+            ctx.strokeStyle = rgba(PEPPER, 0.5 + 0.3 * p);
+            ctx.lineWidth = 1.4;
+            roundRect(k.x - k.w / 2, k.y - k.h / 2, k.w, k.h, W * 0.008);
+            ctx.fill(); ctx.stroke();
+
+            ctx.textAlign = 'center';
+            // key glyph + label, centered as one group (ring left, text right)
+            const s = W * 0.008;
+            const label = 'pepper';
+            ctx.font = `600 ${Math.round(W * 0.010)}px ${FONT_MONO}`;
+            const labelW = ctx.measureText(label).width;
+            const glyphW = s * 3.2, gap = W * 0.006;       // ring-left edge → shaft tip
+            const startX = k.x - (glyphW + gap + labelW) / 2;
+            const gx = startX + s * 0.6, gy = k.y;
+            ctx.strokeStyle = rgba(PEPPER, 0.9);
+            ctx.lineWidth = 1.6;
+            ctx.beginPath(); ctx.arc(gx, gy, s * 0.6, 0, Math.PI * 2); ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(gx + s * 0.6, gy); ctx.lineTo(gx + s * 2.6, gy);
+            ctx.moveTo(gx + s * 2.1, gy); ctx.lineTo(gx + s * 2.1, gy + s * 0.5);
+            ctx.moveTo(gx + s * 2.6, gy); ctx.lineTo(gx + s * 2.6, gy + s * 0.5);
+            ctx.stroke();
+            ctx.fillStyle = rgba(COL.text, 0.9);
+            ctx.textAlign = 'left';
+            ctx.fillText(label, startX + glyphW + gap, k.y + W * 0.004);
+            ctx.textAlign = 'center';
+            ctx.fillStyle = rgba(COL.muted, 0.65);
+            ctx.font = `500 ${Math.round(W * 0.0085)}px ${FONT_MONO}`;
+            ctx.fillText('AUTH_PGSODIUM_KEY', k.x, k.y + k.h * 0.5 + H * 0.022);
+        }
+
+        function drawDb(now, t, out) {
+            const d = L.db;
+            // panel slides/fades in right after the argon2id work meter completes
+            const gin = easeInOut(clamp01((t - DB_IN_START) / DB_IN_DUR));
+            if (gin <= 0) return;
+
+            ctx.save();
+            ctx.translate((1 - gin) * W * 0.05, 0);
+            ctx.globalAlpha = gin;
+            const g = ctx.createRadialGradient(d.x + d.w / 2, d.y + d.h / 2, d.w * 0.1, d.x + d.w / 2, d.y + d.h / 2, d.w * 1.2);
+            g.addColorStop(0, rgba(COL.accent, 0.10));
+            g.addColorStop(1, rgba(COL.accent, 0));
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(d.x + d.w / 2, d.y + d.h / 2, d.w * 1.2, 0, Math.PI * 2); ctx.fill();
+
+            ctx.fillStyle = rgba(COL.surface, 0.95);
+            ctx.strokeStyle = rgba(COL.accent, 0.5);
+            ctx.lineWidth = 1.6;
+            roundRect(d.x, d.y, d.w, d.h, W * 0.012);
+            ctx.fill(); ctx.stroke();
+
+            // header
+            ctx.textAlign = 'left';
+            ctx.fillStyle = rgba(COL.accent, 0.95);
+            ctx.font = `700 ${Math.round(W * 0.013)}px ${FONT_MONO}`;
+            ctx.fillText('auth.users', d.x + W * 0.016, d.y + d.h * 0.21);
+            ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+            ctx.lineWidth = 1;
+            const sepY = d.y + d.h * 0.32;
+            ctx.beginPath();
+            ctx.moveTo(d.x + W * 0.012, sepY);
+            ctx.lineTo(d.x + d.w - W * 0.012, sepY);
+            ctx.stroke();
+
+            // email row
+            const emailAlpha = clamp01((t - 6000) / 600) * out;
+            ctx.fillStyle = rgba(COL.muted, 0.7 * emailAlpha);
+            ctx.font = `500 ${Math.round(W * 0.011)}px ${FONT_MONO}`;
+            ctx.fillText('email', d.x + W * 0.016, L.rowEmailY + H * 0.004);
+            ctx.fillStyle = rgba(COL.text, 0.8 * emailAlpha);
+            ctx.fillText('ada@pipe.dev', L.hashCell.x, L.rowEmailY + H * 0.004);
+
+            // password_hash row label
+            ctx.fillStyle = rgba(COL.muted, 0.85);
+            ctx.fillText('password_hash', d.x + W * 0.016, L.rowHashY + H * 0.004);
+
+            // revealed hash hex, char by char — bright green = ciphertext, never plaintext
+            const hashHex = hexString(cycleSeed(t), HEX_N);
+            const fs = Math.round(W * 0.0115);
+            ctx.font = `600 ${fs}px ${FONT_MONO}`;
+            const cw = ctx.measureText('0').width + W * 0.0022;
+            let x = L.hashCell.x;
+            for (let i = 0; i < HEX_N; i++) {
+                const cs = C_START + i * HEX_PER;
+                if (t < cs) break;
+                const age = clamp01((t - cs) / 260);
+                ctx.fillStyle = rgba(i % 2 ? COL.bright : COL.accent, (0.4 + 0.6 * age) * out);
+                ctx.fillText(hashHex[i], x, L.rowHashY + H * 0.004);
+                x += cw;
+            }
+
+            // completion pulse on the row
+            const tDone = (t - (C_START + HEX_N * HEX_PER)) / 500;
+            if (tDone > 0 && tDone < 1) {
+                ctx.strokeStyle = rgba(COL.bright, 0.6 * (1 - tDone));
+                ctx.lineWidth = 1.5;
+                roundRect(L.hashCell.x - W * 0.006 - 4 * tDone, L.rowHashY - H * 0.028 - 3 * tDone,
+                    (L.hashCell.x + HEX_N * cw) - L.hashCell.x + W * 0.012 + 8 * tDone,
+                    H * 0.056 + 6 * tDone, W * 0.006);
+                ctx.stroke();
+            }
+
+            // "stored" pulse: the whole panel flares once the hash completes
+            const pStore = clamp01((t - (C_START + HEX_N * HEX_PER)) / 1000);
+            if (pStore > 0 && pStore < 1) {
+                const e = 1 - pStore;
+                ctx.strokeStyle = rgba(COL.bright, 0.5 * e);
+                ctx.lineWidth = 2;
+                roundRect(d.x - 6 - 14 * pStore, d.y - 6 - 14 * pStore,
+                    d.w + 12 + 28 * pStore, d.h + 12 + 28 * pStore, W * 0.016);
+                ctx.stroke();
+            }
+
+            // verify check: ring + tick in the gap right of the hash cell
+            const tCheck = (t - CHECK_START) / (CHECK_END - CHECK_START);
+            if (tCheck > 0 && tCheck < 1) {
+                const a = Math.min(1, tCheck * 4) * (1 - clamp01((tCheck - 0.7) / 0.3)) * out;
+                const fs = Math.round(W * 0.0115);
+                ctx.font = `600 ${fs}px ${FONT_MONO}`;
+                const cw = ctx.measureText('0').width + W * 0.0022;
+                const xEnd = L.hashCell.x + HEX_N * cw;
+                const edge = d.x + d.w - W * 0.008;
+                const cx = (xEnd + edge) / 2;        // centered in the gap right of the hex
+                const cy = L.rowHashY + H * 0.004 - W * 0.0045;
+                const r = W * 0.0105;
+                ctx.strokeStyle = rgba(COL.bright, a);
+                ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(cx - r * 0.45, cy); ctx.lineTo(cx - r * 0.1, cy + r * 0.4); ctx.lineTo(cx + r * 0.5, cy - r * 0.4);
+                ctx.stroke();
+                ctx.fillStyle = rgba(COL.bright, a);
+                ctx.font = `600 ${Math.round(W * 0.0095)}px ${FONT_MONO}`;
+                ctx.textAlign = 'center';
+                ctx.fillText('match', cx, cy + W * 0.0105 + W * 0.015);
+                ctx.textAlign = 'left';
+            }
+            ctx.restore();
+        }
+
+        function cycleSeed(t) { return Math.floor((nowRef) / LOOP) * 7919 + 4242; }
+
+        // traveling packet: position is a pure function of progress → seekable
+        function drawPacket(now, p, color, label) {
+            if (p <= 0 || p >= 1) return;
+            const c = { x: (L.userExit.x + L.boxEnter.x) / 2, y: L.userExit.y - H * 0.06 };
+            const pos = quad(L.userExit, c, L.boxEnter, easeInOut(p));
+            // trail: sample earlier points on the same path
+            for (let k = 10; k >= 1; k--) {
+                const pp = p - k * 0.045;
+                if (pp <= 0) continue;
+                const tp = quad(L.userExit, c, L.boxEnter, easeInOut(pp));
+                ctx.strokeStyle = rgba(color, (1 - k / 11) * 0.45);
+                ctx.lineWidth = (1 - k / 11) * 4;
+                ctx.beginPath(); ctx.moveTo(pos.x, pos.y); ctx.lineTo(tp.x, tp.y); ctx.stroke();
+            }
+            const glow = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, W * 0.014);
+            glow.addColorStop(0, rgba(color, 0.8));
+            glow.addColorStop(1, rgba(color, 0));
+            ctx.fillStyle = glow;
+            ctx.beginPath(); ctx.arc(pos.x, pos.y, W * 0.014, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(pos.x, pos.y, W * 0.0038, 0, Math.PI * 2); ctx.fill();
+            if (label) {
+                ctx.fillStyle = rgba(color, 0.85);
+                ctx.font = `600 ${Math.round(W * 0.010)}px ${FONT_MONO}`;
+                ctx.textAlign = 'center';
+                ctx.fillText(label, pos.x, pos.y - W * 0.018);
+                ctx.textAlign = 'left';
+            }
+        }
+
+        function drawPackets(now, t) {
+            const pA = (t - A_START) / (A_END - A_START);
+            if (pA > 0 && pA < 1) drawPacket(now, pA, AMBER, 'password');
+            const pD = (t - D_START) / (D_END - D_START);
+            if (pD > 0 && pD < 1) drawPacket(now, pD, AMBER, 'login');
+        }
+
+        function drawHud(t) {
+            ctx.textAlign = 'center';
+            ctx.fillStyle = rgba(COL.text, 0.92);
+            ctx.font = `800 ${Math.round(W * 0.024)}px ${FONT_SANS}`;
+            ctx.fillText('argon2id — salt + pepper + password', W / 2, H * 0.075);
+            ctx.fillStyle = rgba(COL.muted, 0.75);
+            ctx.font = `500 ${Math.round(W * 0.011)}px ${FONT_MONO}`;
+            ctx.fillText('hybrid i/d · memory-hard · unique salt', W / 2, H * 0.115);
+
+            // phase chip — what is happening right now
+            let chip = '', chipCol = COL.muted;
+            if (t >= A_START && t < W_END) { chip = '1 · hash'; chipCol = AMBER; }
+            else if (t >= W_END && t < C_START + HEX_N * HEX_PER) { chip = '2 · store'; chipCol = COL.accent; }
+            else if (t >= D_START && t < CHECK_END) { chip = '3 · verify'; chipCol = COL.bright; }
+            if (chip) {
+                const fs = Math.round(W * 0.0105);
+                ctx.font = `700 ${fs}px ${FONT_MONO}`;
+                const tw = ctx.measureText(chip).width;
+                const px = W / 2 - tw / 2 - W * 0.012, py = H * 0.138;
+                ctx.fillStyle = rgba(chipCol, 0.12);
+                ctx.strokeStyle = rgba(chipCol, 0.5);
+                ctx.lineWidth = 1;
+                roundRect(px, py, tw + W * 0.024, fs * 2.4, fs);
+                ctx.fill(); ctx.stroke();
+                ctx.fillStyle = rgba(chipCol, 0.95);
+                ctx.fillText(chip, W / 2, py + fs * 1.65);
+            }
+            ctx.textAlign = 'left';
+        }
+
+        // ============================================================
+        // 6. FRAME
+        // ============================================================
+        let nowRef = 0;
+        let __seek = null;
+        window.__time = (v) => { __seek = v; };
+
+        function frame(now) {
+            if (__seek != null) now = __seek;
+            nowRef = now;
+            const t = now % LOOP;
+            const cycle = Math.floor(now / LOOP);
+            const out = outAlpha(t);
+
+            ctx.clearRect(0, 0, W, H);
+            drawBackground(now);
+            drawConnections(now);
+            drawReject(now);
+            drawUser(now);
+            drawBox(now, t, cycle);
+            drawKey(now);
+            drawDb(now, t, out);
+            drawPackets(now, t);
+            drawHud(t);
+            requestAnimationFrame(frame);
+        }
+
+        resize();
+        requestAnimationFrame(frame);
+    </script>
+</body>
+
+</html>

@@ -5,18 +5,33 @@ the **shared, branded CSS** in `css/`, so the palette always matches
 theodufort.com.
 
     motion-graphics/
-    ├── css/                     shared CSS (see below)
-    ├── skills/motion-graphics/  the skill that defines how to build graphics
-    ├── AGENTS.md                rules for agents working in this repo
+    ├── css/                              shared CSS (see below)
+    ├── skills/motion-graphics/           the skill that defines how to build graphics
+    │   └── references/drawing-techniques.md  layout-tested canvas recipes
+    ├── skills/motion-graphic-validation/ the skill for visually validating a graphic
+    ├── AGENTS.md                         rules for agents working in this repo
     └── <topic-kebab-case>/
-        └── index.html           one graphic = one folder with exactly this
+        ├── index.html                    the graphic itself
+        └── README.md                     standard description of the visual (kept in sync)
 
-## Building a new graphic
+## Building or changing a graphic
 
 Follow the `motion-graphics` skill (`skills/motion-graphics/SKILL.md`) and
-`AGENTS.md`. The short version: one folder with a single `index.html`, link
-`css/brand.css` + `css/motion.css`, one continuously animating page (no
-slideshow, no controls), minimal text, everything in motion.
+`AGENTS.md`. The short version:
+
+- **Edit before you generate.** Most requests are tweaks to an existing
+  graphic — check the existing folders first and edit that `index.html` in
+  place. Only create a new folder when the concept is genuinely new.
+- One folder with exactly two files: `index.html` (link `css/brand.css` +
+  `css/motion.css`, one continuously animating page — no slideshow, no
+  controls, minimal text, everything in motion) and a standard `README.md`
+  describing the visual, kept in sync with every HTML change.
+- **Every create or edit must pass the validation skill**
+  (`skills/motion-graphic-validation/SKILL.md`): loads clean, deterministic
+  seek (`window.__time`), then a **vision pass** (park at several times,
+  screenshot, look for badly placed text / overlaps / broken animation),
+  confirmed with `measureText`/pixel probes where needed, plus an animation
+  audit (nothing frozen, clean loop seam) and a README sync check.
 
 ## Shared CSS (`css/`)
 
@@ -34,9 +49,10 @@ New graphic? Just link both files — you inherit the full brand theme:
 
 Then style any part you need differently in a small local `<style>` block
 (your rules come later in the cascade, so they win).
-`ha-proxy-motion-graphic/` shows a compliant graphic in action: one
-continuously looping 32s timeline on a single canvas — no slideshow, no
-HUD.
+`pgsodium-salted-hashing/` shows a compliant graphic in action: one
+continuously looping timeline on a single canvas — no slideshow, no
+controls. (`high-availability-proxy/` is a legacy slideshow — copy only its
+`<link>` usage, not its interaction pattern.)
 
 ## Brand palette (from the website)
 
@@ -67,7 +83,11 @@ variables from `brand.css` instead.
 
 ## Anatomy of a compliant graphic
 
-- One folder, one `index.html` (all CSS in `<style>`, all JS in `<script>`).
+- One folder with exactly two files: `index.html` (all CSS in `<style>`, all
+  JS in `<script>`) and `README.md` — a standard description of what the
+  visual is (title, story beats with timings, key elements, notes), kept in
+  sync with every HTML change. Template in
+  `skills/motion-graphics/SKILL.md` → "Per-graphic README".
 - The whole story plays through **one continuous timeline** that loops — no
   slideshow, no play/pause/prev/next HUD, no scene switching.
 - Everything animates: elements enter, travel (`.req` dots), fill (`.meter`),
@@ -76,11 +96,21 @@ variables from `brand.css` instead.
 
 ## Adding a new graphic
 
-1. `mkdir my-graphic`, create `my-graphic/index.html`.
-2. Link `../css/brand.css` then `../css/motion.css`.
+0. **First check whether an existing graphic already covers the topic — if
+   so, edit it instead of adding a folder.**
+1. `mkdir my-graphic`, then write `my-graphic/README.md` first (standard
+   template — the spec of what the visual should be).
+2. Create `my-graphic/index.html`; link `../css/brand.css` then
+   `../css/motion.css`.
 3. Derive 4–8 story beats, assign a duration to each (~20–45s total loop).
-4. Build all beats in the same DOM driven by one timeline (CSS keyframes
-   preferred; small inline JS only for sequencing/counters).
-5. Verify in the browser: watch one full loop, confirm only
-   `my-graphic/index.html` was created, no brand hex values locally, no
-   controls, nothing frozen.
+4. Build all beats on one continuous timeline; expose `window.__time(ms)` to
+   park the loop at any moment.
+5. Run the **validation skill** (`skills/motion-graphic-validation/SKILL.md`)
+   — vision pass over parked screenshots, `measureText`/pixel-probe
+   confirmation, animation/loop-seam audit, README sync check — and confirm
+   only `my-graphic/index.html` + `my-graphic/README.md` were created, no
+   brand hex values locally, no controls, nothing frozen.
+
+When **modifying** an existing graphic, update its `README.md` in the same
+change so the description always matches the visual (create it first if the
+folder doesn't have one yet).
