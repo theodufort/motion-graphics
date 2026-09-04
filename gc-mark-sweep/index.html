@@ -1,369 +1,155 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>GC Mark and Sweep</title>
+<meta charset="utf-8">
 <link rel="stylesheet" href="../css/brand.css" />
 <link rel="stylesheet" href="../css/motion.css" />
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
-canvas{display:block;width:100%;height:100%}
+body{background:var(--bg);overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
 </style>
 </head>
 <body>
 <canvas id="stage"></canvas>
 <script>
-(function(){
-"use strict";
-var canvas=document.getElementById("stage");
-var ctx=canvas.getContext("2d");
-var W=0,H=0,dpr=1;
+// setup
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+const LOOP=30000;
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+let W,H,dpr,roots,nodes,edges;
 
-var LOOP=30000;
-var PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
-function rgba(c,a){return"rgba("+c[0]+","+c[1]+","+c[2]+","+a+")";}
-
-function lerp(a,b,t){return a+(b-a)*t;}
-function clamp01(v){return v<0?0:v>1?1:v;}
-function easeInOut(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
-function easeOut(t){return 1-(1-t)*(1-t);}
-
-function fade(t,start,end,fw){
-  if(t<start||t>=end)return 0;
-  var a=clamp01((t-start)/fw);
-  var b=clamp01((end-t)/fw);
-  return Math.min(a,b);
-}
-
-var nodes=[];
-var edges=[];
-var markOrder=[];
-var garbageIds=["obj6","obj7"];
-
+// layout
 function buildLayout(){
-  nodes=[
-    {id:"rootA",label:"Root A",x:W*0.28,y:H*0.16,type:"root"},
-    {id:"rootB",label:"Root B",x:W*0.72,y:H*0.16,type:"root"},
-    {id:"obj1",label:"Obj 1",x:W*0.15,y:H*0.44,type:"obj"},
-    {id:"obj2",label:"Obj 2",x:W*0.38,y:H*0.44,type:"obj"},
-    {id:"obj3",label:"Obj 3",x:W*0.22,y:H*0.70,type:"obj"},
-    {id:"obj4",label:"Obj 4",x:W*0.62,y:H*0.44,type:"obj"},
-    {id:"obj5",label:"Obj 5",x:W*0.78,y:H*0.70,type:"obj"},
-    {id:"obj6",label:"Obj 6",x:W*0.44,y:H*0.64,type:"obj"},
-    {id:"obj7",label:"Obj 7",x:W*0.56,y:H*0.82,type:"obj"}
-  ];
-  edges=[
-    {from:"rootA",to:"obj1"},
-    {from:"rootA",to:"obj2"},
-    {from:"obj1",to:"obj3"},
-    {from:"rootB",to:"obj4"},
-    {from:"obj4",to:"obj5"},
-    {from:"obj6",to:"obj7"}
-  ];
-  markOrder=[
-    {from:"rootA",to:"obj1",t0:3000,t1:4500},
-    {from:"rootA",to:"obj2",t0:4500,t1:6000},
-    {from:"obj1",to:"obj3",t0:6000,t1:7500},
-    {from:"rootB",to:"obj4",t0:7500,t1:9000},
-    {from:"obj4",to:"obj5",t0:9000,t1:10500}
-  ];
+roots=[{x:W*.35,y:H*.12,label:'Root A'},{x:W*.65,y:H*.12,label:'Root B'}];
+nodes=[
+{x:W*.22,y:H*.38,label:'obj 1',r:1},{x:W*.5,y:H*.38,label:'obj 2',r:1},
+{x:W*.78,y:H*.38,label:'obj 3',r:1},{x:W*.35,y:H*.62,label:'obj 4',r:1},
+{x:W*.65,y:H*.62,label:'obj 5',r:1},{x:W*.18,y:H*.82,label:'obj 6',r:0},
+{x:W*.82,y:H*.82,label:'obj 7',r:0}];
+edges=[{f:0,t:0},{f:0,t:1},{f:1,t:2},{f:1,t:3},{f:2,t:4}];
 }
 
-function getNode(id){
-  for(var i=0;i<nodes.length;i++){if(nodes[i].id===id)return nodes[i];}
-  return null;
+// easing
+const lerp=(a,b,t)=>a+(b-a)*t,clamp01=v=>Math.max(0,Math.min(1,v));
+const ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
+const quad=(a,c,b,t)=>({x:lerp(lerp(a.x,c.x,t),lerp(c.x,b.x,t),t),y:lerp(lerp(a.y,c.y,t),lerp(c.y,b.y,t),t)});
+const beat=(t,a,b)=>{const p=(t-a)/(b-a);if(p<0||p>1)return 0;return Math.min(clamp01(p/.15),clamp01((1-p)/.15))};
+
+// hooks
+let __seek=null;
+window.__time=v=>{__seek=v};
+window.__loop=LOOP;
+
+// packets (deterministic spawn windows)
+const markPkts=[
+{f:roots[0],t:nodes[0],s:3000,d:1200},{f:roots[0],t:nodes[1],s:4800,d:1200},
+{f:roots[1],t:nodes[2],s:4800,d:1200},{f:nodes[1],t:nodes[3],s:6600,d:1200},
+{f:nodes[2],t:nodes[4],s:6600,d:1200}];
+const markTimes=[3000,4800,4800,6600,6600];
+
+// frame
+function frame(now){
+if(__seek!=null)now=__seek;
+const t=now%LOOP;
+ctx.clearRect(0,0,W,H);
+drawBg(t);drawEdges(t);drawNodes(t);drawPkts(t);drawHud(t);
+requestAnimationFrame(frame);
 }
 
-function edgeCurve(e){
-  var a=getNode(e.from),b=getNode(e.to);
-  var mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
-  var dx=b.x-a.x,dy=b.y-a.y;
-  var len=Math.sqrt(dx*dx+dy*dy)||1;
-  var nx=-dy/len,ny=dx/len;
-  var off=len*0.15;
-  return{a:a,b:b,cx:mx+nx*off,cy:my+ny*off};
+function drawBg(t){
+ctx.fillStyle=rgba(PAL.bg,1);ctx.fillRect(0,0,W,H);
+ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;
+const s=W/20;
+for(let x=0;x<W;x+=s){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+for(let y=0;y<H;y+=s){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
 }
 
-function quad(a,cx,cy,b,t){
-  var u=1-t;
-  return{
-    x:u*u*a.x+2*u*t*cx+t*t*b.x,
-    y:u*u*a.y+2*u*t*cy+t*t*b.y
-  };
-}
-
-function drawBackground(t){
-  ctx.fillStyle=rgba(PAL.bg,1);
-  ctx.fillRect(0,0,W,H);
-  var gs=Math.max(40,W/25);
-  ctx.strokeStyle=rgba(PAL.text,0.03);
-  ctx.lineWidth=1;
-  ctx.beginPath();
-  for(var x=0;x<W;x+=gs){ctx.moveTo(x,0);ctx.lineTo(x,H);}
-  for(var y=0;y<H;y+=gs){ctx.moveTo(0,y);ctx.lineTo(W,y);}
-  ctx.stroke();
-}
-
-function drawConnections(t){
-  for(var i=0;i<edges.length;i++){
-    var e=edges[i];
-    var a=getNode(e.from),b=getNode(e.to);
-    var curve=edgeCurve(e);
-    var col=PAL.muted;
-    var alpha=0.15;
-
-    var markIdx=-1;
-    for(var m=0;m<markOrder.length;m++){
-      if(markOrder[m].from===e.from&&markOrder[m].to===e.to){markIdx=m;break;}
-    }
-    if(markIdx>=0){
-      var mo=markOrder[markIdx];
-      if(t>=mo.t1){col=PAL.accent;alpha=0.35;}
-      else if(t>=mo.t0){col=PAL.accent;alpha=0.5;}
-    }
-    if(e.from==="obj6"&&e.to==="obj7"){
-      if(t>=15000&&t<25000){col=PAL.fail;alpha=0.3;}
-    }
-    ctx.strokeStyle=rgba(col,alpha);
-    ctx.lineWidth=1.5;
-    ctx.beginPath();
-    ctx.moveTo(a.x,a.y);
-    ctx.quadraticCurveTo(curve.cx,curve.cy,b.x,b.y);
-    ctx.stroke();
-  }
+function drawEdges(t){
+const a=beat(t,2000,15500);
+ctx.lineWidth=1.5;
+edges.forEach(e=>{
+const A=roots[e.f],B=nodes[e.t],m={x:(A.x+B.x)/2,y:(A.y+B.y)/2-H*.06};
+ctx.strokeStyle=rgba(PAL.muted,.12+a*.25);
+ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.quadraticCurveTo(m.x,m.y,B.x,B.y);ctx.stroke();
+});
 }
 
 function drawNodes(t){
-  var baseR=Math.min(W,H)*0.035;
-  for(var i=0;i<nodes.length;i++){
-    var n=nodes[i];
-    var pulse=1+0.06*Math.sin(t/400+i*1.3);
-    var r=baseR*pulse;
-    var alpha=1;
-    var col=PAL.muted;
-    var isRoot=n.type==="root";
-    var isGarbage=garbageIds.indexOf(n.id)!==-1;
-    var marked=false;
-    for(var m=0;m<markOrder.length;m++){
-      if(markOrder[m].to===n.id&&t>=markOrder[m].t1)marked=true;
-    }
-
-    if(isRoot){col=PAL.accent;}
-    else if(marked){col=PAL.accent;}
-    else if(isGarbage){
-      if(t>=15000&&t<25000){
-        var sweepT=(t-15000)/10000;
-        if(sweepT<0.3){col=PAL.fail;}
-        else if(sweepT<0.7){
-          var shrink=1-easeInOut((sweepT-0.3)/0.4);
-          r*=shrink;alpha*=shrink;col=PAL.fail;
-        }else{
-          var fo=1-easeInOut((sweepT-0.7)/0.3);
-          r*=fo;alpha*=fo;col=PAL.fail;
-        }
-      }else if(t>=25000){
-        var reappear=easeOut(clamp01((t-25000)/2000));
-        r*=reappear;alpha*=reappear;col=PAL.muted;
-      }
-    }
-    if(r<1||alpha<0.01)continue;
-
-    var glow=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,r*2.5);
-    glow.addColorStop(0,rgba(col,0.15*alpha));
-    glow.addColorStop(1,rgba(col,0));
-    ctx.fillStyle=glow;
-    ctx.beginPath();
-    ctx.arc(n.x,n.y,r*2.5,0,Math.PI*2);
-    ctx.fill();
-
-    ctx.fillStyle=rgba(col,0.2*alpha);
-    ctx.beginPath();
-    ctx.arc(n.x,n.y,r,0,Math.PI*2);
-    ctx.fill();
-    ctx.strokeStyle=rgba(col,0.8*alpha);
-    ctx.lineWidth=2;
-    ctx.beginPath();
-    ctx.arc(n.x,n.y,r,0,Math.PI*2);
-    ctx.stroke();
-
-    if(isRoot){
-      ctx.fillStyle=rgba(col,0.9*alpha);
-      ctx.font="bold "+Math.round(r*0.55)+"px monospace";
-      ctx.textAlign="center";
-      ctx.textBaseline="middle";
-      ctx.fillText("R",n.x,n.y);
-    }
-    ctx.fillStyle=rgba(PAL.text,0.85*alpha);
-    ctx.font=Math.round(r*0.5)+"px monospace";
-    ctx.textAlign="center";
-    ctx.textBaseline="top";
-    ctx.fillText(n.label,n.x,n.y+r+6);
-  }
+const r=Math.min(W,H)*.035,pulse=Math.sin(t/400)*.08+1;
+roots.forEach(n=>{
+const a=beat(t,500,LOOP-500);
+ctx.beginPath();ctx.arc(n.x,n.y,r*.8*pulse,0,Math.PI*2);
+ctx.fillStyle=rgba(PAL.accent,.3*a);ctx.fill();
+ctx.strokeStyle=rgba(PAL.accent,.8*a);ctx.lineWidth=2;ctx.stroke();
+ctx.fillStyle=rgba(PAL.text,a);ctx.font=`${Math.min(W,H)*.018}px monospace`;ctx.textAlign='center';
+ctx.fillText(n.label,n.x,n.y-r*1.3);
+});
+nodes.forEach((n,i)=>{
+const appear=beat(t,1000+i*200,LOOP-500);
+const mi=markTimes.indexOf(3000+i*1800);
+const isMarked=n.r===1;
+const markT=isMarked?3000+i*1800:0;
+const marked=isMarked&&t>markT;
+const sweepT=!isMarked?17000+i*800:0;
+const swept=!isMarked&&t>sweepT;
+const sp=swept?ease(clamp01((t-sweepT)/1200)):0;
+const alpha=appear*(swept?1-sp:1);
+if(alpha<=0)return;
+const col=marked?PAL.accent:swept?PAL.fail:PAL.muted;
+if(marked){const g=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,r*2.5);g.addColorStop(0,rgba(PAL.accent,.2*alpha));g.addColorStop(1,rgba(PAL.accent,0));ctx.fillStyle=g;ctx.fillRect(n.x-r*3,n.y-r*3,r*6,r*6)}
+ctx.beginPath();ctx.arc(n.x,n.y,r*pulse*(1-sp),0,Math.PI*2);
+ctx.fillStyle=rgba(col,.2*alpha);ctx.fill();
+ctx.strokeStyle=rgba(col,.9*alpha);ctx.lineWidth=2;ctx.stroke();
+ctx.fillStyle=rgba(PAL.text,alpha);ctx.font=`${Math.min(W,H)*.016}px monospace`;ctx.textAlign='center';
+ctx.fillText(n.label,n.x,n.y+r*1.5);
+});
 }
 
-function drawEntities(t){
-  for(var i=0;i<markOrder.length;i++){
-    var mo=markOrder[i];
-    if(t<mo.t0||t>=mo.t1)continue;
-    var p=(t-mo.t0)/(mo.t1-mo.t0);
-    var a=getNode(mo.from),b=getNode(mo.to);
-    var curve=edgeCurve({from:mo.from,to:mo.to});
-    var pos=quad(a,curve.cx,curve.cy,b,easeInOut(p));
-    var trailLen=0.12;
-    for(var tr=trailLen;tr>0;tr-=0.02){
-      var tp=clamp01(p-tr);
-      if(tp<0)continue;
-      var tpos=quad(a,curve.cx,curve.cy,b,easeInOut(tp));
-      var ta=(1-tr/trailLen)*0.5;
-      ctx.fillStyle=rgba(PAL.accent,ta);
-      ctx.beginPath();
-      ctx.arc(tpos.x,tpos.y,3*(1-tr/trailLen),0,Math.PI*2);
-      ctx.fill();
-    }
-    ctx.fillStyle=rgba(PAL.accent,0.9);
-    ctx.beginPath();
-    ctx.arc(pos.x,pos.y,5,0,Math.PI*2);
-    ctx.fill();
-    var pg=ctx.createRadialGradient(pos.x,pos.y,0,pos.x,pos.y,15);
-    pg.addColorStop(0,rgba(PAL.accent,0.4));
-    pg.addColorStop(1,rgba(PAL.accent,0));
-    ctx.fillStyle=pg;
-    ctx.beginPath();
-    ctx.arc(pos.x,pos.y,15,0,Math.PI*2);
-    ctx.fill();
-  }
-
-  if(t>=15000&&t<25000){
-    var sweepT=(t-15000)/10000;
-    for(var g=0;g<garbageIds.length;g++){
-      var gn=getNode(garbageIds[g]);
-      if(!gn)continue;
-      var gt=clamp01((sweepT-g*0.15)/0.3);
-      if(gt>0&&gt<1){
-        var ring=gt*40;
-        var ra=(1-gt)*0.5;
-        ctx.strokeStyle=rgba(PAL.fail,ra);
-        ctx.lineWidth=2;
-        ctx.beginPath();
-        ctx.arc(gn.x,gn.y,Math.min(W,H)*0.035+ring,0,Math.PI*2);
-        ctx.stroke();
-      }
-    }
-  }
+function drawPkts(t){
+const r=Math.min(W,H)*.012;
+markPkts.forEach(p=>{
+const pr=(t-p.s)/p.d;
+if(pr<0||pr>1)return;
+const m={x:(p.f.x+p.t.x)/2,y:(p.f.y+p.t.y)/2-H*.08};
+const pos=quad(p.f,m,p.t,ease(pr));
+for(let i=4;i>=0;i--){
+const tp=pr-i*.04;if(tp<0)continue;
+const pp=quad(p.f,m,p.t,ease(tp));
+ctx.beginPath();ctx.arc(pp.x,pp.y,r*(1-i*.15),0,Math.PI*2);
+ctx.fillStyle=rgba(PAL.accent,(1-i*.18)*(1-pr*.4));ctx.fill();
+}
+});
 }
 
 function drawHud(t){
-  var titleAlpha=fade(t,200,3000,800);
-  if(titleAlpha>0){
-    ctx.fillStyle=rgba(PAL.text,titleAlpha);
-    ctx.font="bold "+Math.round(Math.min(W,H)*0.045)+"px monospace";
-    ctx.textAlign="center";
-    ctx.textBaseline="top";
-    ctx.fillText("GC Mark and Sweep",W*0.5,H*0.03);
-  }
-
-  var phaseLabel="";
-  var phaseAlpha=0;
-  var phaseCol=PAL.accent;
-  if(t>=3000&&t<12000){phaseLabel="MARK";phaseAlpha=fade(t,3000,12000,600);phaseCol=PAL.accent;}
-  else if(t>=12000&&t<15000){phaseLabel="MARKED";phaseAlpha=fade(t,12000,15000,400);phaseCol=PAL.accent;}
-  else if(t>=15000&&t<25000){phaseLabel="SWEEP";phaseAlpha=fade(t,15000,25000,600);phaseCol=PAL.fail;}
-  else if(t>=25000&&t<30000){phaseLabel="COMPACT";phaseAlpha=fade(t,25000,30000,1000);phaseCol=PAL.accent;}
-  if(phaseAlpha>0&&phaseLabel){
-    ctx.fillStyle=rgba(phaseCol,phaseAlpha);
-    ctx.font="bold "+Math.round(Math.min(W,H)*0.03)+"px monospace";
-    ctx.textAlign="center";
-    ctx.textBaseline="top";
-    ctx.fillText(phaseLabel,W*0.5,H*0.08);
-  }
-
-  var barX=W*0.3,barW=W*0.4,barY=H*0.92,barH=6;
-  ctx.fillStyle=rgba(PAL.text,0.08);
-  ctx.fillRect(barX,barY,barW,barH);
-  var barFill=0;
-  var barCol=PAL.accent;
-  if(t>=3000&&t<12000){barFill=easeInOut((t-3000)/9000);barCol=PAL.accent;}
-  else if(t>=12000&&t<15000){barFill=1;barCol=PAL.accent;}
-  else if(t>=15000&&t<25000){barFill=1-easeInOut((t-15000)/10000);barCol=PAL.fail;}
-  else if(t>=25000){barFill=0;}
-  if(barFill>0){
-    ctx.fillStyle=rgba(barCol,0.7);
-    ctx.fillRect(barX,barY,barW*barFill,barH);
-  }
-
-  var counterText="";
-  var counterAlpha=0;
-  if(t>=3000&&t<12000){
-    var marked=0;
-    for(var m=0;m<markOrder.length;m++){
-      if(t>=markOrder[m].t1)marked++;
-    }
-    counterText=marked+" / 7 marked";
-    counterAlpha=fade(t,3000,12000,500);
-  }else if(t>=12000&&t<15000){
-    counterText="5 / 7 marked";
-    counterAlpha=fade(t,12000,15000,400);
-  }else if(t>=15000&&t<25000){
-    var collected=0;
-    if(t>=17000)collected=1;
-    if(t>=19000)collected=2;
-    counterText="Collected: "+collected+" / 2";
-    counterAlpha=fade(t,15000,25000,500);
-  }
-  if(counterAlpha>0&&counterText){
-    ctx.fillStyle=rgba(PAL.text,counterAlpha);
-    ctx.font=Math.round(Math.min(W,H)*0.022)+"px monospace";
-    ctx.textAlign="center";
-    ctx.textBaseline="top";
-    ctx.fillText(counterText,W*0.5,barY+14);
-  }
-
-  if(t>=25000&&t<30000){
-    var fa=fade(t,25500,29500,800);
-    if(fa>0){
-      ctx.fillStyle=rgba(PAL.accent,fa);
-      ctx.font="bold "+Math.round(Math.min(W,H)*0.028)+"px monospace";
-      ctx.textAlign="center";
-      ctx.textBaseline="top";
-      ctx.fillText("Heap Compacted",W*0.5,H*0.88);
-    }
-  }
+const fs=Math.min(W,H)*.028;
+ctx.font=`bold ${fs}px monospace`;ctx.textAlign='center';
+const mA=beat(t,2000,15500),sA=beat(t,14500,28000);
+if(mA>0){ctx.fillStyle=rgba(PAL.accent,mA);ctx.fillText('MARK',W*.5,H*.06)}
+if(sA>0){ctx.fillStyle=rgba(PAL.fail,sA);ctx.fillText('SWEEP',W*.5,H*.06)}
+const mx=W*.3,mw=W*.4,my=H*.94,mh=H*.02;
+const used=t<16000?1:lerp(1,.55,ease(clamp01((t-16000)/8000)));
+ctx.fillStyle=rgba(PAL.muted,.2);ctx.fillRect(mx,my,mw,mh);
+ctx.fillStyle=rgba(t<16000?PAL.accent:PAL.fail,.7);ctx.fillRect(mx,my,mw*used,mh);
+ctx.fillStyle=rgba(PAL.text,.6);ctx.font=`${fs*.6}px monospace`;
+ctx.fillText(`heap ${Math.round(used*100)}%`,W*.5,my-mh*.8);
+const marked=nodes.filter((n,i)=>n.r===1&&t>3000+i*1800).length;
+const freed=nodes.filter((n,i)=>n.r===0&&t>17000+i*800).length;
+ctx.fillStyle=rgba(PAL.text,.5);ctx.font=`${fs*.55}px monospace`;
+ctx.textAlign='left';ctx.fillText(`marked: ${marked}`,mx,my+mh*2.5);
+ctx.textAlign='right';ctx.fillText(`freed: ${freed}`,mx+mw,my+mh*2.5);
 }
 
-var __seek=null;
-window.__time=function(v){__seek=v;};
-window.__loop=LOOP;
-
-function frame(now){
-  if(__seek!=null)now=__seek;
-  var t=now%LOOP;
-  ctx.clearRect(0,0,W,H);
-  drawBackground(t);
-  drawConnections(t);
-  drawNodes(t);
-  drawEntities(t);
-  drawHud(t);
-  requestAnimationFrame(frame);
-}
-
+// resize
 function resize(){
-  dpr=window.devicePixelRatio||1;
-  W=window.innerWidth;
-  H=window.innerHeight;
-  canvas.width=W*dpr;
-  canvas.height=H*dpr;
-  canvas.style.width=W+"px";
-  canvas.style.height=H+"px";
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  buildLayout();
+dpr=window.devicePixelRatio||1;W=window.innerWidth;H=window.innerHeight;
+cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';
+ctx.setTransform(dpr,0,0,dpr,0,0);buildLayout();
 }
-
-window.addEventListener("resize",resize);
-resize();
-requestAnimationFrame(frame);
-})();
+window.addEventListener('resize',resize);
+resize();requestAnimationFrame(frame);
 </script>
 </body>
 </html>

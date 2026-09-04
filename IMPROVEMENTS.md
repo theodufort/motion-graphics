@@ -41,3 +41,16 @@
   folders present finishes in < 5 min and prints BENCH: N/10.
 - [x] tool/validate.mjs: JSON report now includes shotsPath (+ shots
   array); acceptance met: dir exists, 6 files listed.
+- [ ] tool/bench/prompts.jsonl: expand to 15 prompts (5 new: MVCC
+  snapshot read, load balancer health checks, TCP congestion control
+  AIMD, LSM-tree compaction, circuit breaker half-open probing);
+  acceptance: 15 lines with 2 smoke, `node tool/bench.mjs` prints
+  BENCH: N/15.
+- [ ] check.sh/check.mjs: add --json flag printing a machine-readable
+  summary {ts, score, max, graphics, problems[]} as the only stdout;
+  acceptance: `./check.sh --skip-gen --json` parses with
+  python3 -c "import json,sys; json.load(sys.stdin)".
+- [ ] tool/validate.mjs: viewport-resize robustness check — resize to
+  1366x768 mid-validation and seek again; acceptance: pageerror count
+  stays 0 for all 22 graphics (check added to report JSON as
+  "resize": 0|1).
