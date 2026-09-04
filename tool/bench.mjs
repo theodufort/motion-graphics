@@ -11,6 +11,17 @@ import { generate } from "./generate.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const limit = process.argv.slice(2).find((a) => /^\d+$/.test(a));
 const smokeOnly = process.argv.includes("--smoke-only");
+const regen = process.argv.includes("--regen");
+const { validateFolder } = await import("./validate.mjs");
+const slugMap = (() => {
+  const p = path.join(ROOT, "logs", "slug-map.jsonl");
+  if (!existsSync(p)) return new Map();
+  const m = new Map();
+  for (const l of readFileSync(p, "utf8").split("\n").filter(Boolean)) {
+    try { const o = JSON.parse(l); m.set(o.prompt, o.topic); } catch {}
+  }
+  return m;
+})();
 
 async function main() {
 const prompts = readFileSync(path.join(ROOT, "tool", "bench", "prompts.jsonl"), "utf8")
@@ -26,7 +37,16 @@ for (let i = 0; i < prompts.length; i++) {
   const p = prompts[i];
   process.stderr.write(`[bench ${i + 1}/${prompts.length}] ${p.prompt.slice(0, 60)}\n`);
   try {
-    const g = await generate(p.prompt);
+    const known = slugMap.get(p.prompt);
+    const knownFolder = known && existsSync(path.join(ROOT, known)) ? path.join(ROOT, known) : null;
+    let g;
+    if (knownFolder && !regen) {
+      const t = Date.now();
+      const report = await validateFolder(knownFolder);
+      g = { topic: known, pass: report.clean && report.seek && report.collisions && report.seam && report.readme, report, seconds: (Date.now() - t) / 1000, reused: true };
+    } else {
+      g = await generate(p.prompt, { force: regen });
+    }
     if (g.pass) pass++;
     else failures.push(`${g.topic}: ${g.report.errors.slice(0, 2).join("; ")}`);
     process.stderr.write(`  -> ${g.pass ? "PASS" : "FAIL"} in ${Math.round(g.seconds)}s\n`);

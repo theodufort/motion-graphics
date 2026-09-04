@@ -33,6 +33,11 @@
 - [x] tool/check.mjs: smoke folders reused from logs/slug-map.jsonl on
   default runs; --regen forces regeneration;
   acceptance met: full default ./check.sh = 880/880 in 20s (was ~9 min).
-- [ ] tool/generate.mjs: append per-generation metadata to
-  logs/generations.jsonl ({ts, topic, model, seconds, lines, fixPasses,
-  pass}); acceptance: file gains one line per generate.sh run.
+- [x] tool/generate.mjs: logs/generations.jsonl metadata;
+  acceptance met: {ts, prompt, topic, model, seconds:248, lines:129,
+  fixPasses, pass:1} appended per run.
+- [ ] tool/bench.mjs: reuse existing folders on re-runs (validate only, no
+  LLM) and add --regen to force; acceptance: bench re-run with all 10
+  folders present finishes in < 5 min and prints BENCH: N/10.
+- [x] tool/validate.mjs: JSON report now includes shotsPath (+ shots
+  array); acceptance met: dir exists, 6 files listed.

@@ -59,7 +59,7 @@ async function validateFolder(folderPath) {
     };
   });
 
-  const r = { clean: 0, seek: 0, collisions: 0, seam: 0, readme: 0, errors: [...pageErrors, ...errors], shots: [], LOOP };
+  const r = { clean: 0, seek: 0, collisions: 0, seam: 0, readme: 0, errors: [...pageErrors, ...errors], shots: [], shotsPath: shotDir, LOOP };
   await page.goto("file://" + htmlPath, { waitUntil: "load", timeout: 15000 });
   await page.waitForTimeout(300);
 
@@ -190,6 +190,6 @@ if (isMain) {
     process.exit(2);
   }
   const r = await validateFolder(path.resolve(arg));
-  console.log(JSON.stringify({ folder: path.basename(arg), ...r, shots: `${r.shots.length} shots in tool/shots/` }, null, 2));
+  console.log(JSON.stringify({ folder: path.basename(arg), ...r }, null, 2));
   process.exit(r.clean && r.seek && r.collisions && r.seam && r.readme ? 0 : 1);
 }

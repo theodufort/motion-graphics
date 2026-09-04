@@ -202,6 +202,13 @@ if (isMain) {
     process.exit(2);
   }
   console.log(JSON.stringify({ topic: g.topic, pass: g.pass, seconds: Math.round(g.seconds), errors: g.report.errors, checks: { clean: g.report.clean, seek: g.report.seek, collisions: g.report.collisions, seam: g.report.seam, readme: g.report.readme } }, null, 1));
+  try {
+    const html = readFileSync(path.join(g.folder, "index.html"), "utf8");
+    appendFileSync(
+      path.join(ROOT, "logs", "generations.jsonl"),
+      JSON.stringify({ ts: new Date().toISOString(), prompt, topic: g.topic, model: MODEL, seconds: Math.round(g.seconds), lines: html.split("\n").length, fixPasses: g.fixPasses, pass: g.pass }) + "\n"
+    );
+  } catch {}
   console.log(g.folder);
   process.exit(g.pass ? 0 : 1);
 }
