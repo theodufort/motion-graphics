@@ -576,8 +576,27 @@
         let last = 0;
         let perfNow = 0;
 
+        // ---- SEEK HOOK — park the clock for validation (validation skill) ----
+        let __seek = null;
+        window.__time = (ms) => { __seek = ((ms % CYCLE) + CYCLE) % CYCLE; };
+
         function frame(now) {
             perfNow = now;
+            if (__seek != null) {
+                // parked: draw a deterministic frame at seek time (no live entity churn)
+                ctx.clearRect(0, 0, W, H);
+                drawBackground();
+                drawConnections(__seek);
+                drawPings(__seek);
+                drawClients(__seek);
+                drawPackets();
+                drawNodes(__seek);
+                drawProxy(__seek);
+                drawHUD(__seek);
+                last = now;
+                requestAnimationFrame(frame);
+                return;
+            }
             const dt = Math.min(50, last ? now - last : 16);
             last = now;
 
