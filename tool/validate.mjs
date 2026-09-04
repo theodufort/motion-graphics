@@ -52,14 +52,14 @@ async function validateFolder(folderPath) {
         let a = this.globalAlpha;
         const fstr = String(this.fillStyle);
         const rm = fstr.match(/rgba\(([^)]+)\)/);
-        if (rm) a *= parseFloat(rm[1].split(",")[3]) || 1;
+        if (rm) a *= parseFloat(rm[1].split(",")[3]) ?? 1; // || would map alpha 0 → 1
         window.__ft.push({ s: String(s).slice(0, 40), x: left, y: top, w: m.width, asc, desc, a });
       } catch {}
       return orig.call(this, s, x, y);
     };
   });
 
-  const r = { clean: 0, seek: 0, collisions: 0, seam: 0, readme: 0, content: 0, frozen: 0, errors: [...pageErrors, ...errors], shots: [], shotsPath: shotDir, LOOP };
+  const r = { clean: 0, seek: 0, collisions: 0, seam: 0, readme: 0, content: 0, frozen: 0, visibility: 0, errors: [...pageErrors, ...errors], shots: [], shotsPath: shotDir, LOOP };
   await page.goto("file://" + htmlPath, { waitUntil: "load", timeout: 15000 });
   await page.waitForTimeout(300);
 
@@ -103,6 +103,7 @@ async function validateFolder(folderPath) {
     });
   }
 
+  const labelMaxA = new Map(); // label -> { a: max alpha, n: frames seen }
   const rectsByTime = {};
   const contentsByTime = {};
   for (const f of FRAMES) {
@@ -111,7 +112,13 @@ async function validateFolder(folderPath) {
     const shot = path.join(shotDir, `t${t}.png`);
     await page.screenshot({ path: shot });
     r.shots.push(shot);
-    if (p) { rectsByTime[t] = p.ft; contentsByTime[t] = p.content; }
+    if (p) {
+      rectsByTime[t] = p.ft; contentsByTime[t] = p.content;
+      for (const f of p.ft) if (f && f.s) {
+        const o = labelMaxA.get(f.s) || { a: 0, n: 0 };
+        labelMaxA.set(f.s, { a: Math.max(o.a, f.a), n: o.n + 1 });
+      }
+    }
   }
   // seam window: max content across the wrap neighbourhood (crossfades dip
   // briefly at the exact seam but a real dark frame stays empty over the window)
@@ -178,7 +185,18 @@ async function validateFolder(folderPath) {
   })();
   if (!r.readme) errors.push("README.md missing or trivial");
 
-  // resize robustness: change viewport mid-validation, then seek again
+  // label visibility: a label present in EVERY parked frame yet never
+  // reaching alpha 0.15 is a bug (ghost/placeholder text). Beat labels
+  // fade in/out and may sample at alpha 0 on frames at their boundaries
+  // (n=1), so "all frames" is the discriminator; dim subtitles (a~0.3)
+  // are legitimate.
+  r.visibility = 0;
+  const parked = Object.keys(rectsByTime).length;
+  const invisible = [...labelMaxA.entries()].filter(([s, o]) => o.a < 0.15 && o.n >= parked && parked > 0 && s.trim());
+  if (hasSeek && invisible.length === 0) r.visibility = 1;
+  if (r.visibility === 0 && invisible.length)
+    errors.push(`visibility: always-invisible labels: ${invisible.slice(0, 3).map(([s, o]) => `"${s}" (max a=${o.a.toFixed(2)}, ${o.n} frames)`).join(", ")}`);
+
   // frozen-animation probe: sample evenly across the loop; a real graphic
   // shows a big content-px delta at least once (beat transitions), so freeze
   // only when the MAX delta is near zero (beat-hold regions are fine)
@@ -225,5 +243,5 @@ if (isMain) {
   }
   const r = await validateFolder(path.resolve(arg));
   console.log(JSON.stringify({ folder: path.basename(arg), ...r }, null, 2));
-  process.exit(r.clean && r.seek && r.collisions && r.seam && r.readme && r.content && !r.frozen ? 0 : 1);
+  process.exit(r.clean && r.seek && r.collisions && r.seam && r.readme && r.content && !r.frozen && r.visibility ? 0 : 1);
 }

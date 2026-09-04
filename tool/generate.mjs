@@ -70,6 +70,8 @@ HARD RULES
 17. Motion: between any two consecutive beats at least one element must
     visibly change (position, size, alpha, or text). No beat may be a
     pixel-identical redraw of the previous one.
+18. Never draw text at alpha 0 — no invisible placeholder labels; a
+    label that exists in the code must become visible in its beat.
 
 REQUIRED STRUCTURE (adapt content, keep shape):
   setup (canvas, ctx, LOOP, PAL, rgba helper) → buildLayout() (positions from W/H) →
