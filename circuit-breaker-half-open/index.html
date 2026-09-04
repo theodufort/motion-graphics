@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+const LOOP=20000;
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9],amber:[251,191,36]};
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+let W,H,dpr;
+function resize(){dpr=devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);buildLayout()}
+const lerp=(a,b,t)=>a+(b-a)*t,clamp01=v=>Math.max(0,Math.min(1,v)),ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
+const quad=(a,c,b,t)=>({x:(1-t)*(1-t)*a.x+2*(1-t)*t*c.x+t*t*b.x,y:(1-t)*(1-t)*a.y+2*(1-t)*t*c.y+t*t*b.y});
+let src,brk,svc;
+function buildLayout(){src={x:W*.15,y:H*.5,r:W*.04};brk={x:W*.5,y:H*.5,r:W*.055};svc={x:W*.85,y:H*.5,r:W*.04}}
+function stateCol(t){const b=t/LOOP;return b<.25?PAL.accent:b<.45?PAL.fail:b<.75?PAL.amber:PAL.accent}
+function stateLbl(t){const b=t/LOOP;return b<.25?'CLOSED':b<.45?'OPEN':b<.75?'HALF-OPEN':'CLOSED'}
+function fitLabel(txt,x,y,mw,col){let s=Math.max(11,W*.014);ctx.font=`600 ${s}px system-ui,sans-serif`;while(ctx.measureText(txt).width>mw*.9&&s>9){s-=2;ctx.font=`600 ${s}px system-ui,sans-serif`}ctx.fillStyle=rgba(col,.9);ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(txt,x,y)}
+function drawBg(t){ctx.fillStyle=rgba(PAL.bg,1);ctx.fillRect(0,0,W,H);ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;const g=W*.06;for(let x=0;x<W;x+=g){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=g){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}}
+function drawConn(t){const col=stateCol(t),a=.3+.1*Math.sin(t/400);ctx.strokeStyle=rgba(col,a);ctx.lineWidth=2;ctx.setLineDash([8,6]);ctx.lineDashOffset=-t/20;ctx.beginPath();ctx.moveTo(src.x+src.r,src.y);ctx.quadraticCurveTo(W*.32,H*.42,brk.x-brk.r,brk.y);ctx.stroke();ctx.beginPath();ctx.moveTo(brk.x+brk.r,brk.y);ctx.quadraticCurveTo(W*.68,H*.42,svc.x-svc.r,svc.y);ctx.stroke();ctx.setLineDash([])}
+function drawNodes(t){const col=stateCol(t),p=1+.03*Math.sin(t/400);ctx.beginPath();ctx.arc(src.x,src.y,src.r*p,0,Math.PI*2);ctx.fillStyle=rgba(PAL.muted,.15);ctx.fill();ctx.strokeStyle=rgba(PAL.muted,.5);ctx.lineWidth=1.5;ctx.stroke();fitLabel('Request Pool',src.x,src.y+src.r+H*.03,src.r*2.2,PAL.muted);const br=brk.r*p;ctx.beginPath();ctx.arc(brk.x,brk.y,br,0,Math.PI*2);ctx.fillStyle=rgba(col,.12);ctx.fill();ctx.strokeStyle=rgba(col,.8);ctx.lineWidth=2.5;ctx.stroke();const g=ctx.createRadialGradient(brk.x,brk.y,br*.3,brk.x,brk.y,br*1.8);g.addColorStop(0,rgba(col,.15));g.addColorStop(1,rgba(col,0));ctx.fillStyle=g;ctx.beginPath();ctx.arc(brk.x,brk.y,br*1.8,0,Math.PI*2);ctx.fill();fitLabel(stateLbl(t),brk.x,brk.y+br+H*.035,br*2.4,col);ctx.beginPath();ctx.arc(svc.x,svc.y,svc.r*p,0,Math.PI*2);ctx.fillStyle=rgba(PAL.muted,.15);ctx.fill();ctx.strokeStyle=rgba(PAL.muted,.5);ctx.lineWidth=1.5;ctx.stroke();fitLabel('Upstream API',svc.x,svc.y+svc.r+H*.03,svc.r*2.2,PAL.muted)}
+function drawDot(pos,col,a){ctx.beginPath();ctx.arc(pos.x,pos.y,W*.006,0,Math.PI*2);ctx.fillStyle=rgba(col,a);ctx.fill();const g=ctx.createRadialGradient(pos.x,pos.y,0,pos.x,pos.y,W*.012);g.addColorStop(0,rgba(col,a*.4));g.addColorStop(1,rgba(col,0));ctx.fillStyle=g;ctx.beginPath();ctx.arc(pos.x,pos.y,W*.012,0,Math.PI*2);ctx.fill()}
+function pkt(t,from,to,ctrl,off,dur){const c=(t+off)%dur,p=c/dur;return{pos:quad(from,ctrl,to,ease(p)),p}}
+function drawPkts(t){const b=t/LOOP,col=stateCol(t),c1={x:W*.32,y:H*.42},c2={x:W*.68,y:H*.42},a1={x:src.x+src.r,y:src.y},b1={x:brk.x-brk.r,y:brk.y},a2={x:brk.x+brk.r,y:brk.y},b2={x:svc.x-svc.r,y:svc.y};if(b<.25||b>=.75){for(let i=0;i<5;i++){const o=i*600;drawDot(pkt(t,a1,b1,c1,o,3000).pos,col,.8);drawDot(pkt(t,a2,b2,c2,o+1500,3000).pos,col,.8)}}else if(b<.45){for(let i=0;i<3;i++){const o=i*800,r=pkt(t,a1,b1,c1,o,2000);if(r.p<.7)drawDot(r.pos,PAL.fail,.9);else{const bp=1-(r.p-.7)/.3;drawDot(quad(b1,c1,a1,ease(bp)),PAL.fail,.5*(1-bp))}}}else{for(let i=0;i<3;i++){const o=i*1200;drawDot(pkt(t,a1,b1,c1,o,4000).pos,PAL.amber,.9);drawDot(pkt(t,a2,b2,c2,o+2000,4000).pos,PAL.amber,.9)}}}
+function drawHud(t){const b=t/LOOP;fitLabel('Circuit Breaker Probing',W*.5,H*.08,W*.4,PAL.text);ctx.font=`400 ${Math.max(10,W*.01)}px system-ui,sans-serif`;ctx.fillStyle=rgba(PAL.muted,.6);ctx.textAlign='center';ctx.fillText('3 consecutive successes close the breaker',W*.5,H*.92);const ma=clamp01(Math.min((t-9000)/800,(15000-t)/800));if(ma>0){const mx=W*.5,my=H*.78,mw=W*.2,mh=H*.025,suc=Math.min(3,Math.floor((t-9000)/1800));ctx.globalAlpha=ma;ctx.fillStyle=rgba(PAL.muted,.2);ctx.fillRect(mx-mw/2,my,mw,mh);ctx.fillStyle=rgba(PAL.accent,.7);ctx.fillRect(mx-mw/2,my,mw*(suc/3),mh);ctx.strokeStyle=rgba(PAL.muted,.4);ctx.lineWidth=1;ctx.strokeRect(mx-mw/2,my,mw,mh);fitLabel(`Trials ${suc}/3`,mx,my+mh+H*.01,mw,PAL.muted);ctx.globalAlpha=1}}
+let __seek=null;
+window.__time=(v)=>{__seek=v};
+window.__loop=LOOP;
+function frame(now){if(__seek!=null)now=__seek;const t=now%LOOP;ctx.clearRect(0,0,W,H);drawBg(t);drawConn(t);drawNodes(t);drawPkts(t);drawHud(t);requestAnimationFrame(frame)}
+resize();
+addEventListener('resize',resize);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

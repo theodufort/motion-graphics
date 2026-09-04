@@ -47,17 +47,10 @@
   graphics.".
 - [x] tool/validate.mjs: viewport-resize robustness check (1366x768
   mid-validation + re-seek, report JSON "resize": 0|1, enforced by
-  check.mjs); acceptance met: all 23 graphics resize:1, 805/805.- [ ] tool/generate.mjs: system prompt rule — every text label must fit
-  its enclosing shape (measure with ctx.measureText before fillText,
-  shrink font if wider than 0.9x the shape); acceptance: next 3 bench
-  prompts produce 0 collision findings without a fix pass.
+  check.mjs); acceptance met: all 23 graphics resize:1, 805/805.
 - [x] repo hygiene: duplicates consolidated (event-loop-timers-io-
   microtasks, service-mesh-circuit-breaker removed; slug-map slugs
-  canonical); acceptance met: 21 graphics, 735/735.- [ ] tool/generate.mjs: system prompt rule — every text label must fit
-  its enclosing shape (measure with ctx.measureText before fillText,
-  shrink font if wider than 0.9x the shape); acceptance: next 3 bench
-  prompts produce 0 collision findings without a fix pass.
-- [ ] tool/generate.mjs: system prompt rule — every text label must fit
-  its enclosing shape (measure with ctx.measureText before fillText,
-  shrink font if wider than 0.9x the shape); acceptance: next 3 bench
-  prompts produce 0 collision findings without a fix pass.
+  canonical); acceptance met: 21 graphics, 735/735.
+- [x] tool/generate.mjs: prompt rule 16 (label fit via measureText);
+  acceptance met: mvcc-snapshot-reads, load-balancer-health-checks,
+  tcp-congestion-control all pass 5/5, 0 collision findings, 0 fix passes.

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+*{margin:0;box-sizing:border-box}
+body{background:var(--bg);overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+const LOOP=32000;
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+let W,H,dpr;
+const lerp=(a,b,t)=>a+(b-a)*t;
+const clamp01=v=>Math.max(0,Math.min(1,v));
+const ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
+const levels=[{y:.22,l:'L0'},{y:.40,l:'L1'},{y:.58,l:'L2'},{y:.76,l:'L3'}];
+function buildLayout(){dpr=devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
+const beat=t=>t/LOOP;
+function scoreAt(t){const b=beat(t);if(b<.25)return ease(clamp01(b/.25))*.9;if(b<.5)return .9-ease(clamp01((b-.25)/.25))*.5;if(b<.75)return .4+ease(clamp01((b-.5)/.25))*.5;return .9-ease(clamp01((b-.75)/.25))*.9}
+function spaceAmp(t){const b=beat(t);if(b<.25)return lerp(3.2,2.8,ease(clamp01(b/.25)));if(b<.5)return lerp(2.8,1.9,ease(clamp01((b-.25)/.25)));if(b<.75)return lerp(1.9,2.4,ease(clamp01((b-.5)/.25)));return lerp(2.4,3.2,ease(clamp01((b-.75)/.25)))}
+function runsFor(li,t){const b=beat(t);const base=[4,3,2,1];let c=base[li];if(li===0){if(b<.25)c=Math.ceil(ease(clamp01(b/.25))*4);else if(b<.5)c=Math.max(1,4-Math.ceil(ease(clamp01((b-.25)/.25))*3));else if(b<.75)c=1+Math.ceil(ease(clamp01((b-.5)/.25))*3);else c=Math.max(1,4-Math.ceil(ease(clamp01((b-.75)/.25))*3))}if(li===1){if(b<.25)c=3;else if(b<.5)c=3+Math.ceil(ease(clamp01((b-.25)/.25))*2);else if(b<.75)c=Math.max(1,5-Math.ceil(ease(clamp01((b-.5)/.25))*4));else c=1+Math.ceil(ease(clamp01((b-.75)/.25))*2)}if(li===2){if(b<.5)c=2;else if(b<.75)c=2+Math.ceil(ease(clamp01((b-.5)/.25)));else c=Math.max(1,3-Math.ceil(ease(clamp01((b-.75)/.25))*2))}return c}
+function packets(t){const b=beat(t),pk=[];const waves=[[.25,.5,0,1,3],[.5,.75,1,2,3],[.75,1,2,3,2]];waves.forEach(([s,e,f,to,n])=>{if(b>=s&&b<e)for(let i=0;i<n;i++){const off=i*.12,pt=clamp01((b-s-off)/.1);if(pt>0&&pt<1)pk.push({f,to,t:pt,x:.3+i*.15})}});return pk}
+let __seek=null;
+window.__time=v=>{__seek=v};
+window.__loop=LOOP;
+function frame(now){
+if(__seek!=null)now=__seek;
+const t=now%LOOP,b=beat(t);
+ctx.clearRect(0,0,W,H);
+ctx.strokeStyle=rgba(PAL.text,.03);ctx.lineWidth=1;
+for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+ctx.fillStyle=rgba(PAL.text,.9);ctx.font=`600 ${Math.round(W*.028)}px system-ui`;ctx.textAlign='center';ctx.fillText('LSM-Tree Compaction',W*.5,H*.08);
+const lx=W*.18,lw=W*.55;
+levels.forEach((lv,i)=>{
+const ly=H*lv.y,lh=H*.1;
+const pulse=.5+.5*Math.sin(now/400+i);
+const active=(i===0&&b<.25)||(i===1&&b>=.25&&b<.5)||(i===2&&b>=.5&&b<.75)||(i===3&&b>=.75);
+const al=active?.6+.4*pulse:.25;
+ctx.strokeStyle=rgba(active?PAL.accent:PAL.muted,al);ctx.lineWidth=active?2:1;ctx.strokeRect(lx,ly,lw,lh);
+ctx.fillStyle=rgba(PAL.text,.7);ctx.font=`500 ${Math.round(W*.014)}px system-ui`;ctx.textAlign='left';ctx.fillText(lv.l,lx+8,ly+lh*.6);
+const cnt=runsFor(i,t),rw=(lw-40)/5;
+for(let r=0;r<cnt;r++){const rx=lx+30+r*rw,ry=ly+lh*.25,rh=lh*.5,rp=.7+.3*Math.sin(now/350+r*1.2);ctx.fillStyle=rgba(PAL.accent,.15+.15*rp);ctx.fillRect(rx,ry,rw*.8,rh);ctx.strokeStyle=rgba(PAL.accent,.4*rp);ctx.strokeRect(rx,ry,rw*.8,rh)}
+});
+packets(t).forEach(p=>{
+const y1=H*levels[p.f].y+H*.05,y2=H*levels[p.to].y+H*.05;
+const cx=lx+lw*p.x,cy=(y1+y2)/2+20;
+for(let tr=5;tr>=0;tr--){const tt=clamp01(p.t-tr*.03);const py=lerp(y1,y2,ease(tt));const px=cx+Math.sin(ease(tt)*Math.PI)*15;ctx.fillStyle=rgba(PAL.accent,(1-tr/5)*.6);ctx.beginPath();ctx.arc(px,py,3-tr*.4,0,Math.PI*2);ctx.fill()}
+});
+const sx=W*.06,sw=W*.04,sh=H*.5,sy=H*.2,sv=scoreAt(t);
+ctx.fillStyle=rgba(PAL.muted,.15);ctx.fillRect(sx,sy,sw,sh);
+ctx.fillStyle=rgba(sv>.8?PAL.fail:PAL.accent,.7);ctx.fillRect(sx,sy+sh-sh*sv,sw,sh*sv);
+ctx.strokeStyle=rgba(PAL.muted,.3);ctx.strokeRect(sx,sy,sw,sh);
+ctx.fillStyle=rgba(PAL.text,.6);ctx.font=`400 ${Math.round(W*.011)}px system-ui`;ctx.textAlign='center';ctx.fillText('score',sx+sw/2,sy+sh+18);
+const ax=W*.82,aw=W*.12,amp=spaceAmp(t);
+ctx.fillStyle=rgba(PAL.text,.8);ctx.font=`700 ${Math.round(W*.03)}px system-ui`;ctx.textAlign='center';ctx.fillText(amp.toFixed(1)+'\u00d7',ax+aw/2,H*.35);
+ctx.fillStyle=rgba(PAL.muted,.6);ctx.font=`400 ${Math.round(W*.011)}px system-ui`;ctx.fillText('space amp',ax+aw/2,H*.35+22);
+const barY=H*.38;ctx.fillStyle=rgba(PAL.muted,.15);ctx.fillRect(ax,barY,aw,6);
+const an=clamp01((amp-1)/3);ctx.fillStyle=rgba(an>.6?PAL.fail:PAL.accent,.7);ctx.fillRect(ax,barY,aw*an,6);
+ctx.fillStyle=rgba(PAL.muted,.4);ctx.font=`400 ${Math.round(W*.01)}px system-ui`;ctx.textAlign='center';ctx.fillText('runs merge by score \u2192 lower levels',W*.5,H*.94);
+requestAnimationFrame(frame);
+}
+buildLayout();
+addEventListener('resize',buildLayout);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
