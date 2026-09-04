@@ -45,7 +45,7 @@ for (let i = 0; i < prompts.length; i++) {
       const report = await validateFolder(knownFolder);
       g = { topic: known, pass: report.clean && report.seek && report.collisions && report.seam && report.readme, report, seconds: (Date.now() - t) / 1000, reused: true };
     } else {
-      g = await generate(p.prompt, { force: regen });
+      g = await generate(p.prompt, { force: regen, allowExisting: true });
     }
     if (g.pass) pass++;
     else failures.push(`${g.topic}: ${g.report.errors.slice(0, 2).join("; ")}`);

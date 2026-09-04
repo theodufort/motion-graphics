@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>The Event Loop</title>
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+*{margin:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
+canvas{display:block;width:100%;height:100%}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+const LOOP=30000;
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+let W,H,dpr;
+function resize(){dpr=devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
+resize();addEventListener('resize',resize);
+
+// easing
+const lerp=(a,b,t)=>a+(b-a)*t;
+const clamp01=v=>Math.max(0,Math.min(1,v));
+const ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
+const quad=(a,c,b,t)=>{const u=1-t;return{x:u*u*a.x+2*u*t*c.x+t*t*b.x,y:u*u*a.y+2*u*t*c.y+t*t*b.y}};
+
+// nodes (positions as fractions of W/H)
+const nodes=[
+  {fx:.13,fy:.5,label:"Call Stack",col:PAL.accent,r:28},
+  {fx:.42,fy:.5,label:"Event Loop",col:PAL.accent,r:34},
+  {fx:.42,fy:.14,label:"Web APIs",col:PAL.muted,r:24},
+  {fx:.78,fy:.3,label:"Task Queue",col:PAL.muted,r:26},
+  {fx:.78,fy:.7,label:"Microtask Q",col:PAL.accent,r:26}
+];
+const pos=n=>({x:n.fx*W,y:n.fy*H});
+
+// connections: [fromIdx, toIdx, ctrlOffset]
+const conns=[[2,3,.5],[2,4,.5],[3,1,.5],[4,1,.5],[1,0,.5]];
+const ctrl=(a,b)=>{const m={x:(a.x+b.x)/2,y:(a.y+b.y)/2};return{x:m.x+(b.x-a.x)*.15,y:m.y+(b.y-a.y)*.15}};
+
+// packets per beat: {from,to,dur,delay,col}
+const beats=[
+  {range:[0,.2],packets:[],hud:"Architecture"},
+  {range:[.2,.43],packets:[{f:2,t:3,d:.8,delay:.1},{f:3,t:1,d:.7,delay:.5},{f:1,t:0,d:.6,delay:.9}],hud:"Timer → Stack"},
+  {range:[.43,.67],packets:[{f:2,t:3,d:.8,delay:.1},{f:3,t:1,d:.7,delay:.5},{f:1,t:0,d:.6,delay:.9}],hud:"IO → Stack"},
+  {range:[.67,.9],packets:[{f:2,t:4,d:.7,delay:.1},{f:4,t:1,d:.5,delay:.4},{f:1,t:0,d:.5,delay:.6},{f:3,t:1,d:.8,delay:1.2},{f:1,t:0,d:.5,delay:1.6}],hud:"Microtask first"},
+  {range:[.9,1],packets:[],hud:""}
+];
+
+// seek hooks
+let __seek=null;
+window.__time=v=>{__seek=v};
+window.__loop=LOOP;
+
+function drawBg(t){
+  ctx.fillStyle=rgba(PAL.bg,1);ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle=rgba(PAL.text,.03);ctx.lineWidth=1;
+  const sp=W/24;
+  for(let x=0;x<W;x+=sp){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+  for(let y=0;y<H;y+=sp){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+}
+
+function drawConns(t){
+  conns.forEach(([fi,ti])=>{
+    const a=pos(nodes[fi]),b=pos(nodes[ti]),c=ctrl(a,b);
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.quadraticCurveTo(c.x,c.y,b.x,b.y);
+    ctx.strokeStyle=rgba(PAL.muted,.12);ctx.lineWidth=1.5;ctx.stroke();
+  });
+}
+
+function drawNodes(t){
+  nodes.forEach((n,i)=>{
+    const p=pos(n),pulse=1+.08*Math.sin(t/400+i*1.3);
+    const r=n.r*pulse;
+    const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,r*2.2);
+    g.addColorStop(0,rgba(n.col,.15));g.addColorStop(1,rgba(n.col,0));
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(p.x,p.y,r*2.2,0,7);ctx.fill();
+    ctx.beginPath();ctx.arc(p.x,p.y,r,0,7);
+    ctx.fillStyle=rgba(PAL.bg,.9);ctx.fill();
+    ctx.strokeStyle=rgba(n.col,.7);ctx.lineWidth=2;ctx.stroke();
+    // event loop ring
+    if(i===1){ctx.beginPath();ctx.arc(p.x,p.y,r+8,t/1000,t/1000+4.5);ctx.strokeStyle=rgba(PAL.accent,.4);ctx.lineWidth=2;ctx.stroke()}
+    ctx.font=`600 ${Math.max(11,W*.011)}px system-ui`;ctx.textAlign="center";ctx.textBaseline="top";
+    ctx.fillStyle=rgba(PAL.text,.85);ctx.fillText(n.label,p.x,p.y+r+10);
+  });
+}
+
+function drawPackets(t){
+  const beat=t/LOOP;
+  beats.forEach(b=>{
+    if(beat<b.range[0]||beat>=b.range[1])return;
+    const local=(beat-b.range[0])/(b.range[1]-b.range[0]);
+    b.packets.forEach(pk=>{
+      const start=pk.delay,span=pk.d;
+      const pt=clamp01((local-start)/span);
+      if(pt<=0||pt>=1)return;
+      const a=pos(nodes[pk.f]),b2=pos(nodes[pk.t]),c=ctrl(a,b2);
+      const p=quad(a,c,b2,ease(pt));
+      const col=pk.t===4||pk.t===0?PAL.accent:PAL.muted;
+      // trail
+      for(let i=1;i<=5;i++){
+        const tt=clamp01(pt-i*.04);
+        if(tt<=0)break;
+        const tp=quad(a,c,b2,ease(tt));
+        ctx.beginPath();ctx.arc(tp.x,tp.y,4*(1-i*.15),0,7);
+        ctx.fillStyle=rgba(col,.3*(1-i*.18));ctx.fill();
+      }
+      ctx.beginPath();ctx.arc(p.x,p.y,5,0,7);ctx.fillStyle=rgba(col,.9);ctx.fill();
+    });
+  });
+}
+
+function drawHud(t){
+  const beat=t/LOOP;
+  let label="",alpha=0;
+  beats.forEach(b=>{
+    if(beat>=b.range[0]&&beat<b.range[1]){
+      label=b.hud;
+      const local=(beat-b.range[0])/(b.range[1]-b.range[0]);
+      alpha=Math.min(1,local*6,(1-local)*6);
+    }
+  });
+  if(label&&alpha>0){
+    ctx.font=`700 ${Math.max(14,W*.016)}px system-ui`;ctx.textAlign="center";ctx.textBaseline="bottom";
+    ctx.fillStyle=rgba(PAL.accent,alpha);ctx.fillText(label,W*.5,H*.92);
+  }
+  // counter
+  const cycle=Math.floor(t/LOOP);
+  ctx.font=`400 ${Math.max(10,W*.009)}px system-ui`;ctx.textAlign="right";ctx.textBaseline="top";
+  ctx.fillStyle=rgba(PAL.muted,.5);ctx.fillText(`loop ${cycle}`,W-16,16);
+}
+
+function frame(now){
+  if(__seek!=null)now=__seek;
+  const t=now%LOOP;
+  ctx.clearRect(0,0,W,H);
+  drawBg(t);drawConns(t);drawNodes(t);drawPackets(t);drawHud(t);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

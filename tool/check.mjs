@@ -106,7 +106,7 @@ for (const p of (skipGen ? [] : smoke)) {
     folder = knownFolder; // reuse: validate only, no LLM
   } else {
     res = spawnSync("node", [path.join(root, "tool", "generate.mjs"), p.prompt, ...(regen ? ["--force"] : [])], {
-      cwd: root, encoding: "utf8", timeout: 10 * 60 * 1000,
+      cwd: root, encoding: "utf8", timeout: 10 * 60 * 1000, env: { ...process.env, MG_ALLOW_EXISTING: "1" },
     });
     folder = (res.stdout || "").trim().split("\n").pop();
   }

@@ -136,11 +136,11 @@ function rememberSlug(prompt, topic) {
     appendFileSync(slugMapPath, JSON.stringify({ prompt, topic }) + "\n");
   } catch {}
 }
-export async function generate(prompt, { force = false } = {}) {
+export async function generate(prompt, { force = false, allowExisting = process.env.MG_ALLOW_EXISTING === "1" } = {}) {
   const t0 = Date.now();
   // overwrite guard: same prompt previously generated an existing folder
   const known = readSlugMap().get(prompt);
-  if (known && existsSync(path.join(ROOT, known)) && !force)
+  if (known && existsSync(path.join(ROOT, known)) && !force && !allowExisting)
     throw new Error(`refusing to overwrite existing folder "${known}" — pass --force to regenerate`);
   const messages = [
     { role: "system", content: SYSTEM },
@@ -158,7 +158,7 @@ export async function generate(prompt, { force = false } = {}) {
   }
 
   const folder = path.join(ROOT, topic);
-  if (existsSync(path.join(folder, "index.html")) && !force)
+  if (existsSync(path.join(folder, "index.html")) && !force && !allowExisting)
     throw new Error(`folder ${path.basename(folder)} already exists — pass --force to overwrite`);
   mkdirSync(folder, { recursive: true });
   rememberSlug(prompt, topic);
