@@ -37,7 +37,8 @@ Default runs **reuse** previously generated smoke folders (tracked in
 `logs/slug-map.jsonl`) so a full check takes seconds; `./check.sh --regen`
 forces fresh generation, `./check.sh --skip-gen` skips it entirely.
 `generate.sh` refuses to overwrite an existing topic folder unless
-`--force` is passed.
+`--force` is passed. `./check.sh --only <topic>` validates a single
+folder in ~5s (fix-loop speed; unknown topic exits 2).
 
 ### Environment knobs
 

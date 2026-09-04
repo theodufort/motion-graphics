@@ -29,6 +29,9 @@ let score = 0;
 let existingMax = 0;
 let smokeMax = 110;
 const skipGen = process.argv.includes("--skip-gen");
+const onlyIdx = process.argv.indexOf("--only");
+const only = onlyIdx >= 0 ? process.argv[onlyIdx + 1] : null;
+if (only) smokeMax = 0; // single-folder mode: no smoke scoring
 if (skipGen) smokeMax = 0;
 const problems = [];
 
@@ -44,9 +47,16 @@ try {
 }
 
 // --- score all existing graphics --------------------------------------------
-const graphics = readdirSync(root, { withFileTypes: true })
+let graphics = readdirSync(root, { withFileTypes: true })
   .filter((d) => d.isDirectory() && existsSync(path.join(root, d.name, "index.html")))
   .map((d) => d.name);
+if (only) {
+  graphics = graphics.filter((n) => n === only);
+  if (!graphics.length) {
+    console.log(`no graphic folder named "${only}"`);
+    process.exit(2);
+  }
+}
 
 graphics.forEach((name) => (existingMax += 35));
 const CONCURRENCY = +(process.env.MG_CONCURRENCY || 4);

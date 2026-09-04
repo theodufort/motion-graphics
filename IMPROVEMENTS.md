@@ -61,10 +61,9 @@
   "frozen" flag only if MAX content-px delta < 0.5% — first 9×200ms
   window version false-positived on beat-hold regions, replaced);
   acceptance met: fixtures/static-canvas flagged, all 28 graphics
-  unflagged (980/980).- [ ] check.sh/check.mjs: --only <topic> to validate a single graphic
-  (fix-loop speed); acceptance: `./check.sh --skip-gen --only
-  1nf-atomic-cells` finishes in < 10s and scores only that folder.
-- [ ] PROGRESS.md: refresh to current state (28 graphics, 980/980,
+  unflagged (980/980).- [x] check.sh/check.mjs: --only <topic> (single-folder validation,
+  smokeMax=0, exit 2 on unknown topic); acceptance met: 1nf in 5s,
+  unknown topic exits 2.- [ ] PROGRESS.md: refresh to current state (28 graphics, 980/980,
   bench 17/17 in 51s, 6 tool checks, fixtures, slug-map workflow);
   acceptance: no stale milestone claims remain.
 - [ ] tool/validate.mjs: label-visibility probe — every distinct
