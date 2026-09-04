@@ -64,7 +64,8 @@
   unflagged (980/980).- [x] check.sh/check.mjs: --only <topic> (single-folder validation,
   smokeMax=0, exit 2 on unknown topic); acceptance met: 1nf in 5s,
   unknown topic exits 2.- [x] PROGRESS.md: refreshed (980/980, bench 17/17 in 51s, 8 validate
-  checks, 4 fixtures, slug-map workflow, flag reference).- [ ] tool/validate.mjs: label-visibility probe — every distinct
+  checks, 4 fixtures, slug-map workflow, flag reference).
+- [ ] tool/validate.mjs: label-visibility probe — every distinct
   fillText label must appear at alpha >= 0.6 in at least one parked
   frame (always-invisible text is a bug); acceptance: synthetic
   zero-alpha-label fixture flagged, 28 real graphics unflagged.
