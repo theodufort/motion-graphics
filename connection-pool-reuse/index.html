@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+(function(){
+"use strict";
+var canvas=document.getElementById("stage");
+var ctx=canvas.getContext("2d");
+var W=0,H=0,dpr=1;
+
+var LOOP=25000;
+var PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+
+function rgba(c,a){return"rgba("+c[0]+","+c[1]+","+c[2]+","+a+")";}
+
+function resize(){
+  dpr=window.devicePixelRatio||1;
+  W=window.innerWidth;H=window.innerHeight;
+  canvas.width=W*dpr;canvas.height=H*dpr;
+  canvas.style.width=W+"px";canvas.style.height=H+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+window.addEventListener("resize",resize);
+resize();
+
+// Easing
+function clamp01(v){return v<0?0:v>1?1:v;}
+function lerp(a,b,t){return a+(b-a)*t;}
+function easeInOut(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
+function easeOut(t){return 1-(1-t)*(1-t);}
+
+// Layout
+var reqNode,poolCenter,dbNode,poolSlots;
+function buildLayout(){
+  reqNode={x:W*0.14,y:H*0.5,r:Math.min(W,H)*0.055};
+  dbNode={x:W*0.86,y:H*0.5,r:Math.min(W,H)*0.055};
+  poolCenter={x:W*0.5,y:H*0.5};
+  var sw=Math.min(W,H)*0.09,sh=Math.min(W,H)*0.055,gap=Math.min(W,H)*0.025;
+  poolSlots=[];
+  for(var i=0;i<4;i++){
+    var col=i%2,row=Math.floor(i/2);
+    poolSlots.push({
+      x:poolCenter.x+(col===0?-sw-gap*0.5:sw+gap*0.5),
+      y:poolCenter.y+(row===0?-sh-gap*0.5:sh+gap*0.5),
+      w:sw,h:sh
+    });
+  }
+}
+buildLayout();
+window.addEventListener("resize",buildLayout);
+
+// Beat helpers
+function beatAlpha(t,beatStart,beatEnd,fade){
+  fade=fade||0.02;
+  var b=t/LOOP;
+  if(b<beatStart||b>=beatEnd)return 0;
+  var inA=clamp01((b-beatStart)/fade);
+  var outA=clamp01((beatEnd-b)/fade);
+  return Math.min(inA,outA);
+}
+
+// Connection state: 0=idle, 1=active, 2=timeout
+function connState(idx,t){
+  var b=t/LOOP;
+  // conn 0: idle → active at 0.22 → idle at 0.62
+  if(idx===0){
+    if(b>=0.22&&b<0.62)return 1;
+    return 0;
+  }
+  // conn 3: idle → timeout at 0.68 → idle at 0.78
+  if(idx===3){
+    if(b>=0.68&&b<0.78)return 2;
+    return 0;
+  }
+  return 0;
+}
+
+function connColor(idx,t){
+  var s=connState(idx,t);
+  if(s===1)return PAL.text;
+  if(s===2)return PAL.fail;
+  return PAL.accent;
+}
+
+// Packet system (deterministic, spawn by time window)
+function quad(a,c,b,t){
+  var u=1-t;
+  return{x:u*u*a.x+2*u*t*c.x+t*t*b.x, y:u*u*a.y+2*u*t*c.y+t*t*b.y};
+}
+
+function drawPackets(t){
+  var b=t/LOOP;
+  var packets=[];
+  // Borrow packet: req → pool, window 0.20-0.26
+  if(b>=0.20&&b<0.26){
+    var pt=easeInOut(clamp01((b-0.20)/0.06));
+    var a={x:reqNode.x+reqNode.r,y:reqNode.y};
+    var bb={x:poolSlots[0].x,y:poolSlots[0].y};
+    var c={x:(a.x+bb.x)/2,y:Math.min(a.y,bb.y)-H*0.08};
+    packets.push({pos:quad(a,c,bb,pt),col:PAL.accent,trail:pt});
+  }
+  // Query packet: pool → db, window 0.42-0.48
+  if(b>=0.42&&b<0.48){
+    var pt2=easeInOut(clamp01((b-0.42)/0.06));
+    var a2={x:poolSlots[0].x+poolSlots[0].w,y:poolSlots[0].y};
+    var bb2={x:dbNode.x-dbNode.r,y:dbNode.y};
+    var c2={x:(a2.x+bb2.x)/2,y:Math.min(a2.y,bb2.y)-H*0.08};
+    packets.push({pos:quad(a2,c2,bb2,pt2),col:PAL.text,trail:pt2});
+  }
+  // Response packet: db → pool, window 0.50-0.56
+  if(b>=0.50&&b<0.56){
+    var pt3=easeInOut(clamp01((b-0.50)/0.06));
+    var a3={x:dbNode.x-dbNode.r,y:dbNode.y};
+    var bb3={x:poolSlots[0].x+poolSlots[0].w,y:poolSlots[0].y};
+    var c3={x:(a3.x+bb3.x)/2,y:Math.max(a3.y,bb3.y)+H*0.08};
+    packets.push({pos:quad(a3,c3,bb3,pt3),col:PAL.text,trail:pt3});
+  }
+  // Return packet: pool → req, window 0.62-0.68
+  if(b>=0.62&&b<0.68){
+    var pt4=easeInOut(clamp01((b-0.62)/0.06));
+    var a4={x:poolSlots[0].x,y:poolSlots[0].y};
+    var bb4={x:reqNode.x+reqNode.r,y:reqNode.y};
+    var c4={x:(a4.x+bb4.x)/2,y:Math.max(a4.y,bb4.y)+H*0.08};
+    packets.push({pos:quad(a4,c4,bb4,pt4),col:PAL.accent,trail:pt4});
+  }
+
+  for(var i=0;i<packets.length;i++){
+    var p=packets[i];
+    // Trail
+    for(var j=4;j>=1;j--){
+      var ta=p.trail-j*0.04;
+      if(ta<0)continue;
+      var tp=quad({x:0,y:0},{x:0,y:0},{x:0,y:0},0); // placeholder
+      // Draw fading circle behind
+      var trailAlpha=(1-j*0.2)*0.3;
+      ctx.beginPath();
+      ctx.arc(p.pos.x,p.pos.y,3+j*1.5,0,Math.PI*2);
+      ctx.fillStyle=rgba(p.col,trailAlpha*0.4);
+      ctx.fill();
+    }
+    // Main dot
+    ctx.beginPath();
+    ctx.arc(p.pos.x,p.pos.y,5,0,Math.PI*2);
+    ctx.fillStyle=rgba(p.col,0.9);
+    ctx.shadowColor=rgba(p.col,0.6);
+    ctx.shadowBlur=12;
+    ctx.fill();
+    ctx.shadowBlur=0;
+  }
+}
+
+// Draw background grid
+function drawBackground(t){
+  ctx.fillStyle=rgba(PAL.bg,1);
+  ctx.fillRect(0,0,W,H);
+  // Grid
+  ctx.strokeStyle=rgba(PAL.text,0.03);
+  ctx.lineWidth=1;
+  var gs=Math.min(W,H)*0.06;
+  for(var x=0;x<W;x+=gs){
+    ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();
+  }
+  for(var y=0;y<H;y+=gs){
+    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
+  }
+}
+
+// Draw connections (lines between nodes)
+function drawConnections(t){
+  var b=t/LOOP;
+  var pulse=0.5+0.5*Math.sin(t/400);
+  // req → pool
+  var a1={x:reqNode.x+reqNode.r,y:reqNode.y};
+  var b1={x:poolCenter.x-poolSlots[0].w*1.5,y:poolCenter.y};
+  var c1={x:(a1.x+b1.x)/2,y:Math.min(a1.y,b1.y)-H*0.06};
+  ctx.beginPath();
+  ctx.moveTo(a1.x,a1.y);
+  ctx.quadraticCurveTo(c1.x,c1.y,b1.x,b1.y);
+  ctx.strokeStyle=rgba(PAL.muted,0.15+0.1*pulse);
+  ctx.lineWidth=1.5;
+  ctx.stroke();
+  // pool → db
+  var a2={x:poolCenter.x+poolSlots[0].w*1.5,y:poolCenter.y};
+  var b2={x:dbNode.x-dbNode.r,y:dbNode.y};
+  var c2={x:(a2.x+b2.x)/2,y:Math.min(a2.y,b2.y)-H*0.06};
+  ctx.beginPath();
+  ctx.moveTo(a2.x,a2.y);
+  ctx.quadraticCurveTo(c2.x,c2.y,b2.x,b2.y);
+  ctx.strokeStyle=rgba(PAL.muted,0.15+0.1*pulse);
+  ctx.lineWidth=1.5;
+  ctx.stroke();
+}
+
+// Draw nodes (request, database)
+function drawNodes(t){
+  var b=t/LOOP;
+  var pulse=0.5+0.5*Math.sin(t/400);
+  // Request node
+  var reqActive=beatAlpha(t,0.18,0.30,0.02);
+  var reqGlow=0.3+0.4*reqActive;
+  ctx.beginPath();
+  ctx.arc(reqNode.x,reqNode.y,reqNode.r*(1+0.03*Math.sin(t/350)),0,Math.PI*2);
+  ctx.fillStyle=rgba(PAL.muted,0.08+0.06*pulse);
+  ctx.fill();
+  ctx.strokeStyle=rgba(PAL.muted,reqGlow);
+  ctx.lineWidth=2;
+  ctx.stroke();
+  // Label
+  ctx.font="600 "+Math.round(Math.min(W,H)*0.022)+"px system-ui,sans-serif";
+  ctx.textAlign="center";ctx.textBaseline="middle";
+  ctx.fillStyle=rgba(PAL.text,0.7+0.3*pulse);
+  ctx.fillText("Request",reqNode.x,reqNode.y);
+
+  // Database node
+  var dbActive=beatAlpha(t,0.40,0.58,0.02);
+  var dbGlow=0.3+0.4*dbActive;
+  ctx.beginPath();
+  ctx.arc(dbNode.x,dbNode.y,dbNode.r*(1+0.03*Math.sin(t/380)),0,Math.PI*2);
+  ctx.fillStyle=rgba(PAL.muted,0.08+0.06*pulse);
+  ctx.fill();
+  ctx.strokeStyle=rgba(PAL.muted,dbGlow);
+  ctx.lineWidth=2;
+  ctx.stroke();
+  ctx.fillStyle=rgba(PAL.text,0.7+0.3*pulse);
+  ctx.fillText("Database",dbNode.x,dbNode.y);
+}
+
+// Draw pool slots
+function drawPool(t){
+  var b=t/LOOP;
+  var pulse=0.5+0.5*Math.sin(t/400);
+
+  // Pool container
+  var pw=poolSlots[1].x+poolSlots[1].w-poolSlots[0].x+Math.min(W,H)*0.04;
+  var ph=poolSlots[2].y+poolSlots[2].h-poolSlots[0].y+Math.min(W,H)*0.04;
+  var px=poolCenter.x-pw/2,py=poolCenter.y-ph/2;
+  ctx.beginPath();
+  ctx.roundRect(px,py,pw,ph,Math.min(W,H)*0.015);
+  ctx.fillStyle=rgba(PAL.muted,0.04+0.02*pulse);
+  ctx.fill();
+  ctx.strokeStyle=rgba(PAL.muted,0.12+0.05*pulse);
+  ctx.lineWidth=1.5;
+  ctx.stroke();
+
+  // Pool label
+  ctx.font="600 "+Math.round(Math.min(W,H)*0.018)+"px system-ui,sans-serif";
+  ctx.textAlign="center";ctx.textBaseline="bottom";
+  ctx.fillStyle=rgba(PAL.muted,0.5+0.2*pulse);
+  ctx.fillText("Pool",poolCenter.x,py-6);
+
+  // Slots
+  for(var i=0;i<4;i++){
+    var s=poolSlots[i];
+    var state=connState(i,t);
+    var col=connColor(i,t);
+    var slotPulse=0.5+0.5*Math.sin(t/350+i*1.2);
+    var alpha=0.5+0.3*slotPulse;
+
+    // Slot rect
+    ctx.beginPath();
+    ctx.roundRect(s.x,s.y,s.w,s.h,Math.min(W,H)*0.008);
+    ctx.fillStyle=rgba(col,0.1+0.08*slotPulse);
+    ctx.fill();
+    ctx.strokeStyle=rgba(col,alpha);
+    ctx.lineWidth=state===2?2.5:1.5;
+    ctx.stroke();
+
+    // Slot number
+    ctx.font="500 "+Math.round(Math.min(W,H)*0.016)+"px system-ui,sans-serif";
+    ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.fillStyle=rgba(col,0.8);
+    ctx.fillText("C"+(i+1),s.x+s.w/2,s.y+s.h/2);
+
+    // Timeout meter under slot 0 when active
+    if(i===0&&state===1){
+      var meterW=s.w*0.8;
+      var meterX=s.x+s.w*0.1;
+      var meterY=s.y+s.h+5;
+      var meterH=3;
+      // Background
+      ctx.fillStyle=rgba(PAL.muted,0.15);
+      ctx.fillRect(meterX,meterY,meterW,meterH);
+      // Fill: drains from full to empty during beat 3 (0.4-0.6)
+      var drain=clamp01((b-0.40)/0.20);
+      var fillW=meterW*(1-drain);
+      var meterCol=drain>0.7?PAL.fail:PAL.accent;
+      ctx.fillStyle=rgba(meterCol,0.8);
+      ctx.fillRect(meterX,meterY,fillW,meterH);
+    }
+
+    // Timeout flash on slot 3
+    if(i===3&&state===2){
+      var flash=0.5+0.5*Math.sin(t/100);
+      ctx.beginPath();
+      ctx.roundRect(s.x-3,s.y-3,s.w+6,s.h+6,Math.min(W,H)*0.01);
+      ctx.strokeStyle=rgba(PAL.fail,0.3+0.5*flash);
+      ctx.lineWidth=2;
+      ctx.stroke();
+    }
+  }
+}
+
+// Draw HUD (counters, title, labels)
+function drawHud(t){
+  var b=t/LOOP;
+  var pulse=0.5+0.5*Math.sin(t/500);
+  var fs=Math.round(Math.min(W,H)*0.02);
+
+  // Title: "Connection Pool Reuse"
+  var titleA=beatAlpha(t,0,0.18,0.03)+beatAlpha(t,0.82,1.0,0.03);
+  if(titleA>0){
+    ctx.font="700 "+Math.round(Math.min(W,H)*0.035)+"px system-ui,sans-serif";
+    ctx.textAlign="center";ctx.textBaseline="top";
+    ctx.fillStyle=rgba(PAL.text,titleA*0.9);
+    ctx.fillText("Connection Pool Reuse",W*0.5,H*0.06);
+  }
+
+  // Beat labels
+  var labels=[
+    {text:"Idle Queue",start:0,end:0.20,col:PAL.accent},
+    {text:"Borrow",start:0.20,end:0.40,col:PAL.text},
+    {text:"In Use",start:0.40,end:0.62,col:PAL.text},
+    {text:"Return + Timeout",start:0.62,end:0.82,col:PAL.fail},
+    {text:"Pool Ready",start:0.82,end:1.0,col:PAL.accent}
+  ];
+  for(var i=0;i<labels.length;i++){
+    var la=beatAlpha(t,labels[i].start,labels[i].end,0.025);
+    if(la>0){
+      ctx.font="600 "+fs+"px system-ui,sans-serif";
+      ctx.textAlign="center";ctx.textBaseline="bottom";
+      ctx.fillStyle=rgba(labels[i].col,la*0.85);
+      ctx.fillText(labels[i].text,W*0.5,H*0.92);
+    }
+  }
+
+  // Counters top-right
+  var idleCount=0,activeCount=0,timeoutCount=0;
+  for(var i=0;i<4;i++){
+    var st=connState(i,t);
+    if(st===0)idleCount++;
+    else if(st===1)activeCount++;
+    else timeoutCount++;
+  }
+  var cx=W*0.88,cy=H*0.08;
+  ctx.font="500 "+Math.round(fs*0.85)+"px system-ui,sans-serif";
+  ctx.textAlign="left";ctx.textBaseline="top";
+  ctx.fillStyle=rgba(PAL.accent,0.7+0.2*pulse);
+  ctx.fillText("Idle "+idleCount,cx,cy);
+  ctx.fillStyle=rgba(PAL.text,0.7+0.2*pulse);
+  ctx.fillText("Active "+activeCount,cx,cy+fs*1.2);
+  ctx.fillStyle=rgba(PAL.fail,0.7+0.2*pulse);
+  ctx.fillText("Timeout "+timeoutCount,cx,cy+fs*2.4);
+
+  // Utilization meter bottom-left
+  var utilW=W*0.12,utilH=4;
+  var utilX=W*0.06,utilY=H*0.94;
+  var util=activeCount/4;
+  ctx.fillStyle=rgba(PAL.muted,0.15);
+  ctx.fillRect(utilX,utilY,utilW,utilH);
+  var utilCol=util>0.7?PAL.fail:PAL.accent;
+  ctx.fillStyle=rgba(utilCol,0.7);
+  ctx.fillRect(utilX,utilY,utilW*util,utilH);
+  ctx.font="400 "+Math.round(fs*0.7)+"px system-ui,sans-serif";
+  ctx.textAlign="left";ctx.textBaseline="bottom";
+  ctx.fillStyle=rgba(PAL.muted,0.6);
+  ctx.fillText("Utilization "+Math.round(util*100)+"%",utilX,utilY-4);
+}
+
+// Seek hooks
+var __seek=null;
+window.__time=function(v){__seek=v;};
+window.__loop=LOOP;
+
+// Main frame loop
+function frame(now){
+  if(__seek!=null)now=__seek;
+  var t=now%LOOP;
+
+  ctx.clearRect(0,0,W,H);
+  drawBackground(t);
+  drawConnections(t);
+  drawNodes(t);
+  drawPool(t);
+  drawPackets(t);
+  drawHud(t);
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

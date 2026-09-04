@@ -1,0 +1,10 @@
+{"prompt":"how a TLS handshake establishes an encrypted channel between client and server","smoke":true}
+{"prompt":"request routing through a service mesh with retries and a circuit breaker","smoke":true}
+{"prompt":"how a B-tree index speeds up database lookups"}
+{"prompt":"the event loop: timers, IO callbacks, and microtasks"}
+{"prompt":"CDN caching: cache hit vs miss, origin fetch, stale-while-revalidate"}
+{"prompt":"how JWT verification works: decode, signature check, claims"}
+{"prompt":"backpressure in a streaming data pipeline"}
+{"prompt":"vector clocks detecting concurrent updates in a distributed store"}
+{"prompt":"raft leader election: heartbeat, timeout, vote, commit"}
+{"prompt":"garbage collection mark and sweep in two phases"}

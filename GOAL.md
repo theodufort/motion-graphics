@@ -17,17 +17,22 @@ are fed back to the LLM for automatic fix passes — a self-improving loop.
 - `skills/motion-graphics/SKILL.md` = generation spec (canvas architecture,
   brand tokens, anti-patterns); `skills/motion-graphic-validation/SKILL.md` =
   validation loop (vision-first, measurement tie-breaker).
-- Environment: Node 22, npm+internet (playwright installable), local ollama
-  with `qwen3.6:35b-a3b-q4_K_M`, `gpt-oss:20b`, `qwen3.5:9b` — **no external
-  API keys; generation must be local**.
+- Environment: Node 22, npm+internet (playwright installable), local
+  **llama.cpp server on `http://127.0.0.1:8123`** (OpenAI-compatible
+  `/v1/chat/completions`), model **`Qwen3.8-27b-coding`** (~19 tok/s,
+  reasoning model — responses put analysis in `reasoning_content`, final
+  text in `content`; budget `max_tokens` ≥ 16000). Ollama is NOT usable
+  for this (operator restriction + 35b doesn't fit RAM). No external API
+  keys; generation is fully local.
 
 ## Scope
 
 - `tool/` directory: generator, validator, check harness, bench prompts.
 - Generator: `tool/generate.mjs <prompt>` (+ thin `generate.sh`). Builds a
   prompt from the SKILL spec + template + one gold example
-  (`pgsodium-salted-hashing/index.html`), calls local ollama
-  (`MG_GEN_MODEL` env, default `qwen3.6:35b-a3b-q4_K_M`), writes
+  (`pgsodium-salted-hashing/index.html`), calls the local LLM
+  (`MG_LLM_MODEL` env, default `Qwen3.8-27b-coding` on `MG_LLM_BASE`
+  `http://127.0.0.1:8123`), writes
   `<topic>/index.html`, then loops: validate → feed failures back to LLM
   (max `MG_FIX_PASSES`, default 3) → re-validate. Writes the folder's
   `README.md` per the standard template.
@@ -117,9 +122,10 @@ time, recording every iteration in `logs/iterations.jsonl`.
 ## Assumptions (verify at M1, document deviations in logs)
 
 - Playwright's bundled chromium downloads fine (internet is available).
-- `ollama` server on `localhost:11434` stays up; default model
-  `qwen3.6:35b-a3b-q4_K_M` writes usable canvas JS; `qwen3.5:9b` is the fast
-  fallback (`MG_GEN_MODEL`).
+- llama.cpp server on `127.0.0.1:8123` stays up with
+  `Qwen3.8-27b-coding` loaded (it is preloaded); `Qwen3.8-27b-coding`
+  writes usable canvas JS. It is a reasoning model: most of the
+  `max_tokens` budget is consumed by `reasoning_content` before `content`
 - "Vision validation" = agent/operating-model inspection of saved PNGs +
   deterministic in-page probes. No local vision-model API is required.
 - Generated graphics follow the existing canvas architecture exactly
