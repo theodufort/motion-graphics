@@ -48,20 +48,26 @@ const graphics = readdirSync(root, { withFileTypes: true })
   .filter((d) => d.isDirectory() && existsSync(path.join(root, d.name, "index.html")))
   .map((d) => d.name);
 
-for (const name of graphics) {
-  const f = path.join(root, name);
-  existingMax += 35;
-  let r;
-  try {
-    r = await validateFolder(f);
-  } catch (e) {
-    problems.push(`${name}: validator crashed: ${e.message}`);
-    continue;
+graphics.forEach((name) => (existingMax += 35));
+const CONCURRENCY = +(process.env.MG_CONCURRENCY || 4);
+let cursor = 0;
+async function worker() {
+  while (cursor < graphics.length) {
+    const name = graphics[cursor++];
+    const f = path.join(root, name);
+    let r;
+    try {
+      r = await validateFolder(f);
+    } catch (e) {
+      problems.push(`${name}: validator crashed: ${e.message}`);
+      continue;
+    }
+    const pts = 10 * r.clean + 5 * r.seek + 10 * r.collisions + 5 * r.seam + 5 * r.readme;
+    score += pts;
+    if (pts < 35) problems.push(`${name}: ${pts}/35 (${(r.errors || []).join("; ") || "check bits failed"})`);
   }
-  const pts = 10 * r.clean + 5 * r.seek + 10 * r.collisions + 5 * r.seam + 5 * r.readme;
-  score += pts;
-  if (pts < 35) problems.push(`${name}: ${pts}/35 (${(r.errors || []).join("; ") || "check bits failed"})`);
 }
+await Promise.all(Array.from({ length: Math.min(CONCURRENCY, graphics.length) }, worker));
 
 // --- smoke generation ---------------------------------------------------------
 if (skipGen) problems.push("skip-gen: smoke generation skipped (passing only if graphics all pass)");
