@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
+canvas{display:block;width:100%;height:100%}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+// setup
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+const LOOP=30000;
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+let W,H,dpr;
+function resize(){dpr=devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
+addEventListener('resize',()=>{resize();buildLayout()});
+resize();
+
+// easing
+const lerp=(a,b,t)=>a+(b-a)*t,clamp01=v=>Math.max(0,Math.min(1,v));
+const ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
+function bA(t,a,b,f=.04){const s=t/LOOP;if(s<a||s>=b)return 0;return Math.min(ease(clamp01((s-a)/f)),ease(clamp01((b-s)/f)))}
+
+// data
+const paths=[{id:'A',lp:100,asLen:2,med:50},{id:'B',lp:100,asLen:3,med:80},{id:'C',lp:200,asLen:2,med:30}];
+const crits=[{label:'Local Pref',r:[.17,.40]},{label:'AS Path Len',r:[.40,.63]},{label:'MED',r:[.63,.86]}];
+
+// layout
+let L={};
+function buildLayout(){
+  const lh=H*.22,sy=H*.28;
+  L.lanes=paths.map((_,i)=>({x:W*.1,y:sy+i*lh,w:W*.55,h:lh*.6}));
+  L.router={x:W*.78,y:H*.5,r:W*.035};
+  L.title={x:W*.5,y:H*.09};
+  L.crit={x:W*.5,y:H*.16};
+}
+buildLayout();
+
+// seek hooks
+let __seek=null;
+window.__time=v=>{__seek=v};
+window.__loop=LOOP;
+
+// draw helpers
+function drawBg(t){
+  ctx.fillStyle=rgba(PAL.bg,1);ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;
+  const st=W*.05;
+  for(let x=0;x<W;x+=st){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+  for(let y=0;y<H;y+=st){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+}
+
+function drawPaths(t){
+  paths.forEach((p,i)=>{
+    const lane=L.lanes[i],win=p.id==='C';
+    const elim=(p.id!=='C')?bA(t,.17,.24):0;
+    const al=1-elim*.75;
+    const pulse=.5+.5*Math.sin(t/400+i*2);
+    // lane bg
+    ctx.fillStyle=rgba(win?PAL.accent:PAL.muted,(.03+.02*pulse)*al);
+    ctx.beginPath();ctx.roundRect(lane.x,lane.y,lane.w,lane.h,8);ctx.fill();
+    // label
+    ctx.fillStyle=rgba(win?PAL.accent:PAL.text,al);
+    ctx.font=`bold ${Math.floor(H*.032)}px monospace`;ctx.textAlign='left';
+    ctx.fillText('Path '+p.id,lane.x+12,lane.y+lane.h*.32);
+    // AS hops
+    const hr=H*.011,hs=lane.x+W*.16,hg=W*.055;
+    for(let h=0;h<p.asLen;h++){
+      const hx=hs+h*hg,hy=lane.y+lane.h*.52;
+      ctx.beginPath();ctx.arc(hx,hy,hr*(1+.15*Math.sin(t/300+h)),0,Math.PI*2);
+      ctx.fillStyle=rgba(win?PAL.accent:PAL.muted,al*.8);ctx.fill();
+      if(h<p.asLen-1){ctx.strokeStyle=rgba(PAL.muted,al*.35);ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(hx+hr,hy);ctx.lineTo(hx+hg-hr,hy);ctx.stroke()}
+    }
+    // meters
+    const attrs=[{l:'LP',v:p.lp,m:200},{l:'AS',v:p.asLen,m:4},{l:'MED',v:p.med,m:100}];
+    attrs.forEach((a,ai)=>{
+      const ax=lane.x+W*.34+ai*W*.07;
+      ctx.fillStyle=rgba(PAL.muted,al*.6);ctx.font=`${Math.floor(H*.016)}px monospace`;ctx.textAlign='center';
+      ctx.fillText(a.l,ax,lane.y+lane.h*.78);
+      const mw=W*.045,mh=H*.01;
+      ctx.fillStyle=rgba(PAL.muted,al*.15);ctx.fillRect(ax-mw/2,lane.y+lane.h*.82,mw,mh);
+      ctx.fillStyle=rgba(win?PAL.accent:PAL.muted,al*.65);ctx.fillRect(ax-mw/2,lane.y+lane.h*.82,mw*(a.v/a.m),mh);
+      ctx.fillStyle=rgba(PAL.text,al);ctx.font=`${Math.floor(H*.014)}px monospace`;
+      ctx.fillText(String(a.v),ax,lane.y+lane.h*.82+mh+H*.016);
+    });
+    // elimination X
+    if(elim>.05){
+      ctx.strokeStyle=rgba(PAL.fail,elim*.6);ctx.lineWidth=3;
+      const cx=lane.x+lane.w*.88,cy=lane.y+lane.h*.5,s=H*.018;
+      ctx.beginPath();ctx.moveTo(cx-s,cy-s);ctx.lineTo(cx+s,cy+s);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(cx+s,cy-s);ctx.lineTo(cx-s,cy+s);ctx.stroke();
+    }
+  });
+}
+
+function drawRouter(t){
+  const{x,y,r}=L.router,pulse=1+.05*Math.sin(t/500);
+  const g=ctx.createRadialGradient(x,y,0,x,y,r*2.5);
+  g.addColorStop(0,rgba(PAL.accent,.12));g.addColorStop(1,rgba(PAL.accent,0));
+  ctx.fillStyle=g;ctx.fillRect(x-r*3,y-r*3,r*6,r*6);
+  ctx.beginPath();ctx.arc(x,y,r*pulse,0,Math.PI*2);
+  ctx.fillStyle=rgba(PAL.accent,.18);ctx.fill();
+  ctx.strokeStyle=rgba(PAL.accent,.65);ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle=rgba(PAL.text,.9);ctx.font=`bold ${Math.floor(r*.45)}px monospace`;
+  ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('RTR',x,y);ctx.textBaseline='alphabetic';
+}
+
+function drawCrit(t){
+  crits.forEach(c=>{
+    const a=bA(t,c.r[0],c.r[1],.03);if(a<.01)return;
+    ctx.fillStyle=rgba(PAL.accent,a*.9);ctx.font=`bold ${Math.floor(H*.026)}px monospace`;ctx.textAlign='center';
+    ctx.fillText(c.label,L.crit.x,L.crit.y);
+    const tw=ctx.measureText(c.label).width;
+    ctx.strokeStyle=rgba(PAL.accent,a*.35);ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(L.crit.x-tw/2,L.crit.y+5);ctx.lineTo(L.crit.x+tw/2,L.crit.y+5);ctx.stroke();
+  });
+}
+
+function drawTitle(t){
+  const a=bA(t,0,.15,.04)+bA(t,.88,1,.04);if(a<.01)return;
+  ctx.fillStyle=rgba(PAL.text,a);ctx.font=`bold ${Math.floor(H*.038)}px monospace`;ctx.textAlign='center';
+  ctx.fillText('BGP Best Path',L.title.x,L.title.y);
+}
+
+function drawPackets(t){
+  paths.forEach((p,i)=>{
+    const lane=L.lanes[i],win=p.id==='C';
+    const elim=(p.id!=='C')?bA(t,.17,.24):0;
+    const al=(1-elim*.8)*.65;if(al<.04)return;
+    const sx=lane.x+lane.w*.82,sy=lane.y+lane.h*.5,ex=L.router.x-L.router.r,ey=L.router.y;
+    const cx=(sx+ex)/2,cy=(sy+ey)/2+(sy-ey)*.3;
+    for(let k=0;k<3;k++){
+      const ph=((t+k*667)%2000)/2000,pe=ease(ph);
+      const px=lerp(lerp(sx,cx,pe),lerp(cx,ex,pe),pe);
+      const py=lerp(lerp(sy,cy,pe),lerp(cy,ey,pe),pe);
+      ctx.beginPath();ctx.arc(px,py,H*.005,0,Math.PI*2);
+      ctx.fillStyle=rgba(win?PAL.accent:PAL.muted,al*(1-ph*.4));ctx.fill();
+      if(ph>.12){
+        const tp=ease(ph-.1),tx=lerp(lerp(sx,cx,tp),lerp(cx,ex,tp),tp),ty=lerp(lerp(sy,cy,tp),lerp(cy,ey,tp),tp);
+        ctx.beginPath();ctx.arc(tx,ty,H*.003,0,Math.PI*2);
+        ctx.fillStyle=rgba(win?PAL.accent:PAL.muted,al*.35);ctx.fill();
+      }
+    }
+  });
+}
+
+function drawWinner(t){
+  const a=bA(t,.86,1,.04);if(a<.01)return;
+  const lane=L.lanes[2];
+  ctx.fillStyle=rgba(PAL.accent,a*.9);ctx.font=`bold ${Math.floor(H*.024)}px monospace`;ctx.textAlign='center';
+  ctx.fillText('\u2713 Best Path',lane.x+lane.w*.5,lane.y-H*.018);
+}
+
+// main loop
+function frame(now){
+  if(__seek!=null)now=__seek;
+  const t=now%LOOP;
+  ctx.clearRect(0,0,W,H);
+  drawBg(t);drawPaths(t);drawRouter(t);drawCrit(t);drawTitle(t);drawPackets(t);drawWinner(t);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

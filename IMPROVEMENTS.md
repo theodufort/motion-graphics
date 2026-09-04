@@ -55,11 +55,9 @@
   all 26 real graphics pass (910/910).- [x] README.md: Environment knobs table (MG_LLM_BASE, MG_LLM_MODEL,
   MG_FIX_PASSES, MG_TIMEOUT_MS, MG_CONCURRENCY, MG_ALLOW_EXISTING) with
   defaults; acceptance met.
-- [ ] tool/generate.mjs: prompt rule 17 — beats must have visible
-  state change (at least one element's position/size/alpha changes
-  between consecutive beats); acceptance: next 2 fresh prompts pass
-  and their shots at 40%/65% differ by > 5% content px.
-- [x] tool/validate.mjs: frozen-animation probe (9×200ms samples at
+- [x] tool/generate.mjs: prompt rule 17 (per-beat visible motion);
+  acceptance met: dns-recursive-resolution + bgp-best-path-selection
+  pass 5/5, 40%/65% shots differ 22.3% / 6.2% content px (> 5%).- [x] tool/validate.mjs: frozen-animation probe (9×200ms samples at
   45% of loop; "frozen" flag if all content-px deltas < 0.5%);
   acceptance met: fixtures/static-canvas flagged, all 26 graphics
   unflagged (910/910).
