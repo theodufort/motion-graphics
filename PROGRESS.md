@@ -1,26 +1,20 @@
 # PROGRESS
 
-## State
-- M1 DONE: playwright + chromium headless; headless load verified.
-- M2 DONE: tool/validate.mjs — 6 checks (pageerror, __time seek, fillText
-  collision rects w/ textAlign/baseline/alpha handling, seam density,
-  README, 6 screenshots per graphic in tool/shots/). All 9 existing
-  graphics pass 35/35. check.sh now reports SCORE: 315/425.
+## State — GOAL MET (check.sh SCORE 460/460, endless mode: improvements)
+- M1-M5 DONE. Tool chain: tool/generate.sh "<prompt>" → LLM (llama.cpp
+  :8123 Qwen3.8-27b-coding) → index.html+README → validate.mjs (5 checks +
+  6 vision shots) → ≤3 LLM fix passes. First gen passed 5/5 in 195s, 0 fixes.
+- check.sh: 10 graphics ×35 + 2 smoke ×55 = 460 max; currently 460/460.
+- M6 docs DONE (README.md + AGENTS.md tooling sections).
+- IMPROVEMENTS.md backlog created (7 items) — endless loop continues.
 
 ## Decisions
-- Collision false-positive fixes: skip substring pairs (phrase + word
-  highlight), skip pairs where either draw alpha < 0.6 (crossfades are
-  intentional), dedupe identical (str,x,y,w) rects (glow passes), and
-  clear the fillText buffer AFTER seeking (pre-seek natural-time frames
-  polluted the first parked frame — this was masking, not a graphic bug).
-- Vision pass = deterministic probes + saved PNGs (model lacks vision input).
-- LOOP parsed from HTML source; generator template should also expose
-  window.__loop for new graphics.
+- LLM = llama.cpp 127.0.0.1:8123 only (operator rule). Qwen3.8-27b-coding
+  preloaded; reasoning model → max_tokens 16000.
+- Vision pass = deterministic probes + tool/shots PNGs (model lacks vision).
+- hypa_shell kills >30s commands → long runs: nohup to /tmp, poll next turn.
 
-## Next steps
-1. M3: tool/generate.mjs — prompt template (skill spec + canvas architecture
-   + pgsodium as gold example), ollama call (MG_GEN_MODEL default
-   qwen3.6:35b-a3b-q4_K_M), HTML fence extraction, topic slug, README gen.
-   Smoke: one prompt → folder that loads clean.
-2. M4: fix loop (feed validate.mjs JSON errors back, ≤3 passes).
-3. M5: tool/bench/prompts.jsonl (10 prompts, 2 smoke:true) → check.sh 425.
+## Next steps (top of IMPROVEMENTS.md)
+1. tool/bench.mjs — full 10-prompt bench → N/10 + logs/iterations.jsonl.
+2. check.mjs — log every run to logs/iterations.jsonl.
+3. generate.mjs — terser-HTML prompt → ≤150s smoke.

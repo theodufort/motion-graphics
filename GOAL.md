@@ -68,11 +68,12 @@ are fed back to the LLM for automatic fix passes — a self-improving loop.
 
 ## Completion criteria (measurable — `./check.sh`)
 
-`check.sh` prints `SCORE: <n>` (max 425) and **exits 0 when**:
+`check.sh` prints `SCORE: <n>` (max = 35 × #graphics + 110; 460 with the
+10 current graphics) and **exits 0 when**:
 
 1. Every existing graphic folder passes: clean load (10) + `__time` (5) +
    no text collisions at 5 parked frames (10) + clean seam (5) + README (5)
-   → 9 × 35 = 315.
+   → 35 each (315 for the original 9).
 2. Both smoke prompts generate a new folder that passes the same 5 checks
    (2 × 55 = 110). Partial credit: folder exists + clean load = 10 ea.
 3. Exit 0 requires criterion 1 fully met AND both smoke graphics fully pass.
