@@ -30,10 +30,9 @@
   acceptance met: 16s for 22 graphics, same SCORE format.
 - [x] tool/check.mjs: concurrency-4 validation pool (MG_CONCURRENCY);
   acceptance met: 22 graphics in 16s (< 90s target).
-- [ ] tool/check.mjs: reuse existing smoke topic folders on default runs (no
-  LLM calls) and add --regen to force regeneration; acceptance: default
-  `./check.sh` with both smoke folders present finishes in < 3 min, and
-  `./check.sh --regen` regenerates them.
+- [x] tool/check.mjs: smoke folders reused from logs/slug-map.jsonl on
+  default runs; --regen forces regeneration;
+  acceptance met: full default ./check.sh = 880/880 in 20s (was ~9 min).
 - [ ] tool/generate.mjs: append per-generation metadata to
   logs/generations.jsonl ({ts, topic, model, seconds, lines, fixPasses,
   pass}); acceptance: file gains one line per generate.sh run.

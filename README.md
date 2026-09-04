@@ -33,6 +33,11 @@ a graphic that passed every check (~3 min typical).
 `./check.sh` scores the whole repo (`SCORE: <n>`, exit 0 = all graphics
 pass + both smoke prompts from `tool/bench/prompts.jsonl` generate
 cleanly). Unattended runs log each iteration to `logs/iterations.jsonl`.
+Default runs **reuse** previously generated smoke folders (tracked in
+`logs/slug-map.jsonl`) so a full check takes seconds; `./check.sh --regen`
+forces fresh generation, `./check.sh --skip-gen` skips it entirely.
+`generate.sh` refuses to overwrite an existing topic folder unless
+`--force` is passed.
 
 ### The vision pass
 

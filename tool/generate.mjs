@@ -3,7 +3,7 @@
 // CLI: node tool/generate.mjs "<prompt>"
 // Env: MG_LLM_BASE (default http://127.0.0.1:8123), MG_LLM_MODEL (default
 //      Qwen3.8-27b-coding), MG_FIX_PASSES (default 3), MG_TIMEOUT_MS (default 900000)
-import { writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { writeFileSync, existsSync, mkdirSync, readFileSync, appendFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { validateFolder } from "./validate.mjs";
@@ -122,8 +122,26 @@ function parse(out, fallbackSlug) {
   return { topic: topicM ? slugify(topicM[1]) : fallbackSlug, html, readme };
 }
 
-export async function generate(prompt) {
+const slugMapPath = path.join(ROOT, "logs", "slug-map.jsonl");
+function readSlugMap() {
+  if (!existsSync(slugMapPath)) return new Map();
+  const m = new Map();
+  for (const l of readFileSync(slugMapPath, "utf8").split("\n").filter(Boolean)) {
+    try { const o = JSON.parse(l); m.set(o.prompt, o.topic); } catch {}
+  }
+  return m;
+}
+function rememberSlug(prompt, topic) {
+  try {
+    appendFileSync(slugMapPath, JSON.stringify({ prompt, topic }) + "\n");
+  } catch {}
+}
+export async function generate(prompt, { force = false } = {}) {
   const t0 = Date.now();
+  // overwrite guard: same prompt previously generated an existing folder
+  const known = readSlugMap().get(prompt);
+  if (known && existsSync(path.join(ROOT, known)) && !force)
+    throw new Error(`refusing to overwrite existing folder "${known}" — pass --force to regenerate`);
   const messages = [
     { role: "system", content: SYSTEM },
     { role: "user", content: `Make a motion graphic: ${prompt}` },
@@ -140,7 +158,10 @@ export async function generate(prompt) {
   }
 
   const folder = path.join(ROOT, topic);
+  if (existsSync(path.join(folder, "index.html")) && !force)
+    throw new Error(`folder ${path.basename(folder)} already exists — pass --force to overwrite`);
   mkdirSync(folder, { recursive: true });
+  rememberSlug(prompt, topic);
   writeFileSync(path.join(folder, "index.html"), html + "\n");
   writeFileSync(path.join(folder, "README.md"), readme + "\n");
   let report = await validateFolder(folder);
@@ -158,7 +179,8 @@ Reply with the COMPLETE corrected file between ===HTML=== markers (keep TOPIC an
     const fix = await llm(messages);
     const p2 = parse(fix, topic);
     html = p2.html;
-    writeFileSync(path.join(folder, "index.html"), html + "\n");
+    rememberSlug(prompt, topic);
+  writeFileSync(path.join(folder, "index.html"), html + "\n");
     if (p2.readme !== readme) { readme = p2.readme; writeFileSync(path.join(folder, "README.md"), readme + "\n"); }
     report = await validateFolder(folder);
     pass = report.clean && report.seek && report.collisions && report.seam && report.readme;
@@ -168,9 +190,17 @@ Reply with the COMPLETE corrected file between ===HTML=== markers (keep TOPIC an
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
-  const prompt = process.argv.slice(2).join(" ");
+  const args = process.argv.slice(2);
+  const force = args.includes("--force");
+  const prompt = args.filter((a) => a !== "--force").join(" ");
   if (!prompt) { console.error("usage: node tool/generate.mjs \"<prompt>\""); process.exit(2); }
-  const g = await generate(prompt);
+  let g;
+  try {
+    g = await generate(prompt, { force });
+  } catch (e) {
+    console.error(`error: ${e.message}`);
+    process.exit(2);
+  }
   console.log(JSON.stringify({ topic: g.topic, pass: g.pass, seconds: Math.round(g.seconds), errors: g.report.errors, checks: { clean: g.report.clean, seek: g.report.seek, collisions: g.report.collisions, seam: g.report.seam, readme: g.report.readme } }, null, 1));
   console.log(g.folder);
   process.exit(g.pass ? 0 : 1);

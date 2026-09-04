@@ -19,7 +19,7 @@
 //     (partial: folder exists + clean load = 10)
 //   exit 0  <=>  all existing graphics pass every check AND both smoke gens fully pass.
 
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
@@ -88,14 +88,31 @@ for (let i = 0; i < 2 - smoke.length; i++) {
   problems.push(`smoke slot ${i + 1}: no smoke:true prompt available`);
 }
 
+const regen = process.argv.includes("--regen");
+const slugMap = (() => {
+  const p = path.join(root, "logs", "slug-map.jsonl");
+  if (!existsSync(p)) return new Map();
+  const m = new Map();
+  for (const l of readFileSync(p, "utf8").split("\n").filter(Boolean)) {
+    try { const o = JSON.parse(l); m.set(o.prompt, o.topic); } catch {}
+  }
+  return m;
+})();
 for (const p of (skipGen ? [] : smoke)) {
-  const res = spawnSync("node", [path.join(root, "tool", "generate.mjs"), p.prompt], {
-    cwd: root, encoding: "utf8", timeout: 10 * 60 * 1000,
-  });
-  const folder = (res.stdout || "").trim().split("\n").pop();
+  const known = slugMap.get(p.prompt);
+  const knownFolder = known && existsSync(path.join(root, known)) ? path.join(root, known) : null;
+  let folder, res = null;
+  if (knownFolder && !regen) {
+    folder = knownFolder; // reuse: validate only, no LLM
+  } else {
+    res = spawnSync("node", [path.join(root, "tool", "generate.mjs"), p.prompt, ...(regen ? ["--force"] : [])], {
+      cwd: root, encoding: "utf8", timeout: 10 * 60 * 1000,
+    });
+    folder = (res.stdout || "").trim().split("\n").pop();
+  }
   const f = folder && path.isAbsolute(folder) ? folder : path.join(root, folder || "");
   if (!folder || !existsSync(path.join(f, "index.html"))) {
-    problems.push(`smoke "${p.prompt.slice(0, 40)}…": generation failed (${res.status})`);
+    problems.push(`smoke "${p.prompt.slice(0, 40)}…": generation failed (${res ? res.status : "reused folder missing"})`);
     continue;
   }
   try {
@@ -120,7 +137,7 @@ try {
 // --- verdict ------------------------------------------------------------------
 const existingPerfect = !graphics.some((n) => problems.some((p) => p.startsWith(`${n}:`)));
 const smokePerfect = skipGen || (smoke.length === 2 && !problems.some((p) => p.startsWith("smoke ")));
-console.log(`graphics: ${graphics.length}${skipGen ? "  [skip-gen]" : ""}  score: ${score}/${existingMax + smokeMax}`);
+console.log(`graphics: ${graphics.length}${skipGen ? "  [skip-gen]" : ""}${regen ? "  [regen]" : ""}  score: ${score}/${existingMax + smokeMax}`);
 for (const p of problems) console.log(`  ✗ ${p}`);
 console.log(`SCORE: ${score}`);
 process.exit(existingPerfect && smokePerfect ? 0 : 1);
