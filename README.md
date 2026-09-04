@@ -34,6 +34,27 @@ a graphic that passed every check (~3 min typical).
 pass + both smoke prompts from `tool/bench/prompts.jsonl` generate
 cleanly). Unattended runs log each iteration to `logs/iterations.jsonl`.
 
+### The vision pass
+
+Deterministic probes (JS errors, `fillText` collision rects, seam pixel
+density) are the tie-breaker — but the first line of defense is *looking*.
+After any generation or edit, a human or vision-capable model should open
+the 6 shots `validate.mjs` saves in `tool/shots/<topic>/`:
+
+| File | Park time | What to look for |
+| --- | --- | --- |
+| `t<15%·LOOP>.png` | LOOP × 0.15 | early beat — entrances, first labels |
+| `t<40%·LOOP>.png` | LOOP × 0.40 | densest beat — most elements at once |
+| `t<65%·LOOP>.png` | LOOP × 0.65 | mid/late beat — state changes |
+| `t<90%·LOOP>.png` | LOOP × 0.90 | final beat — exits |
+| `seam-a.png` / `seam-b.png` | LOOP−300 / 300 | wrap must crossfade, no dark frame |
+
+(Exact filenames use the millisecond values, e.g. `t2700.png` for an
+18s loop.) Judge each shot for: text touching/overflowing boxes, labels
+over labels, elements covering content, anything frozen or clipped, and
+seam darkness. If a shot looks wrong but probes passed, report it — the
+probe thresholds in `tool/validate.mjs` then get tightened.
+
 ## Building or changing a graphic
 
 Follow the `motion-graphics` skill (`skills/motion-graphics/SKILL.md`) and

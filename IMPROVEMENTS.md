@@ -19,9 +19,8 @@
 - [x] tool/validate.mjs: collision findings deduped per pair;
   acceptance met: fixtures/text-overlap reports '"alpha label" x "beta label" ×4',
   all 22 graphics still 770/770.
-- [ ] README.md / AGENTS.md: add a short "vision pass" note — how a
-  human/vision model reviews tool/shots/<topic>/ after generation;
-  acceptance: section exists and names the 6 shot files.
+- [x] README.md / AGENTS.md: "The vision pass" section with the 6-shot
+  table (t15/t40/t65/t90, seam-a, seam-b) + review checklist.
 - [ ] tool/generate.mjs: guard against re-generating into an existing
   folder (refuse or require --force) so bench runs never clobber the
   curated 9; acceptance: second run with same slug exits 2 without
@@ -31,3 +30,10 @@
   acceptance met: 16s for 22 graphics, same SCORE format.
 - [x] tool/check.mjs: concurrency-4 validation pool (MG_CONCURRENCY);
   acceptance met: 22 graphics in 16s (< 90s target).
+- [ ] tool/check.mjs: reuse existing smoke topic folders on default runs (no
+  LLM calls) and add --regen to force regeneration; acceptance: default
+  `./check.sh` with both smoke folders present finishes in < 3 min, and
+  `./check.sh --regen` regenerates them.
+- [ ] tool/generate.mjs: append per-generation metadata to
+  logs/generations.jsonl ({ts, topic, model, seconds, lines, fixPasses,
+  pass}); acceptance: file gains one line per generate.sh run.

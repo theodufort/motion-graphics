@@ -93,7 +93,7 @@ report it as done. The full procedure lives in its own skill:
    moment of the loop can be parked and inspected. If you edited a graphic
    that lacks it, add it.
 3. **Vision pass (primary).** Park at 4–6 representative times (including
-   both sides of the loop seam), screenshot each, and inspect the images with
+   both sides of the loop seam), for each (shots saved to tool/shots/<topic>/ — file table in README "The vision pass"), and inspect the images with
    your vision for badly placed/overflowing text, overlapping elements,
    frozen or broken animation, and dark seam frames.
 4. **Measurement pass (tie-breaker).** Vision on downscaled screenshots can
