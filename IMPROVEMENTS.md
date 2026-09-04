@@ -27,9 +27,7 @@
   curated 9; acceptance: second run with same slug exits 2 without
   overwriting (unless --force).
 
-- [ ] tool/check.mjs + check.sh: add --skip-gen flag (validate all existing
-  folders, no LLM calls); acceptance: `./check.sh --skip-gen` finishes in
-  < 120s and prints the same SCORE format.
-- [ ] tool/validate.mjs: validate multiple folders concurrently (two
-  chromium instances); acceptance: all 10+ graphics validate in < 90s
-  total via check.mjs --skip-gen.
+- [x] tool/check.mjs + check.sh: --skip-gen flag;
+  acceptance met: 16s for 22 graphics, same SCORE format.
+- [x] tool/check.mjs: concurrency-4 validation pool (MG_CONCURRENCY);
+  acceptance met: 22 graphics in 16s (< 90s target).
