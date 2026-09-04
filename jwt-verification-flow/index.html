@@ -1,380 +1,109 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>JWT Verification Flow</title>
+<meta charset="utf-8">
 <link rel="stylesheet" href="../css/brand.css" />
 <link rel="stylesheet" href="../css/motion.css" />
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
-canvas#stage{display:block;width:100%;height:100%}
+*{margin:0;padding:0}
+body{background:var(--bg);overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
 </style>
 </head>
 <body>
 <canvas id="stage"></canvas>
 <script>
-(function(){
-"use strict";
-var canvas=document.getElementById("stage");
-var ctx=canvas.getContext("2d");
-var LOOP=30000;
-var PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
-function rgba(c,a){return"rgba("+c[0]+","+c[1]+","+c[2]+","+a+")";}
-var W=0,H=0,dpr=1;
-function resize(){
-dpr=window.devicePixelRatio||1;
-W=window.innerWidth;H=window.innerHeight;
-canvas.width=W*dpr;canvas.height=H*dpr;
-ctx.setTransform(dpr,0,0,dpr,0,0);
-}
-function lerp(a,b,t){return a+(b-a)*t;}
-function clamp01(t){return Math.max(0,Math.min(1,t));}
-function easeInOut(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
-function beatAlpha(t,s,e,f){
-f=f||0.03;
-if(t<s||t>e)return 0;
-if(t<s+f)return easeInOut((t-s)/f);
-if(t>e-f)return easeInOut((e-t)/f);
-return 1;
-}
-function wrapBeatAlpha(t,s,e,f){
-f=f||0.03;
-if(s>e){
-if(t>=s){
-if(t<s+f)return easeInOut((t-s)/f);
-return 1;
-}
-if(t<=e){
-if(t>e-f)return easeInOut((e-t)/f);
-return 1;
-}
-return 0;
-}
-return beatAlpha(t,s,e,f);
-}
-function quad(a,c,b,t){
-var u=1-t;
-return{x:u*u*a.x+2*u*t*c.x+t*t*b.x,y:u*u*a.y+2*u*t*c.y+t*t*b.y};
-}
-function roundRect(x,y,w,h,r){
-ctx.beginPath();
-ctx.moveTo(x+r,y);
-ctx.lineTo(x+w-r,y);
-ctx.quadraticCurveTo(x+w,y,x+w,y+r);
-ctx.lineTo(x+w,y+h-r);
-ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
-ctx.lineTo(x+r,y+h);
-ctx.quadraticCurveTo(x,y+h,x,y+h-r);
-ctx.lineTo(x,y+r);
-ctx.quadraticCurveTo(x,y,x+r,y);
-ctx.closePath();
-}
-function layout(){
-return{
-title:{x:W*0.5,y:H*0.06},
-token:{x:W*0.5,y:H*0.24},
-left:{x:W*0.2,y:H*0.55},
-right:{x:W*0.8,y:H*0.55},
-bottom:{x:W*0.5,y:H*0.82}
-};
-}
-function drawGrid(t){
-var sp=W*0.06;
-var off=(t*0.006)%sp;
-ctx.strokeStyle=rgba(PAL.text,0.03);
-ctx.lineWidth=1;
-ctx.beginPath();
-for(var x=-sp+off;x<W+sp;x+=sp){ctx.moveTo(x,0);ctx.lineTo(x,H);}
-for(var y=-sp+off*0.5;y<H+sp;y+=sp){ctx.moveTo(0,y);ctx.lineTo(W,y);}
-ctx.stroke();
-}
-function drawTitle(t){
-var L=layout();
-var a=1;
-var pulse=1+0.008*Math.sin(t/400);
-ctx.save();
-ctx.translate(L.title.x,L.title.y);
-ctx.scale(pulse,pulse);
-ctx.font="bold "+Math.round(H*0.042)+"px system-ui,sans-serif";
-ctx.textAlign="center";ctx.textBaseline="middle";
-ctx.fillStyle=rgba(PAL.text,a*0.9);
-ctx.fillText("JWT Verification",0,0);
-ctx.restore();
-}
-function drawToken(t){
-var L=layout();
-var a=1;
-var split=clamp01((t-1000)/3000);
-split=easeInOut(split);
-var segW=W*0.1;
-var gap=W*0.015*split;
-var totalW=segW*3+gap*2;
-var startX=L.token.x-totalW/2;
-var y=L.token.y;
-var h=H*0.05;
-var pulse=1+0.012*Math.sin(t/350);
-ctx.save();
-ctx.translate(L.token.x,y);
-ctx.scale(pulse,pulse);
-ctx.translate(-L.token.x,-y);
-var segs=[
-{label:"Header",color:PAL.accent,w:segW*0.8},
-{label:"Payload",color:PAL.text,w:segW*1.2},
-{label:"Signature",color:PAL.muted,w:segW*0.8}
+// setup
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+const LOOP=30000;
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+let W,H,dpr;
+function buildLayout(){dpr=devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
+// easing
+const lerp=(a,b,t)=>a+(b-a)*t,clamp01=t=>Math.max(0,Math.min(1,t));
+const ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
+const fade=(t,s,e,ed=.05)=>{if(t<s||t>=e)return 0;return Math.min(clamp01((t-s)/ed),clamp01((e-t)/ed))};
+// data
+const nodes=[
+{id:'token',x:.5,y:.16,label:'JWT Token',c:'accent'},
+{id:'header',x:.2,y:.42,label:'Header',c:'text'},
+{id:'payload',x:.5,y:.42,label:'Payload',c:'text'},
+{id:'sig',x:.8,y:.42,label:'Signature',c:'text'},
+{id:'key',x:.8,y:.74,label:'Secret Key',c:'muted'},
+{id:'claims',x:.3,y:.74,label:'Claims',c:'accent'}
 ];
-var cx=startX;
-for(var i=0;i<3;i++){
-var s=segs[i];
-var sw=s.w*(1+0.04*split);
-var glow=0.35+0.15*Math.sin(t/300+i*1.2);
-ctx.fillStyle=rgba(s.color,a*glow);
-roundRect(cx,y-h/2,sw,h,h*0.3);
-ctx.fill();
-ctx.strokeStyle=rgba(s.color,a*0.5);
-ctx.lineWidth=1.5;
-roundRect(cx,y-h/2,sw,h,h*0.3);
-ctx.stroke();
-ctx.font="bold "+Math.round(H*0.02)+"px system-ui,sans-serif";
-ctx.textAlign="center";ctx.textBaseline="middle";
-ctx.fillStyle=rgba(PAL.bg,a*0.9);
-ctx.fillText(s.label,cx+sw/2,y);
-cx+=sw+gap;
-}
-ctx.restore();
-}
-function drawPanel(x,y,w,h,a,label,lines,t){
-var pulse=1+0.006*Math.sin(t/500+x*0.01);
-ctx.save();
-ctx.translate(x,y);
-ctx.scale(pulse,pulse);
-ctx.translate(-x,-y);
-ctx.fillStyle=rgba(PAL.bg,a*0.85);
-roundRect(x-w/2,y-h/2,w,h,h*0.08);
-ctx.fill();
-ctx.strokeStyle=rgba(PAL.accent,a*0.4);
-ctx.lineWidth=1.5;
-roundRect(x-w/2,y-h/2,w,h,h*0.08);
-ctx.stroke();
-ctx.font="bold "+Math.round(H*0.022)+"px system-ui,sans-serif";
-ctx.textAlign="center";ctx.textBaseline="middle";
-ctx.fillStyle=rgba(PAL.accent,a*0.9);
-ctx.fillText(label,x,y-h/2+H*0.028);
-var ly=y-h/2+H*0.055;
-ctx.font=Math.round(H*0.019)+"px monospace";
-ctx.textAlign="left";
-for(var i=0;i<lines.length;i++){
-ctx.fillStyle=rgba(PAL.text,a*0.8);
-ctx.fillText(lines[i],x-w/2+W*0.025,ly+i*H*0.03);
-}
-ctx.restore();
-}
-function drawPackets(t,from,to,ctrl,startMs,dur,count){
-var elapsed=t-startMs;
-if(elapsed<0)return;
-for(var i=0;i<count;i++){
-var pt=elapsed/dur-i*0.25;
-if(pt<0||pt>1)continue;
-var e=easeInOut(clamp01(pt));
-var pos=quad(from,ctrl,to,e);
-var trail=0.6*(1-pt);
-for(var j=0;j<5;j++){
-var tt=clamp01(e-j*0.04);
-var tp=quad(from,ctrl,to,tt);
-var ta=trail*(1-j*0.18);
-ctx.beginPath();
-ctx.arc(tp.x,tp.y,3-j*0.4,0,Math.PI*2);
-ctx.fillStyle=rgba(PAL.accent,ta);
-ctx.fill();
-}
-}
-}
-function drawDecode(t){
-var a=wrapBeatAlpha(t,0.93,0.38,0.03);
-if(a<=0)return;
-var L=layout();
-var lw=W*0.26,lh=H*0.2;
-drawPanel(L.left.x,L.left.y,lw,lh,a,"Header",["{ alg: HS256","  typ: JWT }"],t);
-drawPanel(L.right.x,L.right.y,lw,lh,a,"Payload",["{ sub: user_42","  exp: 1719849600","  role: admin }"],t);
-var fromH={x:L.token.x-W*0.12,y:L.token.y};
-var toH={x:L.left.x+W*0.08,y:L.left.y-H*0.08};
-var ctrlH={x:L.token.x-W*0.15,y:L.token.y-H*0.1};
-drawPackets(t,fromH,toH,ctrlH,4000,2500,3);
-var fromP={x:L.token.x+W*0.12,y:L.token.y};
-var toP={x:L.right.x-W*0.08,y:L.right.y-H*0.08};
-var ctrlP={x:L.token.x+W*0.15,y:L.token.y-H*0.1};
-drawPackets(t,fromP,toP,ctrlP,4500,2500,3);
-}
-function drawSignature(t){
-var a=beatAlpha(t,0.3,0.62,0.03);
-if(a<=0)return;
-var L=layout();
-var bw=W*0.32,bh=H*0.13;
-var bx=L.bottom.x,by=L.bottom.y;
-var pulse=1+0.008*Math.sin(t/380);
-ctx.save();
-ctx.translate(bx,by);
-ctx.scale(pulse,pulse);
-ctx.translate(-bx,-by);
-ctx.fillStyle=rgba(PAL.bg,a*0.85);
-roundRect(bx-bw/2,by-bh/2,bw,bh,bh*0.1);
-ctx.fill();
-ctx.strokeStyle=rgba(PAL.accent,a*0.5);
-ctx.lineWidth=1.5;
-roundRect(bx-bw/2,by-bh/2,bw,bh,bh*0.1);
-ctx.stroke();
-ctx.font="bold "+Math.round(H*0.02)+"px system-ui,sans-serif";
-ctx.textAlign="center";ctx.textBaseline="middle";
-ctx.fillStyle=rgba(PAL.accent,a*0.9);
-ctx.fillText("Signature Check",bx,by-bh/2+H*0.022);
-var meterW=bw*0.7;
-var meterH=H*0.016;
-var mx=bx-meterW/2,my=by;
-var fillT=clamp01((t-10500)/3500);
-fillT=easeInOut(fillT);
-ctx.fillStyle=rgba(PAL.muted,a*0.3);
-roundRect(mx,my-meterH/2,meterW,meterH,meterH/2);
-ctx.fill();
-ctx.fillStyle=rgba(PAL.accent,a*0.8);
-roundRect(mx,my-meterH/2,meterW*fillT,meterH,meterH/2);
-ctx.fill();
-ctx.font=Math.round(H*0.017)+"px monospace";
-ctx.fillStyle=rgba(PAL.text,a*0.7);
-ctx.fillText("HMAC-SHA256(key, h.p) === sig",bx,my+H*0.032);
-var checkT=clamp01((t-15000)/1200);
-if(checkT>0){
-var cs=easeInOut(checkT);
-ctx.save();
-ctx.translate(bx+bw/2-W*0.02,by);
-ctx.scale(cs,cs);
-ctx.strokeStyle=rgba(PAL.accent,a);
-ctx.lineWidth=3;
-ctx.beginPath();
-ctx.moveTo(-W*0.01,0);
-ctx.lineTo(-W*0.003,W*0.009);
-ctx.lineTo(W*0.013,-W*0.011);
-ctx.stroke();
-ctx.restore();
-}
-ctx.restore();
-var from={x:L.token.x,y:L.token.y+H*0.025};
-var to={x:bx,y:by-bh/2};
-var ctrl={x:L.token.x,y:L.token.y+H*0.1};
-drawPackets(t,from,to,ctrl,10000,2200,2);
-}
-function drawClaims(t){
-var a=beatAlpha(t,0.55,0.82,0.03);
-if(a<=0)return;
-var L=layout();
-var claims=[
-{label:"exp",val:"1719849600"},
-{label:"sub",val:"user_42"},
-{label:"role",val:"admin"}
+const packets=[
+{f:'token',t:'header',s:.04,e:.22},{f:'token',t:'payload',s:.04,e:.22},{f:'token',t:'sig',s:.04,e:.22},
+{f:'sig',t:'key',s:.42,e:.54},{f:'key',t:'sig',s:.54,e:.64},
+{f:'payload',t:'claims',s:.68,e:.82}
 ];
-var startY=L.right.y-H*0.07;
-var rowH=H*0.042;
-for(var i=0;i<claims.length;i++){
-var ca=beatAlpha(t,0.55+i*0.04,0.82,0.02);
-if(ca<=0)continue;
-var ry=startY+i*rowH;
-var cx=L.right.x;
-var cw=W*0.2;
-ctx.fillStyle=rgba(PAL.bg,ca*0.7);
-roundRect(cx-cw/2,ry-rowH*0.35,cw,rowH*0.7,rowH*0.2);
-ctx.fill();
-ctx.strokeStyle=rgba(PAL.accent,ca*0.3);
-ctx.lineWidth=1;
-roundRect(cx-cw/2,ry-rowH*0.35,cw,rowH*0.7,rowH*0.2);
-ctx.stroke();
-ctx.font="bold "+Math.round(H*0.018)+"px monospace";
-ctx.textAlign="left";ctx.textBaseline="middle";
-ctx.fillStyle=rgba(PAL.accent,ca*0.9);
-ctx.fillText(claims[i].label,cx-cw/2+W*0.018,ry);
-ctx.fillStyle=rgba(PAL.text,ca*0.8);
-ctx.fillText(claims[i].val,cx-cw/2+W*0.06,ry);
-var checkT=clamp01((t-(18000+i*1200))/700);
-if(checkT>0){
-var cs=easeInOut(checkT);
-ctx.save();
-ctx.translate(cx+cw/2-W*0.022,ry);
-ctx.scale(cs,cs);
-ctx.strokeStyle=rgba(PAL.accent,ca);
-ctx.lineWidth=2.5;
-ctx.beginPath();
-ctx.moveTo(-W*0.007,0);
-ctx.lineTo(-W*0.002,W*0.006);
-ctx.lineTo(W*0.009,-W*0.008);
-ctx.stroke();
-ctx.restore();
-}
-}
-}
-function drawVerified(t){
-var a=beatAlpha(t,0.75,0.98,0.03);
-if(a<=0)return;
-var L=layout();
-var pulse=1+0.025*Math.sin(t/250);
-ctx.save();
-ctx.translate(L.token.x,L.token.y+H*0.09);
-ctx.scale(pulse,pulse);
-ctx.font="bold "+Math.round(H*0.038)+"px system-ui,sans-serif";
-ctx.textAlign="center";ctx.textBaseline="middle";
-ctx.fillStyle=rgba(PAL.accent,a);
-ctx.fillText("\u2713 Verified",0,0);
-ctx.restore();
-var ringR=H*0.035*(1+0.1*Math.sin(t/300));
-ctx.beginPath();
-ctx.arc(L.token.x,L.token.y+H*0.09,ringR,0,Math.PI*2);
-ctx.strokeStyle=rgba(PAL.accent,a*0.3);
-ctx.lineWidth=2;
-ctx.stroke();
-}
-function drawHud(t){
-var beat=t/LOOP;
-var labels=["Decode","Signature","Claims","Verified"];
-var idx;
-if(beat<0.38)idx=0;
-else if(beat<0.62)idx=1;
-else if(beat<0.82)idx=2;
-else idx=3;
-ctx.font=Math.round(H*0.015)+"px system-ui,sans-serif";
-ctx.textAlign="left";ctx.textBaseline="top";
-ctx.fillStyle=rgba(PAL.muted,0.6);
-ctx.fillText("Step "+(idx+1)+"/4: "+labels[idx],W*0.03,H*0.03);
-var barW=W*0.1;
-var barH=H*0.007;
-var bx=W*0.03,by=H*0.052;
-ctx.fillStyle=rgba(PAL.muted,0.2);
-roundRect(bx,by,barW,barH,barH/2);
-ctx.fill();
-ctx.fillStyle=rgba(PAL.accent,0.7);
-roundRect(bx,by,barW*beat,barH,barH/2);
-ctx.fill();
-}
-var __seek=null;
-window.__time=function(v){__seek=v;};
+const beats=[{s:0,e:.17,l:'Decode'},{s:.17,e:.40,l:'Parse JSON'},{s:.40,e:.65,l:'Verify Signature'},{s:.65,e:.90,l:'Extract Claims'},{s:.90,e:1,l:'Valid ✓'}];
+const claims=['sub: user_42','exp: 1719…','role: admin'];
+// hooks
+let __seek=null;
+window.__time=v=>{__seek=v};
 window.__loop=LOOP;
+// helpers
+const np=n=>({x:n.x*W,y:n.y*H});
+const quad=(a,c,b,t)=>{const u=1-t;return{x:u*u*a.x+2*u*t*c.x+t*t*b.x,y:u*u*a.y+2*u*t*c.y+t*t*b.y}};
+// frame
 function frame(now){
 if(__seek!=null)now=__seek;
-var t=now%LOOP;
+const t=now%LOOP,beat=t/LOOP;
 ctx.clearRect(0,0,W,H);
-ctx.fillStyle=rgba(PAL.bg,1);
-ctx.fillRect(0,0,W,H);
-drawGrid(t);
-drawTitle(t);
-drawToken(t);
-drawDecode(t);
-drawSignature(t);
-drawClaims(t);
-drawVerified(t);
-drawHud(t);
+// grid
+ctx.strokeStyle=rgba(PAL.text,.03);ctx.lineWidth=1;
+for(let x=0;x<W;x+=48){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+for(let y=0;y<H;y+=48){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+// beat label
+const ab=beats.find(b=>beat>=b.s&&beat<b.e);
+if(ab){const ba=fade(beat,ab.s,ab.e,.04);ctx.font=`600 ${W*.022}px system-ui`;ctx.fillStyle=rgba(PAL.accent,ba*.9);ctx.textAlign='center';ctx.fillText(ab.l,W*.5,H*.055)}
+// connections
+packets.forEach(p=>{
+const a=np(nodes.find(n=>n.id===p.f)),b=np(nodes.find(n=>n.id===p.t));
+const c={x:(a.x+b.x)/2,y:Math.min(a.y,b.y)-H*.09};
+const pa=fade(beat,p.s,p.e,.04);
+if(pa>0){ctx.strokeStyle=rgba(PAL.accent,pa*.15);ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.quadraticCurveTo(c.x,c.y,b.x,b.y);ctx.stroke()}
+});
+// nodes
+nodes.forEach(n=>{
+const p=np(n),pulse=1+Math.sin(now/400)*.06,r=W*.017*pulse,na=fade(beat,0,1,.02);
+const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,r*2.5);g.addColorStop(0,rgba(PAL[n.c],na*.1));g.addColorStop(1,rgba(PAL[n.c],0));
+ctx.fillStyle=g;ctx.fillRect(p.x-r*2.5,p.y-r*2.5,r*5,r*5);
+ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fillStyle=rgba(PAL[n.c],na*.18);ctx.fill();ctx.strokeStyle=rgba(PAL[n.c],na*.65);ctx.lineWidth=1.5;ctx.stroke();
+ctx.font=`500 ${W*.013}px system-ui`;ctx.fillStyle=rgba(PAL.text,na*.85);ctx.textAlign='center';ctx.fillText(n.label,p.x,p.y+r+W*.018);
+});
+// packets
+packets.forEach(p=>{
+const a=np(nodes.find(n=>n.id===p.f)),b=np(nodes.find(n=>n.id===p.t));
+const c={x:(a.x+b.x)/2,y:Math.min(a.y,b.y)-H*.09};
+const dur=(p.e-p.s)*LOOP,el=t-p.s*LOOP;
+if(el>0&&el<dur){
+const pt=ease(clamp01(el/dur)),pos=quad(a,c,b,pt);
+for(let i=4;i>=1;i--){const tt=clamp01(pt-i*.04),tp=quad(a,c,b,tt);ctx.beginPath();ctx.arc(tp.x,tp.y,W*.003*(1-i*.18),0,Math.PI*2);ctx.fillStyle=rgba(PAL.accent,.35*(1-i*.2));ctx.fill()}
+ctx.beginPath();ctx.arc(pos.x,pos.y,W*.006,0,Math.PI*2);ctx.fillStyle=rgba(PAL.accent,.9);ctx.fill();
+}});
+// token segments
+const ta=fade(beat,0,.32,.05);
+if(ta>0){
+const segs=['eyJhbGciOi…','eyJzdWIiOi…','SflKxwRJ…'],sw=W*.13;
+segs.forEach((s,i)=>{
+const sx=W*.5-sw*1.5+i*sw*1.1,split=clamp01((beat-.04)/.1),ox=(i-1)*split*W*.07;
+ctx.font=`400 ${W*.011}px monospace`;ctx.fillStyle=rgba(PAL.muted,ta*.7);ctx.textAlign='center';ctx.fillText(s,sx+ox,H*.22);
+});
+}
+// claims
+const ca=fade(beat,.65,.92,.05);
+if(ca>0){claims.forEach((c,i)=>{const c2=clamp01((beat-.68-i*.04)/.06);ctx.font=`400 ${W*.012}px monospace`;ctx.fillStyle=rgba(PAL.accent,ca*c2*.8);ctx.textAlign='center';ctx.fillText(c,W*.3,H*.8+i*H*.032)})}
+// checkmark
+const va=fade(beat,.42,.65,.05);
+if(va>0){const prog=clamp01((beat-.55)/.08);ctx.font=`600 ${W*.02}px system-ui`;ctx.fillStyle=rgba(PAL.accent,va*prog);ctx.textAlign='center';ctx.fillText(prog>.9?'✓ Valid':'…',W*.8,H*.6)}
 requestAnimationFrame(frame);
 }
-resize();
-window.addEventListener("resize",resize);
+buildLayout();
+addEventListener('resize',buildLayout);
 requestAnimationFrame(frame);
-})();
 </script>
 </body>
 </html>

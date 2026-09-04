@@ -16,3 +16,19 @@
   First generation passed all 5 checks in 195s, 0 fix passes.
 - 2026-09-04 (M3): hypa_shell kills commands after 30s; long-running
   check.sh runs must be nohup'd to a log file and polled.
+
+## Overwrite guard + MG_ALLOW_EXISTING (2026-09-04)
+
+- `generate.sh` refuses to overwrite an existing topic folder (exit 2,
+  fast-path via logs/slug-map.jsonl before any LLM call). This protects
+  curated graphics and gives stable re-run behaviour.
+- `tool/bench.mjs` and `tool/check.mjs` are the *only* callers that set
+  `MG_ALLOW_EXISTING=1` (or `allowExisting: true`): bench/check output is
+  tool-generated, and LLM slugs can legitimately land on an existing
+  generated folder on re-runs — those runs refresh in place instead of
+  failing.
+- Consequence: the slug map (prompt→topic) is the source of truth for
+  "which folder does this prompt own"; it grows one line per successful
+  generation. Re-runs of a known prompt with `--force`/`--regen` are
+  expected to be somewhat slower (full LLM call) because the fast
+  guard is intentionally bypassed.

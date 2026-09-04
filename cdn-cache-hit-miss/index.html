@@ -1,278 +1,146 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CDN Cache Strategy</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>CDN Cache Hit vs Miss</title>
 <link rel="stylesheet" href="../css/brand.css" />
 <link rel="stylesheet" href="../css/motion.css" />
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
+*{margin:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
-canvas#stage{display:block;width:100vw;height:100vh}
+canvas{display:block;width:100%;height:100%}
 </style>
 </head>
 <body>
 <canvas id="stage"></canvas>
 <script>
-(function(){
-"use strict";
-var canvas=document.getElementById("stage");
-var ctx=canvas.getContext("2d");
-var LOOP=30000;
-var PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9],amber:[245,158,11]};
-function rgba(c,a){return"rgba("+c[0]+","+c[1]+","+c[2]+","+a+")"}
-var W,H,dpr;
-function resize(){
-dpr=window.devicePixelRatio||1;
-W=window.innerWidth;H=window.innerHeight;
-canvas.width=W*dpr;canvas.height=H*dpr;
-canvas.style.width=W+"px";canvas.style.height=H+"px";
-ctx.setTransform(dpr,0,0,dpr,0,0);
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+const LOOP=30000;
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+let W,H,dpr;
+const lerp=(a,b,t)=>a+(b-a)*t, clamp01=v=>Math.max(0,Math.min(1,v));
+const ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
+const fade=(t,a,b,edge=.8)=>{if(t<a||t>=b)return 0;const f=(t-a)/(b-a);return f<edge?ease(f/edge):1-ease((f-edge)/(1-edge))};
+const quad=(a,c,b,t)=>{const u=1-t;return{x:u*u*a.x+2*u*t*c.x+t*t*b.x,y:u*u*a.y+2*u*t*c.y+t*t*b.y}};
+let __seek=null;
+window.__time=v=>{__seek=v};
+window.__loop=LOOP;
+const nodes=[
+  {id:'client',label:'Client',x:.15,y:.5,r:22},
+  {id:'cdn',label:'CDN Edge',x:.5,y:.42,r:28},
+  {id:'origin',label:'Origin',x:.85,y:.5,r:22}
+];
+const conns=[
+  {from:'client',to:'cdn',cp:{x:.32,y:.28}},
+  {from:'cdn',to:'origin',cp:{x:.68,y:.28}}
+];
+const packets=[
+  {from:'client',to:'cdn',t0:.5,t1:2,col:'muted',r:5},
+  {from:'cdn',to:'client',t0:2,t1:3.2,col:'accent',r:6},
+  {from:'client',to:'cdn',t0:8.5,t1:10,col:'muted',r:5},
+  {from:'cdn',to:'origin',t0:10,t1:12,col:'fail',r:5},
+  {from:'origin',to:'cdn',t0:12,t1:14,col:'fail',r:5},
+  {from:'cdn',to:'client',t0:14,t1:15.5,col:'fail',r:6},
+  {from:'client',to:'cdn',t0:16.5,t1:18,col:'muted',r:5},
+  {from:'cdn',to:'client',t0:18,t1:19.2,col:'accent',r:6},
+  {from:'cdn',to:'origin',t0:19,t1:21.5,col:'muted',r:4},
+  {from:'origin',to:'cdn',t0:21.5,t1:23,col:'muted',r:4}
+];
+const beats=[
+  {t0:0,t1:8,label:'CACHE HIT',sub:'12 ms · edge response',col:'accent'},
+  {t0:8,t1:16,label:'CACHE MISS',sub:'240 ms · origin fetch',col:'fail'},
+  {t0:16,t1:24,label:'STALE-WHILE-REVALIDATE',sub:'serve stale · refresh bg',col:'accent'},
+  {t0:24,t1:30,label:'METRICS',sub:'hit rate · latency',col:'text'}
+];
+function resize(){dpr=window.devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
+function nodePos(n){return{x:W*n.x,y:H*n.y}}
+function drawBg(t){
+  ctx.fillStyle=rgba(PAL.bg,1);ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle=rgba(PAL.text,.03);ctx.lineWidth=1;
+  const g=60;
+  for(let x=0;x<W;x+=g){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+  for(let y=0;y<H;y+=g){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
 }
-function lerp(a,b,t){return a+(b-a)*t}
-function clamp01(v){return Math.max(0,Math.min(1,v))}
-function easeInOut(t){return t<0.5?2*t*t:-1+(4-2*t)*t}
-var clientPos,cdnPos,originPos;
-function buildLayout(){
-clientPos={x:W*0.14,y:H*0.48};
-cdnPos={x:W*0.5,y:H*0.40};
-originPos={x:W*0.86,y:H*0.48};
+function drawConns(t){
+  conns.forEach(c=>{
+    const a=nodePos(nodes.find(n=>n.id===c.from)),b=nodePos(nodes.find(n=>n.id===c.to));
+    const cp={x:W*c.cp.x,y:H*c.cp.y};
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.quadraticCurveTo(cp.x,cp.y,b.x,b.y);
+    ctx.strokeStyle=rgba(PAL.muted,.15);ctx.lineWidth=1.5;ctx.stroke();
+  });
 }
-function quad(a,c,b,t){
-var u=1-t;
-return{x:u*u*a.x+2*u*t*c.x+t*t*b.x,y:u*u*a.y+2*u*t*c.y+t*t*b.y};
+function drawNodes(t){
+  nodes.forEach(n=>{
+    const p=nodePos(n),pulse=1+.08*Math.sin(t/400+n.x*10);
+    const r=n.r*pulse;
+    const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,r*2.5);
+    const col=n.id==='cdn'?PAL.accent:n.id==='origin'?PAL.fail:PAL.muted;
+    g.addColorStop(0,rgba(col,.25));g.addColorStop(1,rgba(col,0));
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(p.x,p.y,r*2.5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=rgba(PAL.bg,1);ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle=rgba(col,.7);ctx.lineWidth=2;ctx.stroke();
+    ctx.fillStyle=rgba(PAL.text,.9);ctx.font=`600 ${Math.max(11,W*.012)}px system-ui`;ctx.textAlign='center';
+    ctx.fillText(n.label,p.x,p.y+r+18);
+  });
 }
-function ctrlAC(){return{x:(clientPos.x+cdnPos.x)/2,y:Math.min(clientPos.y,cdnPos.y)-H*0.14}}
-function ctrlCO(){return{x:(cdnPos.x+originPos.x)/2,y:Math.min(cdnPos.y,originPos.y)-H*0.14}}
-function beatAlpha(t,start,end,fade){
-if(t<start||t>=end)return 0;
-var fi=clamp01((t-start)/fade);
-var fo=clamp01((end-t)/fade);
-return Math.min(easeInOut(fi),easeInOut(fo));
+function drawPackets(t){
+  packets.forEach(p=>{
+    const s=(p.t0/1000)*1000,e=(p.t1/1000)*1000;
+    const ts=t/1000;
+    if(ts<p.t0||ts>=p.t1)return;
+    const prog=ease(clamp01((ts-p.t0)/(p.t1-p.t0)));
+    const a=nodePos(nodes.find(n=>n.id===p.from)),b=nodePos(nodes.find(n=>n.id===p.to));
+    const cIdx=p.from==='client'?0:1;
+    const cp={x:W*conns[cIdx].cp.x,y:H*conns[cIdx].cp.y};
+    const pos=quad(a,cp,b,prog);
+    const col=PAL[p.col];
+    for(let i=5;i>=0;i--){
+      const tp=clamp01(prog-i*.04);
+      if(tp<0)continue;
+      const tp2=quad(a,cp,b,tp);
+      ctx.fillStyle=rgba(col,.12*(1-i/6));
+      ctx.beginPath();ctx.arc(tp2.x,tp2.y,p.r*(1-i*.12),0,Math.PI*2);ctx.fill();
+    }
+    ctx.fillStyle=rgba(col,.95);ctx.beginPath();ctx.arc(pos.x,pos.y,p.r,0,Math.PI*2);ctx.fill();
+  });
 }
-function drawPacket(from,ctrl,to,progress,color,alpha,size){
-if(alpha<=0.01||progress<=0||progress>=1)return;
-var p=easeInOut(clamp01(progress));
-var pos=quad(from,ctrl,to,p);
-for(var i=5;i>=1;i--){
-var tp=clamp01(p-i*0.05);
-if(tp<=0)break;
-var tp2=quad(from,ctrl,to,tp);
-var ta=alpha*(1-i/6)*0.45;
-ctx.beginPath();ctx.arc(tp2.x,tp2.y,size*(1-i*0.13),0,Math.PI*2);ctx.fillStyle=rgba(color,ta);ctx.fill();
-}
-var g=ctx.createRadialGradient(pos.x,pos.y,0,pos.x,pos.y,size*3.5);
-g.addColorStop(0,rgba(color,alpha*0.5));g.addColorStop(1,rgba(color,0));
-ctx.beginPath();ctx.arc(pos.x,pos.y,size*3.5,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
-ctx.beginPath();ctx.arc(pos.x,pos.y,size,0,Math.PI*2);ctx.fillStyle=rgba(color,alpha);ctx.fill();
-}
-function drawNode(pos,label,sublabel,color,alpha,t){
-if(alpha<=0.01)return;
-var pulse=1+0.07*Math.sin(t/400);
-var r=Math.min(W,H)*0.038*pulse;
-var g=ctx.createRadialGradient(pos.x,pos.y,0,pos.x,pos.y,r*2.8);
-g.addColorStop(0,rgba(color,alpha*0.25));g.addColorStop(1,rgba(color,0));
-ctx.beginPath();ctx.arc(pos.x,pos.y,r*2.8,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
-ctx.beginPath();ctx.arc(pos.x,pos.y,r,0,Math.PI*2);
-ctx.fillStyle=rgba(color,alpha*0.12);ctx.fill();
-ctx.strokeStyle=rgba(color,alpha*0.75);ctx.lineWidth=2;ctx.stroke();
-ctx.beginPath();ctx.arc(pos.x,pos.y,r*0.28,0,Math.PI*2);ctx.fillStyle=rgba(color,alpha*0.9);ctx.fill();
-var fs=Math.min(W,H)*0.021;
-ctx.font="600 "+fs+"px system-ui,sans-serif";ctx.textAlign="center";ctx.textBaseline="top";
-ctx.fillStyle=rgba(PAL.text,alpha);ctx.fillText(label,pos.x,pos.y+r+12);
-if(sublabel){
-ctx.font="400 "+(fs*0.72)+"px system-ui,sans-serif";
-ctx.fillStyle=rgba(PAL.muted,alpha*0.75);
-ctx.fillText(sublabel,pos.x,pos.y+r+12+fs+4);
-}
-}
-function drawMeter(x,y,w,h,value,color,label,alpha){
-if(alpha<=0.01)return;
-ctx.fillStyle=rgba(PAL.muted,alpha*0.08);
-ctx.fillRect(x,y,w,h);
-var fw=w*clamp01(value);
-if(fw>0){ctx.fillStyle=rgba(color,alpha*0.65);ctx.fillRect(x,y,fw,h)}
-ctx.strokeStyle=rgba(PAL.muted,alpha*0.25);ctx.lineWidth=1;ctx.strokeRect(x,y,w,h);
-var fs=Math.min(W,H)*0.013;
-ctx.font="500 "+fs+"px system-ui,sans-serif";ctx.textAlign="left";ctx.textBaseline="bottom";
-ctx.fillStyle=rgba(PAL.text,alpha*0.75);ctx.fillText(label,x,y-5);
-var pct=Math.round(clamp01(value)*100)+"%";
-ctx.textAlign="right";ctx.fillStyle=rgba(color,alpha*0.8);ctx.fillText(pct,x+w,y-5);
-}
-function drawBackground(t){
-ctx.fillStyle=rgba(PAL.bg,1);ctx.fillRect(0,0,W,H);
-var sp=Math.min(W,H)*0.055;
-ctx.strokeStyle="rgba(255,255,255,0.03)";ctx.lineWidth=1;
-var i;
-for(i=0;i<W;i+=sp){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,H);ctx.stroke()}
-for(i=0;i<H;i+=sp){ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(W,i);ctx.stroke()}
-}
-function drawConnections(alpha){
-if(alpha<=0.01)return;
-var cAC=ctrlAC(),cCO=ctrlCO();
-ctx.strokeStyle=rgba(PAL.muted,alpha*0.12);ctx.lineWidth=1;ctx.setLineDash([5,7]);
-var i,p;
-ctx.beginPath();
-for(i=0;i<=40;i++){p=quad(clientPos,cAC,cdnPos,i/40);if(i===0)ctx.moveTo(p.x,p.y);else ctx.lineTo(p.x,p.y)}
-ctx.stroke();
-ctx.beginPath();
-for(i=0;i<=40;i++){p=quad(cdnPos,cCO,originPos,i/40);if(i===0)ctx.moveTo(p.x,p.y);else ctx.lineTo(p.x,p.y)}
-ctx.stroke();
-ctx.setLineDash([]);
-}
-function drawTitle(alpha){
-if(alpha<=0.01)return;
-var fs=Math.min(W,H)*0.032;
-ctx.font="700 "+fs+"px system-ui,sans-serif";ctx.textAlign="center";ctx.textBaseline="top";
-ctx.fillStyle=rgba(PAL.text,alpha*0.9);
-ctx.fillText("CDN Cache Strategy",W*0.5,H*0.06);
-}
-function drawStatusLabel(text,color,alpha){
-if(alpha<=0.01||!text)return;
-var fs=Math.min(W,H)*0.018;
-ctx.font="600 "+fs+"px system-ui,sans-serif";ctx.textAlign="center";ctx.textBaseline="bottom";
-ctx.fillStyle=rgba(color,alpha);
-ctx.fillText(text,cdnPos.x,cdnPos.y-Math.min(W,H)*0.038-14);
-}
-function drawCounter(x,y,value,label,alpha){
-if(alpha<=0.01)return;
-var fs=Math.min(W,H)*0.02;
-ctx.font="700 "+fs+"px system-ui,sans-serif";ctx.textAlign="center";ctx.textBaseline="top";
-ctx.fillStyle=rgba(PAL.text,alpha*0.85);
-ctx.fillText(Math.round(value).toString(),x,y);
-ctx.font="400 "+(fs*0.6)+"px system-ui,sans-serif";
-ctx.fillStyle=rgba(PAL.muted,alpha*0.6);
-ctx.fillText(label,x,y+fs+4);
-}
-function drawBeatLabel(text,alpha){
-if(alpha<=0.01||!text)return;
-var fs=Math.min(W,H)*0.016;
-ctx.font="500 "+fs+"px system-ui,sans-serif";ctx.textAlign="center";ctx.textBaseline="bottom";
-ctx.fillStyle=rgba(PAL.muted,alpha*0.6);
-ctx.fillText(text,W*0.5,H*0.94);
-}
-function drawPathLabel(from,ctrl,to,progress,text,color,alpha){
-if(alpha<=0.01)return;
-var p=quad(from,ctrl,to,progress);
-var fs=Math.min(W,H)*0.013;
-ctx.font="500 "+fs+"px system-ui,sans-serif";ctx.textAlign="center";ctx.textBaseline="bottom";
-ctx.fillStyle=rgba(color,alpha*0.8);
-ctx.fillText(text,p.x,p.y-10);
+function drawHud(t){
+  const ts=t/1000;
+  beats.forEach((b,i)=>{
+    const a=fade(ts,b.t0,b.t1,1);
+    if(a<=0)return;
+    const col=PAL[b.col];
+    ctx.globalAlpha=a;
+    ctx.fillStyle=rgba(col,.9);ctx.font=`700 ${Math.max(18,W*.022)}px system-ui`;ctx.textAlign='center';
+    ctx.fillText(b.label,W*.5,H*.12);
+    ctx.fillStyle=rgba(PAL.muted,.8);ctx.font=`400 ${Math.max(12,W*.013)}px system-ui`;
+    ctx.fillText(b.sub,W*.5,H*.12+24);
+    if(i===3){
+      const fill=ease(clamp01((ts-24.5)/3));
+      const mw=W*.3,mx=W*.5-mw/2,my=H*.72,mh=14;
+      ctx.fillStyle=rgba(PAL.muted,.15);ctx.fillRect(mx,my,mw,mh);
+      ctx.fillStyle=rgba(PAL.accent,.8);ctx.fillRect(mx,my,mw*fill*.94,mh);
+      ctx.fillStyle=rgba(PAL.text,.9);ctx.font=`600 ${Math.max(13,W*.014)}px system-ui`;
+      ctx.fillText(`${Math.round(fill*94)}% hit rate`,W*.5,my-10);
+      const lw=W*.12;
+      ctx.fillStyle=rgba(PAL.accent,.7);ctx.fillRect(W*.35,H*.82,lw*(12/240),10);
+      ctx.fillStyle=rgba(PAL.fail,.7);ctx.fillRect(W*.55,H*.82,lw,10);
+      ctx.fillStyle=rgba(PAL.muted,.7);ctx.font=`400 ${Math.max(11,W*.011)}px system-ui`;
+      ctx.fillText('12ms',W*.35+lw*.025,H*.82+26);ctx.fillText('240ms',W*.55+lw*.5,H*.82+26);
+    }
+    ctx.globalAlpha=1;
+  });
 }
 function frame(now){
-if(__seek!=null)now=__seek;
-var t=now%LOOP;
-buildLayout();
-ctx.clearRect(0,0,W,H);
-drawBackground(t);
-var FADE=1200;
-var a1=beatAlpha(t,0,7500,FADE);
-var a2=beatAlpha(t,7500,15000,FADE);
-var a3=beatAlpha(t,15000,22500,FADE);
-var a4=beatAlpha(t,22500,30000,FADE);
-var baseAlpha=Math.max(a1,a2,a3,a4);
-drawConnections(baseAlpha);
-drawTitle(baseAlpha);
-var cAC=ctrlAC(),cCO=ctrlCO();
-var i;
-// Beat 1: Cache HIT
-if(a1>0.01){
-var req1=clamp01((t-400)/1400);
-var res1=clamp01((t-2200)/1400);
-drawPacket(clientPos,cAC,cdnPos,req1,PAL.text,a1,5);
-drawPacket(cdnPos,cAC,clientPos,res1,PAL.accent,a1,6);
-if(req1>0.3&&req1<0.9)drawPathLabel(clientPos,cAC,cdnPos,0.5,"GET /api/data",PAL.text,a1*0.7);
-if(res1>0.3&&res1<0.9)drawPathLabel(cdnPos,cAC,clientPos,0.5,"200 HIT",PAL.accent,a1*0.8);
-drawNode(clientPos,"Client","Browser",PAL.muted,a1,t);
-drawNode(cdnPos,"CDN Edge","Cache Layer",PAL.accent,a1,t);
-drawNode(originPos,"Origin","App Server",PAL.muted,a1*0.4,t);
-drawStatusLabel("HIT",PAL.accent,a1);
-var hitVal=clamp01((t-2200)/4000);
-drawMeter(W*0.08,H*0.82,W*0.18,8,hitVal,PAL.accent,"Hit Ratio",a1);
-drawCounter(W*0.5,H*0.78,Math.round(clamp01(t/7500)*12),"requests",a1);
-drawBeatLabel("Cache Hit — served from edge",a1);
+  if(__seek!=null)now=__seek;
+  const t=now%LOOP;
+  ctx.clearRect(0,0,W,H);
+  drawBg(t);drawConns(t);drawNodes(t);drawPackets(t);drawHud(t);
+  requestAnimationFrame(frame);
 }
-// Beat 2: Cache MISS
-if(a2>0.01){
-var bt2=t-7500;
-var req2a=clamp01((bt2-400)/1200);
-var req2b=clamp01((bt2-1800)/1200);
-var res2b=clamp01((bt2-3200)/1200);
-var res2a=clamp01((bt2-4600)/1200);
-drawPacket(clientPos,cAC,cdnPos,req2a,PAL.text,a2,5);
-drawPacket(cdnPos,cCO,originPos,req2b,PAL.fail,a2,5);
-drawPacket(originPos,cCO,cdnPos,res2b,PAL.accent,a2,5);
-drawPacket(cdnPos,cAC,clientPos,res2a,PAL.accent,a2,6);
-if(req2a>0.3&&req2a<0.9)drawPathLabel(clientPos,cAC,cdnPos,0.5,"GET /api/data",PAL.text,a2*0.7);
-if(req2b>0.3&&req2b<0.9)drawPathLabel(cdnPos,cCO,originPos,0.5,"MISS → fetch",PAL.fail,a2*0.8);
-if(res2b>0.3&&res2b<0.9)drawPathLabel(originPos,cCO,cdnPos,0.5,"200 origin",PAL.accent,a2*0.7);
-if(res2a>0.3&&res2a<0.9)drawPathLabel(cdnPos,cAC,clientPos,0.5,"200 cached",PAL.accent,a2*0.8);
-drawNode(clientPos,"Client","Browser",PAL.muted,a2,t);
-var cdnColor2=bt2<3200?PAL.fail:PAL.accent;
-drawNode(cdnPos,"CDN Edge","Cache Layer",cdnColor2,a2,t);
-drawNode(originPos,"Origin","App Server",PAL.fail,a2,t);
-var status2=bt2<3200?"MISS":"CACHED";
-var statusColor2=bt2<3200?PAL.fail:PAL.accent;
-drawStatusLabel(status2,statusColor2,a2);
-var originLoad=clamp01((bt2-1800)/2000)*(1-clamp01((bt2-5000)/2000));
-drawMeter(W*0.74,H*0.82,W*0.18,8,originLoad,PAL.fail,"Origin Load",a2);
-drawCounter(W*0.5,H*0.78,Math.round(clamp01(bt2/7500)*8),"origin hits",a2);
-drawBeatLabel("Cache Miss — origin fetch & store",a2);
-}
-// Beat 3: Stale-While-Revalidate
-if(a3>0.01){
-var bt3=t-15000;
-var req3=clamp01((bt3-400)/1200);
-var stale3=clamp01((bt3-1600)/1000);
-var reval3=clamp01((bt3-2000)/3000);
-var fresh3=clamp01((bt3-5200)/1200);
-drawPacket(clientPos,cAC,cdnPos,req3,PAL.text,a3,5);
-drawPacket(cdnPos,cAC,clientPos,stale3,PAL.amber,a3,6);
-drawPacket(cdnPos,cCO,originPos,reval3,PAL.muted,a3*0.7,4);
-drawPacket(originPos,cCO,cdnPos,fresh3,PAL.accent,a3,5);
-if(req3>0.3&&req3<0.9)drawPathLabel(clientPos,cAC,cdnPos,0.5,"GET /api/data",PAL.text,a3*0.7);
-if(stale3>0.3&&stale3<0.9)drawPathLabel(cdnPos,cAC,clientPos,0.5,"200 STALE",PAL.amber,a3*0.8);
-if(reval3>0.2&&reval3<0.9)drawPathLabel(cdnPos,cCO,originPos,0.5,"revalidate",PAL.muted,a3*0.6);
-if(fresh3>0.3&&fresh3<0.9)drawPathLabel(originPos,cCO,cdnPos,0.5,"200 fresh",PAL.accent,a3*0.7);
-drawNode(clientPos,"Client","Browser",PAL.muted,a3,t);
-var cdnColor3=bt3<5200?PAL.amber:PAL.accent;
-drawNode(cdnPos,"CDN Edge","SWR Mode",cdnColor3,a3,t);
-drawNode(originPos,"Origin","App Server",PAL.muted,a3*0.6,t);
-var status3=bt3<5200?"STALE":"FRESH";
-var statusColor3=bt3<5200?PAL.amber:PAL.accent;
-drawStatusLabel(status3,statusColor3,a3);
-var swrVal=clamp01((bt3-1600)/6000);
-drawMeter(W*0.08,H*0.82,W*0.18,8,swrVal,PAL.amber,"SWR Window",a3);
-drawCounter(W*0.5,H*0.78,Math.round(clamp01(bt3/7500)*5),"revalidations",a3);
-drawBeatLabel("Stale-While-Revalidate — serve & refresh",a3);
-}
-// Beat 4: Summary
-if(a4>0.01){
-var bt4=t-22500;
-var pulse4=0.5+0.5*Math.sin(bt4/600);
-drawPacket(clientPos,cAC,cdnPos,clamp01((bt4%2000)/1800),PAL.accent,a4*0.6,4);
-drawPacket(cdnPos,cAC,clientPos,clamp01(((bt4+600)%2000)/1800),PAL.accent,a4*0.6,4);
-drawPacket(cdnPos,cCO,originPos,clamp01(((bt4+1000)%3000)/2800),PAL.fail,a4*0.4,3);
-drawPacket(originPos,cCO,cdnPos,clamp01(((bt4+2000)%3000)/2800),PAL.accent,a4*0.4,3);
-drawNode(clientPos,"Client","Browser",PAL.muted,a4,t);
-drawNode(cdnPos,"CDN Edge","Cache Layer",PAL.accent,a4,t);
-drawNode(originPos,"Origin","App Server",PAL.muted,a4,t);
-drawStatusLabel("HIT · MISS · SWR",PAL.accent,a4);
-drawMeter(W*0.08,H*0.82,W*0.18,8,0.87,PAL.accent,"Hit Ratio",a4);
-drawMeter(W*0.74,H*0.82,W*0.18,8,0.13,PAL.fail,"Origin Load",a4);
-drawCounter(W*0.5,H*0.78,Math.round(12+8*clamp01(bt4/7500)),"total reqs",a4);
-drawBeatLabel("Edge-first: minimize origin round-trips",a4);
-}
-requestAnimationFrame(frame);
-}
-var __seek=null;
-window.__time=function(v){__seek=v};
-window.__loop=LOOP;
-resize();
-window.addEventListener("resize",resize);
-requestAnimationFrame(frame);
-})();
+resize();window.addEventListener('resize',resize);requestAnimationFrame(frame);
 </script>
 </body>
 </html>

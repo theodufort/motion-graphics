@@ -1,21 +1,19 @@
 # B-Tree Index Lookup
-Explains how a B-tree index reduces a linear table scan to a logarithmic key traversal, cutting lookups from O(n) to O(log n).
+Explains how a B-tree index reduces database lookups from O(n) linear scans to O(log n) hops.
 ## Story beats
 | Time (s) | Beat | What's on screen |
 | -------- | ---- | ---------------- |
-| 0–5 | Linear Scan | 16 row-cells sweep left-to-right, counter ticks to 10 000 |
-| 5–10 | B-Tree Index | 3-level tree fades in, nodes pulse, edges draw |
-| 10–15 | Key Lookup | Packet travels root→mid→leaf, comparison pulses at each node |
-| 15–20 | Result | Leaf glows, "1 row" vs "10 000 rows" meters fill |
-| 20–25 | Loop | Crossfade back into the linear scan |
-Loop length: 25s.
+| 0–5 | Linear Scan | 12 nodes in a row; red packet visits each sequentially, counter ticks 0→12 |
+| 5–10 | B-Tree Index | Nodes morph into a 3-level tree; edges and level labels fade in |
+| 10–15 | Indexed Lookup | Green packet hops root→mid→leaf along highlighted edges, counter 1→3 |
+| 15–20 | 12 vs 3 Hops | Side-by-side counters and meters; "4× faster" label |
+Loop length: 20s.
 ## Key elements
-- Row cells: muted grey, scanned by accent bar
-- B-tree nodes: accent circles, pulse with sin
-- Traversal packet: accent dot with fading trail
-- Comparison meters: accent vs fail fill bars
-- Counters: text-colour, tick up per beat
+- Flat array nodes: muted grey, represent unindexed rows
+- B-tree nodes: accent green, represent indexed keys
+- Scan packet: fail red, shows linear cost
+- Lookup packet: accent green, shows logarithmic cost
+- Meters & counters: compare 12 vs 3 hops
 ## Notes
-- The traversal path (root→mid[1]→leaf[3]) is deterministic; no random state.
-- Beat crossfades use easeInOut over 8% of each beat window to avoid hard cuts.
-- The linear-scan counter uses a non-linear ease so it feels like "scanning" (fast start, slow end).
+- Beat 4 fades out into beat 1 fading in for a seamless loop with no dark gap.
+- All positions derive from W/H so the layout is resolution-independent.
