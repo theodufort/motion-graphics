@@ -13,3 +13,5 @@
 {"prompt":"TCP congestion control: slow start, congestion avoidance, additive-increase multiplicative-decrease","smoke":false}
 {"prompt":"LSM-tree compaction: sorted runs merged by score, space amplification","smoke":false}
 {"prompt":"circuit breaker half-open probing: trial requests, success threshold, recovery","smoke":false}
+{"prompt":"DNS resolution: recursive query chain, caching, TTL expiry","smoke":false}
+{"prompt":"how a BGP router chooses the best path: local pref, AS path length, MED","smoke":false}

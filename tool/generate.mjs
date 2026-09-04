@@ -67,6 +67,9 @@ HARD RULES
     ctx.measureText(label).width < 0.9 * the shape's width (measure at draw
     time; if too wide, drop the font size by 2px steps or shorten the
     label). Never let a label visually overflow its box.
+17. Motion: between any two consecutive beats at least one element must
+    visibly change (position, size, alpha, or text). No beat may be a
+    pixel-identical redraw of the previous one.
 
 REQUIRED STRUCTURE (adapt content, keep shape):
   setup (canvas, ctx, LOOP, PAL, rgba helper) → buildLayout() (positions from W/H) →

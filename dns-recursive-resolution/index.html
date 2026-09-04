@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+const LOOP=30000;
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+let W,H,dpr,nodes,cacheBox;
+function resize(){dpr=devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);buildLayout()}
+function buildLayout(){const cx=W*.5,cy=H*.42,sp=W*.32,r=Math.min(W,H)*.045;nodes=[{x:cx-sp*1.5,y:cy,r,label:'Client'},{x:cx-sp*.5,y:cy,r,label:'Resolver'},{x:cx+sp*.5,y:cy,r,label:'TLD'},{x:cx+sp*1.5,y:cy,r,label:'Authoritative'}];cacheBox={x:cx-sp*.5,y:cy+r*3.2,w:r*3.4,h:r*1.5}}
+addEventListener('resize',resize);resize();
+const lerp=(a,b,t)=>a+(b-a)*t,clamp01=v=>Math.max(0,Math.min(1,v)),ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
+function beatA(t,s,e,f=600){const b=t/LOOP,ss=s/LOOP,ee=e/LOOP;if(b<ss||b>=ee)return 0;return Math.min(clamp01((b-ss)/(f/LOOP)),clamp01((ee-b)/(f/LOOP)))}
+function quad(a,c,b,t){return{x:(1-t)*(1-t)*a.x+2*(1-t)*t*c.x+t*t*b.x,y:(1-t)*(1-t)*a.y+2*(1-t)*t*c.y+t*t*b.y}}
+let __seek=null;window.__time=v=>{__seek=v};window.__loop=LOOP;
+function fitText(label,cx,cy,maxW,base,fill){let fs=base;ctx.font=`${fs}px system-ui`;while(ctx.measureText(label).width>maxW*.9&&fs>8){fs-=2;ctx.font=`${fs}px system-ui`}ctx.fillStyle=fill;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,cx,cy)}
+function drawPackets(t){const pk=[];const chain=(prog,dir)=>{for(let i=0;i<3;i++){const si=dir>0?i*.3:(2-i)*.3,se=si+.25,p=clamp01((prog-si)/(se-si));if(p>0&&p<1){const a=dir>0?nodes[i]:nodes[i+1],b=dir>0?nodes[i+1]:nodes[i],c={x:(a.x+b.x)/2,y:a.y+(dir>0?-30:30)};pk.push(quad(a,c,b,ease(p)))}}};if(t<5000)chain(t/5000,1);if(t>=5000&&t<10000)chain((t-5000)/5000,-1);if(t>=25000)chain((t-25000)/5000,1);if(t>=15000&&t<20000){const p=(t-15000)/5000;const p1=clamp01(p/.3);if(p1>0&&p1<1)pk.push(quad(nodes[0],{x:(nodes[0].x+nodes[1].x)/2,y:nodes[0].y-20},nodes[1],ease(p1)));const p2=clamp01((p-.35)/.3);if(p2>0&&p2<1)pk.push(quad(nodes[1],{x:(nodes[0].x+nodes[1].x)/2,y:nodes[1].y+20},nodes[0],ease(p2)))}for(const p of pk){for(let i=4;i>=1;i--){ctx.fillStyle=rgba(PAL.accent,.3-i*.06);ctx.beginPath();ctx.arc(p.x-i*4,p.y,5-i*.8,0,Math.PI*2);ctx.fill()}ctx.fillStyle=rgba(PAL.accent,.9);ctx.beginPath();ctx.arc(p.x,p.y,5,0,Math.PI*2);ctx.fill()}}
+function drawCache(t,now){const a=beatA(t,10000,25000);if(a<=0)return;const cb=cacheBox;let ttl=300;if(t>=20000&&t<25000)ttl=Math.round(300*(1-(t-20000)/5000));else if(t>=25000)ttl=0;const col=ttl>0?PAL.accent:PAL.fail;ctx.fillStyle=rgba(PAL.bg,.8*a);ctx.strokeStyle=rgba(col,.5*a);ctx.lineWidth=1.5;ctx.beginPath();ctx.roundRect(cb.x-cb.w/2,cb.y-cb.h/2,cb.w,cb.h,6);ctx.fill();ctx.stroke();fitText('Cache Entry',cb.x,cb.y-cb.h*.22,cb.w,13,rgba(PAL.text,.8*a));fitText(`TTL: ${ttl}s`,cb.x,cb.y+cb.h*.12,cb.w,14,rgba(col,a));const mw=cb.w*.7,mx=cb.x-mw/2,my=cb.y+cb.h*.4;ctx.fillStyle=rgba(PAL.muted,.2*a);ctx.fillRect(mx,my,mw,4);ctx.fillStyle=rgba(col,.7*a);ctx.fillRect(mx,my,mw*(ttl/300),4)}
+function frame(now){if(__seek!=null)now=__seek;const t=now%LOOP;ctx.clearRect(0,0,W,H);ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;const gs=40;for(let x=0;x<W;x+=gs){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=gs){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}const ta=beatA(t,0,5000,500);if(ta>0){ctx.font=`bold ${Math.min(W*.032,40)}px system-ui`;ctx.fillStyle=rgba(PAL.text,ta);ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('DNS Recursive Resolution',W*.5,H*.08)}const labels=[['Query Chain',0,10000],['Response & Cache',10000,15000],['Cache Hit',15000,20000],['TTL Expiry',20000,25000],['Re-query',25000,30000]];for(const[l,s,e]of labels){const a=beatA(t,s,e,400);if(a>0){ctx.font=`${Math.min(W*.018,20)}px system-ui`;ctx.fillStyle=rgba(PAL.muted,a);ctx.textAlign='center';ctx.fillText(l,W*.5,H*.14)}}for(let i=0;i<3;i++){ctx.strokeStyle=rgba(PAL.muted,.15);ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(nodes[i].x,nodes[i].y);ctx.lineTo(nodes[i+1].x,nodes[i+1].y);ctx.stroke()}for(let i=0;i<4;i++){const n=nodes[i],pulse=1+.06*Math.sin(now/400+i*1.2),r=n.r*pulse;const g=ctx.createRadialGradient(n.x,n.y,r*.3,n.x,n.y,r*2);g.addColorStop(0,rgba(PAL.accent,.08));g.addColorStop(1,rgba(PAL.accent,0));ctx.fillStyle=g;ctx.beginPath();ctx.arc(n.x,n.y,r*2,0,Math.PI*2);ctx.fill();ctx.fillStyle=rgba(PAL.bg,.9);ctx.strokeStyle=rgba(PAL.accent,.6);ctx.lineWidth=2;ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);ctx.fill();ctx.stroke();fitText(n.label,n.x,n.y,r*1.8,Math.min(r*.65,13),rgba(PAL.text,.9))}drawPackets(t);drawCache(t,now);const sa=.4+.2*Math.sin(now/600);ctx.font=`${Math.min(W*.011,11)}px system-ui`;ctx.fillStyle=rgba(PAL.muted,sa*.5);ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillText('recursive · cached · ttl',W-16,H-14);requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
