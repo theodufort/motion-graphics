@@ -57,7 +57,8 @@
   defaults; acceptance met.
 - [x] tool/generate.mjs: prompt rule 17 (per-beat visible motion);
   acceptance met: dns-recursive-resolution + bgp-best-path-selection
-  pass 5/5, 40%/65% shots differ 22.3% / 6.2% content px (> 5%).- [x] tool/validate.mjs: frozen-animation probe (9×200ms samples at
-  45% of loop; "frozen" flag if all content-px deltas < 0.5%);
-  acceptance met: fixtures/static-canvas flagged, all 26 graphics
-  unflagged (910/910).
+  pass 5/5, 40%/65% shots differ 22.3% / 6.2% content px (> 5%).- [x] tool/validate.mjs: frozen-animation probe (25 loop-wide samples;
+  "frozen" flag only if MAX content-px delta < 0.5% — first 9×200ms
+  window version false-positived on beat-hold regions, replaced);
+  acceptance met: fixtures/static-canvas flagged, all 28 graphics
+  unflagged (980/980).

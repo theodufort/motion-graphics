@@ -179,17 +179,18 @@ async function validateFolder(folderPath) {
   if (!r.readme) errors.push("README.md missing or trivial");
 
   // resize robustness: change viewport mid-validation, then seek again
-  // frozen-animation probe: 9 consecutive 200ms samples mid-loop must not
-  // all have near-zero content-px deltas (a static canvas never moves)
+  // frozen-animation probe: sample evenly across the loop; a real graphic
+  // shows a big content-px delta at least once (beat transitions), so freeze
+  // only when the MAX delta is near zero (beat-hold regions are fine)
   if (hasSeek) {
-    const step = 200, n = 9;
+    const n = 25;
     const samples = [];
-    for (let k = 0; k < n; k++) samples.push((await park(LOOP * 0.45 + k * step))?.content || 0);
+    for (let k = 0; k < n; k++) samples.push((await park((LOOP * (k + 0.5)) / n))?.content || 0);
     const deltas = samples.slice(1).map((c, i) => Math.abs(c - samples[i]));
     const base = Math.max(...samples, 1);
-    if (deltas.every((d) => d / base < 0.005)) {
+    if (Math.max(...deltas) / base < 0.005) {
       r.frozen = 1;
-      errors.push("frozen: content-px deltas < 0.5% across 9 consecutive 200ms samples (static canvas?)");
+      errors.push(`frozen: max content-px delta ${Math.max(...deltas)} over ${n} loop-wide samples (static canvas?)`);
     }
   }
 
