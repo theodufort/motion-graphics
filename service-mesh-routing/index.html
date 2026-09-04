@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Service Mesh Routing</title>
 <link rel="stylesheet" href="../css/brand.css" />
 <link rel="stylesheet" href="../css/motion.css" />
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
-canvas{display:block;width:100%;height:100%}
+canvas#stage{display:block;width:100%;height:100%}
 </style>
 </head>
 <body>
@@ -19,393 +19,19 @@ canvas{display:block;width:100%;height:100%}
 "use strict";
 var canvas=document.getElementById("stage");
 var ctx=canvas.getContext("2d");
-var W=0,H=0,dpr=1;
-
 var LOOP=30000;
-var PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9],warn:[234,179,8]};
+var PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
 function rgba(c,a){return"rgba("+c[0]+","+c[1]+","+c[2]+","+a+")";}
-
 function lerp(a,b,t){return a+(b-a)*t;}
-function clamp01(v){return v<0?0:v>1?1:v;}
+function clamp01(v){return Math.max(0,Math.min(1,v));}
 function easeInOut(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
 function easeOut(t){return 1-(1-t)*(1-t);}
 
-function quad(a,c,b,t){
-  var u=1-t;
-  return{x:u*u*a.x+2*u*t*c.x+t*t*b.x, y:u*u*a.y+2*u*t*c.y+t*t*b.y};
-}
+var W,H,dpr;
+var nodes={};
+var paths={};
 
-function fadeEdge(t,start,end,fade){
-  if(t<start||t>=end)return 0;
-  var a=clamp01((t-start)/fade);
-  var b=clamp01((end-t)/fade);
-  return Math.min(a,b);
-}
-
-/* Layout */
-var nodes=[];
 function buildLayout(){
-  nodes=[
-    {x:W*0.10,y:H*0.50,label:"Client",r:Math.min(W,H)*0.035},
-    {x:W*0.35,y:H*0.50,label:"Gateway",r:Math.min(W,H)*0.04},
-    {x:W*0.72,y:H*0.20,label:"Service A",r:Math.min(W,H)*0.032},
-    {x:W*0.72,y:H*0.50,label:"Service B",r:Math.min(W,H)*0.032},
-    {x:W*0.72,y:H*0.80,label:"Service C",r:Math.min(W,H)*0.032}
-  ];
-}
-
-/* Bézier control points */
-function ctrl(i,j){
-  var a=nodes[i],b=nodes[j];
-  var mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
-  var dx=b.x-a.x,dy=b.y-a.y;
-  var len=Math.sqrt(dx*dx+dy*dy)||1;
-  var nx=-dy/len,ny=dx/len;
-  var off=len*0.15;
-  return{x:mx+nx*off,y:my+ny*off};
-}
-
-/* Packets: {start, dur, from, to, color} */
-var PACKETS=[
-  {s:500,d:900,f:0,t:1,c:"accent"},
-  {s:1600,d:900,f:1,t:2,c:"accent"},
-  {s:3600,d:800,f:2,t:1,c:"accent"},
-  {s:4500,d:700,f:1,t:0,c:"accent"},
-
-  {s:5500,d:900,f:0,t:1,c:"accent"},
-  {s:6600,d:900,f:1,t:3,c:"fail"},
-  {s:7700,d:900,f:1,t:3,c:"accent"},
-  {s:8800,d:800,f:3,t:1,c:"accent"},
-  {s:9700,d:700,f:1,t:0,c:"accent"},
-
-  {s:10500,d:900,f:0,t:1,c:"accent"},
-  {s:11600,d:900,f:1,t:4,c:"fail"},
-  {s:12700,d:900,f:1,t:4,c:"fail"},
-  {s:14200,d:700,f:1,t:0,c:"fail"},
-
-  {s:15500,d:700,f:0,t:1,c:"accent"},
-  {s:16400,d:600,f:1,t:0,c:"fail"},
-
-  {s:21000,d:900,f:1,t:4,c:"accent"},
-  {s:22500,d:800,f:4,t:1,c:"accent"},
-
-  {s:26000,d:900,f:0,t:1,c:"accent"},
-  {s:27100,d:900,f:1,t:2,c:"accent"},
-  {s:28500,d:700,f:2,t:1,c:"accent"},
-  {s:29300,d:600,f:1,t:0,c:"accent"}
-];
-
-/* Circuit breaker state: returns {color, label} */
-function breakerState(t){
-  if(t<13500)return{c:PAL.accent,label:"CLOSED"};
-  if(t<20000)return{c:PAL.fail,label:"OPEN"};
-  if(t<25000)return{c:PAL.warn,label:"HALF-OPEN"};
-  return{c:PAL.accent,label:"CLOSED"};
-}
-
-/* Success rate: 100% except during failures */
-function successRate(t){
-  if(t<6600)return 1.0;
-  if(t<7700)return 0.5;
-  if(t<11600)return 1.0;
-  if(t<12700)return 0.5;
-  if(t<14200)return 0.0;
-  if(t<20000)return 0.0;
-  if(t<22500)return 0.5;
-  return 1.0;
-}
-
-/* Retry count for Service B */
-function retryCount(t){
-  if(t<7700)return 0;
-  if(t<10000)return 1;
-  return 0;
-}
-
-/* Draw background grid */
-function drawBackground(t){
-  ctx.fillStyle=rgba(PAL.bg,1);
-  ctx.fillRect(0,0,W,H);
-  ctx.strokeStyle=rgba(PAL.text,0.03);
-  ctx.lineWidth=1;
-  var step=Math.max(40,W*0.04);
-  for(var x=0;x<W;x+=step){
-    ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();
-  }
-  for(var y=0;y<H;y+=step){
-    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
-  }
-}
-
-/* Draw connections (faint paths) */
-function drawConnections(t){
-  var pairs=[[0,1],[1,2],[1,3],[1,4]];
-  for(var i=0;i<pairs.length;i++){
-    var a=nodes[pairs[i][0]],b=nodes[pairs[i][1]];
-    var c=ctrl(pairs[i][0],pairs[i][1]);
-    ctx.beginPath();
-    ctx.moveTo(a.x,a.y);
-    ctx.quadraticCurveTo(c.x,c.y,b.x,b.y);
-    ctx.strokeStyle=rgba(PAL.muted,0.12);
-    ctx.lineWidth=1.5;
-    ctx.stroke();
-  }
-}
-
-/* Draw nodes */
-function drawNodes(t){
-  var pulse=Math.sin(t/400)*0.15+0.85;
-  for(var i=0;i<nodes.length;i++){
-    var n=nodes[i];
-    var r=n.r*pulse;
-    var isFail=false;
-    if(i===4&&t>=13500&&t<20000)isFail=true;
-    if(i===3&&t>=6600&&t<7700)isFail=true;
-    var col=isFail?PAL.fail:PAL.accent;
-
-    /* Glow */
-    var grd=ctx.createRadialGradient(n.x,n.y,r*0.3,n.x,n.y,r*2.5);
-    grd.addColorStop(0,rgba(col,0.25*pulse));
-    grd.addColorStop(1,rgba(col,0));
-    ctx.fillStyle=grd;
-    ctx.beginPath();ctx.arc(n.x,n.y,r*2.5,0,Math.PI*2);ctx.fill();
-
-    /* Circle */
-    ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);
-    ctx.fillStyle=rgba(PAL.bg,0.9);
-    ctx.fill();
-    ctx.strokeStyle=rgba(col,0.8*pulse);
-    ctx.lineWidth=2;
-    ctx.stroke();
-
-    /* Inner dot */
-    ctx.beginPath();ctx.arc(n.x,n.y,r*0.3,0,Math.PI*2);
-    ctx.fillStyle=rgba(col,0.9*pulse);
-    ctx.fill();
-
-    /* Label */
-    var ly=n.y+r+Math.min(W,H)*0.025;
-    ctx.font="600 "+Math.min(W,H)*0.022+"px system-ui,sans-serif";
-    ctx.textAlign="center";ctx.textBaseline="top";
-    ctx.fillStyle=rgba(PAL.text,0.9);
-    ctx.fillText(n.label,n.x,ly);
-  }
-}
-
-/* Draw packets */
-function drawPackets(t){
-  var dotR=Math.min(W,H)*0.008;
-  for(var i=0;i<PACKETS.length;i++){
-    var p=PACKETS[i];
-    if(t<p.s||t>=p.s+p.d)continue;
-    var prog=clamp01((t-p.s)/p.d);
-    var ep=easeInOut(prog);
-    var a=nodes[p.f],b=nodes[p.t];
-    var c=ctrl(p.f,p.t);
-    var pos=quad(a,c,b,ep);
-    var col=PAL[p.c];
-
-    /* Trail */
-    var trailLen=0.12;
-    for(var ti=5;ti>=1;ti--){
-      var tp=ep-trailLen*(ti/5);
-      if(tp<0)continue;
-      var tpos=quad(a,c,b,tp);
-      var ta=0.3*(1-ti/6);
-      ctx.beginPath();ctx.arc(tpos.x,tpos.y,dotR*(1-ti*0.1),0,Math.PI*2);
-      ctx.fillStyle=rgba(col,ta);
-      ctx.fill();
-    }
-
-    /* Dot */
-    var grd=ctx.createRadialGradient(pos.x,pos.y,0,pos.x,pos.y,dotR*3);
-    grd.addColorStop(0,rgba(col,0.9));
-    grd.addColorStop(1,rgba(col,0));
-    ctx.fillStyle=grd;
-    ctx.beginPath();ctx.arc(pos.x,pos.y,dotR*3,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.arc(pos.x,pos.y,dotR,0,Math.PI*2);
-    ctx.fillStyle=rgba(col,1);
-    ctx.fill();
-  }
-}
-
-/* Draw failure X marks */
-function drawFailMarks(t){
-  var marks=[
-    {x:0,y:0,t0:6600,dur:1200,node:3},
-    {x:0,y:0,t0:11600,dur:1200,node:4},
-    {x:0,y:0,t0:12700,dur:1200,node:4},
-    {x:0,y:0,t0:16400,dur:1000,node:1}
-  ];
-  var sz=Math.min(W,H)*0.02;
-  for(var i=0;i<marks.length;i++){
-    var m=marks[i];
-    if(t<m.t0||t>=m.t0+m.dur)continue;
-    var prog=clamp01((t-m.t0)/m.dur);
-    var alpha=prog<0.3?prog/0.3:1-(prog-0.3)/0.7;
-    var n=nodes[m.node];
-    var ox=n.x+n.r*1.5,oy=n.y-n.r*1.5;
-    ctx.strokeStyle=rgba(PAL.fail,alpha);
-    ctx.lineWidth=3;
-    ctx.beginPath();ctx.moveTo(ox-sz,oy-sz);ctx.lineTo(ox+sz,oy+sz);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(ox+sz,oy-sz);ctx.lineTo(ox-sz,oy+sz);ctx.stroke();
-  }
-}
-
-/* Draw circuit breaker badge */
-function drawBreaker(t){
-  var n=nodes[4];
-  var bs=breakerState(t);
-  var bx=n.x+n.r*2.2,by=n.y;
-  var bw=Math.min(W,H)*0.09,bh=Math.min(W,H)*0.028;
-
-  /* Transition fade: crossfade label */
-  var fadeDur=400;
-  var labelAlpha=1;
-  /* Detect state change boundaries */
-  var boundaries=[13500,20000,25000];
-  for(var i=0;i<boundaries.length;i++){
-    var bd=boundaries[i];
-    if(t>bd-fadeDur&&t<bd+fadeDur){
-      var d=Math.abs(t-bd)/fadeDur;
-      labelAlpha=1-d;
-    }
-  }
-
-  /* Pill background */
-  ctx.beginPath();
-  var rx=bx-bw/2,ry=by-bh/2;
-  var rr=bh/2;
-  ctx.moveTo(rx+rr,ry);
-  ctx.lineTo(rx+bw-rr,ry);
-  ctx.arcTo(rx+bw,ry,rx+bw,ry+rr,rr);
-  ctx.lineTo(rx+bw,ry+bh-rr);
-  ctx.arcTo(rx+bw,ry+bh,rx+bw-rr,ry+bh,rr);
-  ctx.lineTo(rx+rr,ry+bh);
-  ctx.arcTo(rx,ry+bh,rx,ry+bh-rr,rr);
-  ctx.lineTo(rx,ry+rr);
-  ctx.arcTo(rx,ry,rx+rr,ry,rr);
-  ctx.closePath();
-  ctx.fillStyle=rgba(bs.c,0.15);
-  ctx.fill();
-  ctx.strokeStyle=rgba(bs.c,0.7);
-  ctx.lineWidth=1.5;
-  ctx.stroke();
-
-  /* Label */
-  ctx.font="700 "+Math.min(W,H)*0.016+"px system-ui,sans-serif";
-  ctx.textAlign="center";ctx.textBaseline="middle";
-  ctx.fillStyle=rgba(bs.c,labelAlpha);
-  ctx.fillText(bs.label,bx,by);
-
-  /* Small "Circuit Breaker" sub-label */
-  ctx.font="400 "+Math.min(W,H)*0.012+"px system-ui,sans-serif";
-  ctx.fillStyle=rgba(PAL.muted,0.7);
-  ctx.fillText("Circuit Breaker",bx,by+bh*1.2);
-}
-
-/* Draw retry counter */
-function drawRetry(t){
-  var n=nodes[3];
-  var rc=retryCount(t);
-  if(rc===0)return;
-  var rx=n.x+n.r*2,ry=n.y-n.r*1.8;
-  var alpha=fadeEdge(t,7700,10000,300);
-  if(alpha<=0)return;
-  ctx.font="700 "+Math.min(W,H)*0.018+"px system-ui,sans-serif";
-  ctx.textAlign="center";ctx.textBaseline="middle";
-  ctx.fillStyle=rgba(PAL.accent,alpha);
-  ctx.fillText("Retry ×"+rc,rx,ry);
-}
-
-/* Draw success rate meter */
-function drawMeter(t){
-  var mx=W*0.35,my=H*0.93;
-  var mw=W*0.3,mh=Math.min(W,H)*0.018;
-  var rate=successRate(t);
-
-  /* Background */
-  ctx.fillStyle=rgba(PAL.muted,0.1);
-  ctx.beginPath();
-  ctx.roundRect(mx,my,mw,mh,mh/2);
-  ctx.fill();
-
-  /* Fill */
-  var fw=mw*rate;
-  if(fw>0){
-    var col=rate>0.7?PAL.accent:rate>0.3?PAL.warn:PAL.fail;
-    ctx.fillStyle=rgba(col,0.8);
-    ctx.beginPath();
-    ctx.roundRect(mx,my,fw,mh,mh/2);
-    ctx.fill();
-  }
-
-  /* Label */
-  ctx.font="500 "+Math.min(W,H)*0.014+"px system-ui,sans-serif";
-  ctx.textAlign="center";ctx.textBaseline="top";
-  ctx.fillStyle=rgba(PAL.muted,0.8);
-  ctx.fillText("Success Rate",mx+mw/2,my+mh+4);
-
-  /* Percentage */
-  var pct=Math.round(rate*100);
-  ctx.font="700 "+Math.min(W,H)*0.018+"px system-ui,sans-serif";
-  ctx.fillStyle=rgba(PAL.text,0.9);
-  ctx.fillText(pct+"%",mx+mw/2,my-mh*1.5);
-}
-
-/* Draw title */
-function drawTitle(t){
-  var alpha=0.9;
-  ctx.font="700 "+Math.min(W,H)*0.032+"px system-ui,sans-serif";
-  ctx.textAlign="center";ctx.textBaseline="top";
-  ctx.fillStyle=rgba(PAL.text,alpha);
-  ctx.fillText("Service Mesh Routing",W*0.5,H*0.04);
-
-  /* Subtitle rule line */
-  ctx.font="400 "+Math.min(W,H)*0.014+"px system-ui,sans-serif";
-  ctx.fillStyle=rgba(PAL.muted,0.6);
-  ctx.fillText("Retry ×2 → Circuit Breaker → Half-Open → Close",W*0.5,H*0.04+Math.min(W,H)*0.04);
-}
-
-/* Draw beat indicator dots */
-function drawBeats(t){
-  var beat=Math.floor(t/5000);
-  var cx=W*0.5,cy=H*0.97;
-  var gap=Math.min(W,H)*0.02;
-  for(var i=0;i<6;i++){
-    var active=i===beat;
-    var r=active?Math.min(W,H)*0.006:Math.min(W,H)*0.003;
-    ctx.beginPath();ctx.arc(cx+(i-2.5)*gap,cy,r,0,Math.PI*2);
-    ctx.fillStyle=active?rgba(PAL.accent,0.9):rgba(PAL.muted,0.3);
-    ctx.fill();
-  }
-}
-
-/* Main frame */
-let __seek=null;
-window.__time=function(v){__seek=v;};
-window.__loop=LOOP;
-
-function frame(now){
-  if(__seek!=null)now=__seek;
-  var t=now%LOOP;
-
-  ctx.clearRect(0,0,W,H);
-  drawBackground(t);
-  drawConnections(t);
-  drawNodes(t);
-  drawPackets(t);
-  drawFailMarks(t);
-  drawBreaker(t);
-  drawRetry(t);
-  drawMeter(t);
-  drawTitle(t);
-  drawBeats(t);
-
-  requestAnimationFrame(frame);
-}
-
-function resize(){
   dpr=window.devicePixelRatio||1;
   W=window.innerWidth;
   H=window.innerHeight;
@@ -414,6 +40,306 @@ function resize(){
   canvas.style.width=W+"px";
   canvas.style.height=H+"px";
   ctx.setTransform(dpr,0,0,dpr,0,0);
+  var s=Math.min(W,H);
+  var r=s*0.032;
+  nodes={
+    gw:{x:W*0.12,y:H*0.5,r:r,label:"Gateway"},
+    a:{x:W*0.38,y:H*0.26,r:r,label:"Service A"},
+    b:{x:W*0.38,y:H*0.74,r:r,label:"Service B"},
+    c:{x:W*0.72,y:H*0.5,r:r,label:"Service C"}
+  };
+  paths={
+    gwA:{a:nodes.gw,c:{x:(nodes.gw.x+nodes.a.x)/2,y:nodes.gw.y-H*0.12},b:nodes.a},
+    aB:{a:nodes.a,c:{x:nodes.a.x+W*0.06,y:(nodes.a.y+nodes.b.y)/2},b:nodes.b},
+    aC:{a:nodes.a,c:{x:(nodes.a.x+nodes.c.x)/2,y:nodes.a.y+H*0.08},b:nodes.c},
+    bC:{a:nodes.b,c:{x:(nodes.b.x+nodes.c.x)/2,y:nodes.b.y-H*0.08},b:nodes.c}
+  };
+}
+
+function quad(a,c,b,t){
+  var mt=1-t;
+  return{
+    x:mt*mt*a.x+2*mt*t*c.x+t*t*b.x,
+    y:mt*mt*a.y+2*mt*t*c.y+t*t*b.y
+  };
+}
+
+function drawGrid(t){
+  var step=Math.min(W,H)*0.06;
+  ctx.strokeStyle=rgba(PAL.text,0.03);
+  ctx.lineWidth=1;
+  ctx.beginPath();
+  for(var x=0;x<W;x+=step){ctx.moveTo(x,0);ctx.lineTo(x,H);}
+  for(var y=0;y<H;y+=step){ctx.moveTo(0,y);ctx.lineTo(W,y);}
+  ctx.stroke();
+}
+
+function drawPath(p,alpha,dashed){
+  if(alpha<=0)return;
+  ctx.save();
+  if(dashed)ctx.setLineDash([6,8]);
+  ctx.strokeStyle=rgba(PAL.muted,alpha*0.4);
+  ctx.lineWidth=1.5;
+  ctx.beginPath();
+  ctx.moveTo(p.a.x,p.a.y);
+  ctx.quadraticCurveTo(p.c.x,p.c.y,p.b.x,p.b.y);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawNode(n,color,alpha,pulse){
+  if(alpha<=0)return;
+  var r=n.r*(1+0.08*Math.sin(pulse));
+  var g=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,r*2.2);
+  g.addColorStop(0,rgba(color,alpha*0.3));
+  g.addColorStop(1,rgba(color,0));
+  ctx.fillStyle=g;
+  ctx.beginPath();
+  ctx.arc(n.x,n.y,r*2.2,0,Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle=rgba(color,alpha*0.9);
+  ctx.beginPath();
+  ctx.arc(n.x,n.y,r,0,Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle=rgba(PAL.bg,alpha*0.85);
+  ctx.beginPath();
+  ctx.arc(n.x,n.y,r*0.6,0,Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle=rgba(PAL.text,alpha);
+  ctx.font="bold "+Math.max(11,n.r*0.55)+"px system-ui,sans-serif";
+  ctx.textAlign="center";
+  ctx.textBaseline="top";
+  ctx.fillText(n.label,n.x,n.y+r+6);
+}
+
+function drawPacket(pos,color,alpha,trail){
+  if(alpha<=0)return;
+  if(trail){
+    var g=ctx.createRadialGradient(pos.x,pos.y,0,pos.x,pos.y,12);
+    g.addColorStop(0,rgba(color,alpha*0.6));
+    g.addColorStop(1,rgba(color,0));
+    ctx.fillStyle=g;
+    ctx.beginPath();
+    ctx.arc(pos.x,pos.y,12,0,Math.PI*2);
+    ctx.fill();
+  }
+  ctx.fillStyle=rgba(color,alpha);
+  ctx.beginPath();
+  ctx.arc(pos.x,pos.y,4,0,Math.PI*2);
+  ctx.fill();
+}
+
+function drawCircuitBreaker(t,alpha){
+  if(alpha<=0)return;
+  var mx=(nodes.a.x+nodes.b.x)/2+W*0.02;
+  var my=(nodes.a.y+nodes.b.y)/2;
+  var sz=Math.min(W,H)*0.025;
+  var beat=t/LOOP;
+  var openAmt=0;
+  if(beat>=0.5&&beat<0.733){
+    var ot=(beat-0.5)/0.233;
+    openAmt=easeInOut(clamp01(ot*3));
+  }else if(beat>=0.733&&beat<0.9){
+    var ht=(beat-0.733)/0.167;
+    openAmt=easeInOut(clamp01(1-ht*3));
+  }
+  var gap=sz*openAmt;
+  ctx.save();
+  ctx.strokeStyle=rgba(openAmt>0.3?PAL.fail:PAL.accent,alpha);
+  ctx.lineWidth=2.5;
+  ctx.lineCap="round";
+  ctx.beginPath();
+  ctx.arc(mx,my,sz,Math.PI*0.6,Math.PI*1.4,false);
+  ctx.stroke();
+  if(openAmt>0.1){
+    ctx.strokeStyle=rgba(PAL.fail,alpha*openAmt);
+    ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.moveTo(mx+sz*0.3,my-sz*0.8);
+    ctx.lineTo(mx+sz*0.5,my-sz*0.4);
+    ctx.lineTo(mx+sz*0.2,my-sz*0.2);
+    ctx.lineTo(mx+sz*0.4,my+sz*0.2);
+    ctx.stroke();
+  }
+  ctx.fillStyle=rgba(PAL.muted,alpha*0.7);
+  ctx.font=Math.max(9,sz*0.45)+"px system-ui,sans-serif";
+  ctx.textAlign="center";
+  ctx.textBaseline="bottom";
+  var state=openAmt>0.6?"OPEN":openAmt>0.1?"HALF":"CLOSED";
+  ctx.fillText(state,mx,my-sz-4);
+  ctx.restore();
+}
+
+function drawHUD(t){
+  var beat=t/LOOP;
+  var titleAlpha=1;
+  if(beat<0.05)titleAlpha=easeInOut(beat/0.05);
+  else if(beat>0.97)titleAlpha=easeInOut((1-beat)/0.03);
+  ctx.fillStyle=rgba(PAL.text,titleAlpha*0.95);
+  ctx.font="bold "+Math.min(W,H)*0.04+"px system-ui,sans-serif";
+  ctx.textAlign="center";
+  ctx.textBaseline="top";
+  ctx.fillText("Service Mesh Routing",W*0.5,H*0.06);
+
+  var status="",sColor=PAL.accent;
+  if(beat<0.333){status="All Healthy";sColor=PAL.accent;}
+  else if(beat<0.5){status="B Failing";sColor=PAL.fail;}
+  else if(beat<0.733){status="Circuit Open";sColor=PAL.fail;}
+  else if(beat<0.9){status="Half-Open";sColor=PAL.muted;}
+  else{status="Recovered";sColor=PAL.accent;}
+  ctx.fillStyle=rgba(sColor,titleAlpha*0.8);
+  ctx.font=Math.min(W,H)*0.022+"px system-ui,sans-serif";
+  ctx.fillText(status,W*0.5,H*0.11);
+
+  var reqCount=0;
+  if(beat>=0.133&&beat<0.333)reqCount=Math.floor((beat-0.133)/0.2*12);
+  else if(beat>=0.333&&beat<0.5)reqCount=12;
+  else if(beat>=0.5&&beat<0.733)reqCount=12+Math.floor((beat-0.5)/0.233*8);
+  else if(beat>=0.733&&beat<0.9)reqCount=20;
+  else if(beat>=0.9)reqCount=20+Math.floor((beat-0.9)/0.1*6);
+  ctx.fillStyle=rgba(PAL.muted,titleAlpha*0.7);
+  ctx.font=Math.min(W,H)*0.018+"px system-ui,sans-serif";
+  ctx.textAlign="left";
+  ctx.fillText("Requests: "+reqCount,W*0.04,H*0.92);
+
+  var retryLabel="";
+  if(beat>=0.333&&beat<0.5){
+    var rt=(beat-0.333)/0.167;
+    var rc=rt<0.33?1:rt<0.66?2:3;
+    retryLabel="Retries: "+rc+"/3";
+  }
+  if(retryLabel){
+    ctx.fillStyle=rgba(PAL.fail,titleAlpha*0.8);
+    ctx.font="bold "+Math.min(W,H)*0.02+"px system-ui,sans-serif";
+    ctx.textAlign="right";
+    ctx.fillText(retryLabel,W*0.96,H*0.92);
+  }
+}
+
+function getPackets(t){
+  var beat=t/LOOP;
+  var pkts=[];
+  if(beat>=0.133&&beat<0.333){
+    var bt=(beat-0.133)/0.2;
+    var cycle=0.33;
+    var ct=bt%cycle;
+    if(ct<0.3)pkts.push({path:"gwA",prog:ct/0.3,color:"accent"});
+    if(ct>=0.3&&ct<0.6)pkts.push({path:"aB",prog:(ct-0.3)/0.3,color:"accent"});
+    if(ct>=0.6&&ct<0.9)pkts.push({path:"bC",prog:(ct-0.6)/0.3,color:"accent"});
+  }
+  if(beat>=0.333&&beat<0.5){
+    var bt2=(beat-0.333)/0.167;
+    var aDur=0.33;
+    var at=bt2%aDur;
+    if(at<0.5)pkts.push({path:"aB",prog:at*2,color:"fail"});
+    else pkts.push({path:"aB",prog:1-(at-0.5)*2,color:"fail"});
+  }
+  if(beat>=0.5&&beat<0.733){
+    var bt3=(beat-0.5)/0.233;
+    var cycle3=0.35;
+    var ct3=bt3%cycle3;
+    if(ct3<0.3)pkts.push({path:"gwA",prog:ct3/0.3,color:"accent"});
+    if(ct3>=0.3&&ct3<0.65)pkts.push({path:"aC",prog:(ct3-0.3)/0.35,color:"accent"});
+  }
+  if(beat>=0.733&&beat<0.9){
+    var bt4=(beat-0.733)/0.167;
+    if(bt4>=0.2&&bt4<0.5)pkts.push({path:"aB",prog:(bt4-0.2)/0.3,color:"accent"});
+    if(bt4>=0.5&&bt4<0.8)pkts.push({path:"bC",prog:(bt4-0.5)/0.3,color:"accent"});
+  }
+  if(beat>=0.9){
+    var bt5=(beat-0.9)/0.1;
+    var cycle5=0.3;
+    var ct5=bt5%cycle5;
+    if(ct5<0.3)pkts.push({path:"gwA",prog:ct5/0.3,color:"accent"});
+    if(ct5>=0.3&&ct5<0.6)pkts.push({path:"aB",prog:(ct5-0.3)/0.3,color:"accent"});
+    if(ct5>=0.6&&ct5<0.9)pkts.push({path:"bC",prog:(ct5-0.6)/0.3,color:"accent"});
+  }
+  return pkts;
+}
+
+function getNodeColor(nodeName,beat){
+  if(nodeName==="b"){
+    if(beat>=0.333&&beat<0.733)return PAL.fail;
+    if(beat>=0.733&&beat<0.85)return PAL.muted;
+  }
+  return PAL.accent;
+}
+
+function getNodeAlpha(nodeName,beat){
+  if(beat<0.05)return easeInOut(beat/0.05);
+  if(beat>0.97)return easeInOut((1-beat)/0.03);
+  if(nodeName==="b"&&beat>=0.5&&beat<0.733)return 0.5;
+  return 1;
+}
+
+function drawBackground(t){
+  ctx.fillStyle=rgba(PAL.bg,1);
+  ctx.fillRect(0,0,W,H);
+  drawGrid(t);
+}
+
+function drawConnections(t){
+  var beat=t/LOOP;
+  var pathAlpha=1;
+  if(beat<0.05)pathAlpha=easeInOut(beat/0.05);
+  else if(beat>0.97)pathAlpha=easeInOut((1-beat)/0.03);
+  drawPath(paths.gwA,pathAlpha,false);
+  drawPath(paths.aB,pathAlpha,false);
+  drawPath(paths.bC,pathAlpha,false);
+  if(beat>=0.5&&beat<0.733){
+    var fa=1;
+    if(beat<0.53)fa=easeInOut((beat-0.5)/0.03);
+    else if(beat>0.7)fa=easeInOut((0.733-beat)/0.033);
+    drawPath(paths.aC,fa*pathAlpha,true);
+  }
+}
+
+function drawNodes(t){
+  var beat=t/LOOP;
+  var pulse=t/400;
+  var names=["gw","a","b","c"];
+  for(var i=0;i<names.length;i++){
+    var nm=names[i];
+    var n=nodes[nm];
+    var col=getNodeColor(nm,beat);
+    var al=getNodeAlpha(nm,beat);
+    drawNode(n,col,al,pulse+i*1.5);
+  }
+  drawCircuitBreaker(t,beat<0.05?easeInOut(beat/0.05):beat>0.97?easeInOut((1-beat)/0.03):1);
+}
+
+function drawEntities(t){
+  var pkts=getPackets(t);
+  for(var i=0;i<pkts.length;i++){
+    var p=pkts[i];
+    var path=paths[p.path];
+    var pos=quad(path.a,path.c,path.b,easeInOut(clamp01(p.prog)));
+    var col=p.color==="accent"?PAL.accent:PAL.fail;
+    drawPacket(pos,col,0.9,true);
+  }
+}
+
+function drawHud(t){
+  drawHUD(t);
+}
+
+var __seek=null;
+window.__time=function(v){__seek=v;};
+window.__loop=LOOP;
+
+function frame(now){
+  if(__seek!=null)now=__seek;
+  var t=now%LOOP;
+  ctx.clearRect(0,0,W,H);
+  drawBackground(t);
+  drawConnections(t);
+  drawNodes(t);
+  drawEntities(t);
+  drawHud(t);
+  requestAnimationFrame(frame);
+}
+
+function resize(){
   buildLayout();
 }
 

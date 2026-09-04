@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Service Mesh Circuit Breaker</title>
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
+canvas{display:block;width:100%;height:100%}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+(function(){
+"use strict";
+var canvas=document.getElementById("stage");
+var ctx=canvas.getContext("2d");
+var LOOP=30000;
+var PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+var AMBER=[255,200,50];
+function rgba(c,a){return"rgba("+c[0]+","+c[1]+","+c[2]+","+a+")";}
+var W,H,dpr,nodes={};
+function resize(){
+dpr=window.devicePixelRatio||1;
+W=window.innerWidth;H=window.innerHeight;
+canvas.width=W*dpr;canvas.height=H*dpr;
+canvas.style.width=W+"px";canvas.style.height=H+"px";
+ctx.setTransform(dpr,0,0,dpr,0,0);
+buildLayout();
+}
+function buildLayout(){
+nodes={
+gateway:{x:W*0.16,y:H*0.5,r:Math.min(W,H)*0.045,label:"Gateway"},
+svcA:{x:W*0.74,y:H*0.2,r:Math.min(W,H)*0.038,label:"Service A"},
+svcB:{x:W*0.74,y:H*0.5,r:Math.min(W,H)*0.038,label:"Service B"},
+svcC:{x:W*0.74,y:H*0.8,r:Math.min(W,H)*0.038,label:"Service C"}
+};
+}
+function lerp(a,b,t){return a+(b-a)*t;}
+function clamp01(v){return Math.max(0,Math.min(1,v));}
+function easeInOut(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
+function quad(a,c,b,t){
+var u=1-t;
+return{x:u*u*a.x+2*u*t*c.x+t*t*b.x,y:u*u*a.y+2*u*t*c.y+t*t*b.y};
+}
+function ctrl(from,to){return{x:(from.x+to.x)/2,y:(from.y+to.y)/2};}
+function beatAlpha(t,a,b,fade){
+var s=a*LOOP,e=b*LOOP;
+if(t<s||t>=e)return 0;
+return Math.min(clamp01((t-s)/fade),clamp01((e-t)/fade));
+}
+var packets=[
+{f:"gateway",t:"svcA",t0:1000,dur:2500,col:"accent",ok:true},
+{f:"gateway",t:"svcB",t0:5500,dur:2000,col:"fail",ok:false},
+{f:"gateway",t:"svcB",t0:7500,dur:2000,col:"accent",ok:true},
+{f:"gateway",t:"svcC",t0:10500,dur:1500,col:"fail",ok:false},
+{f:"gateway",t:"svcC",t0:12000,dur:1500,col:"fail",ok:false},
+{f:"gateway",t:"svcC",t0:13500,dur:1500,col:"fail",ok:false},
+{f:"gateway",t:"svcC",t0:15500,dur:600,col:"fail",ok:false,fast:true},
+{f:"gateway",t:"svcC",t0:17000,dur:600,col:"fail",ok:false,fast:true},
+{f:"gateway",t:"svcC",t0:20500,dur:2500,col:"muted",ok:true,probe:true},
+{f:"gateway",t:"svcC",t0:25500,dur:2000,col:"accent",ok:true},
+{f:"gateway",t:"svcA",t0:27500,dur:2000,col:"accent",ok:true}
+];
+function circuitState(t){
+if(t<14000)return"CLOSED";
+if(t<20000)return"OPEN";
+if(t<25000)return"HALF-OPEN";
+return"CLOSED";
+}
+function circuitColor(t){
+var s=circuitState(t);
+if(s==="CLOSED")return PAL.accent;
+if(s==="OPEN")return PAL.fail;
+return AMBER;
+}
+function drawBackground(t){
+ctx.fillStyle=rgba(PAL.bg,1);
+ctx.fillRect(0,0,W,H);
+ctx.strokeStyle="rgba(255,255,255,0.03)";
+ctx.lineWidth=1;
+var sp=W/24;
+var i;
+for(i=0;i<W;i+=sp){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,H);ctx.stroke();}
+for(i=0;i<H;i+=sp){ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(W,i);ctx.stroke();}
+}
+function drawConnections(t){
+var pairs=[["gateway","svcA"],["gateway","svcB"],["gateway","svcC"]];
+for(var i=0;i<pairs.length;i++){
+var a=nodes[pairs[i][0]],b=nodes[pairs[i][1]],c=ctrl(a,b);
+ctx.beginPath();
+ctx.moveTo(a.x,a.y);
+ctx.quadraticCurveTo(c.x,c.y,b.x,b.y);
+ctx.strokeStyle="rgba(255,255,255,0.06)";
+ctx.lineWidth=1.5;
+ctx.stroke();
+}
+}
+function drawNodes(t){
+var pulse=Math.sin(t/400)*0.12+1;
+var keys=["gateway","svcA","svcB","svcC"];
+for(var i=0;i<keys.length;i++){
+var n=nodes[keys[i]];
+var r=n.r*pulse;
+var gc=PAL.muted;
+if(keys[i]==="svcC"){gc=circuitColor(t);}
+var grad=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,r*2.8);
+grad.addColorStop(0,rgba(gc,0.12));
+grad.addColorStop(1,rgba(gc,0));
+ctx.fillStyle=grad;
+ctx.beginPath();ctx.arc(n.x,n.y,r*2.8,0,Math.PI*2);ctx.fill();
+ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);
+ctx.fillStyle=rgba(PAL.bg,0.92);ctx.fill();
+ctx.strokeStyle=rgba(gc,0.55);ctx.lineWidth=2;ctx.stroke();
+var fs=Math.max(11,W*0.011);
+ctx.font=fs+"px system-ui,sans-serif";
+ctx.fillStyle=rgba(PAL.text,0.85);
+ctx.textAlign="center";ctx.textBaseline="top";
+ctx.fillText(n.label,n.x,n.y+r+10);
+}
+}
+function drawPackets(t){
+var fs=Math.max(10,W*0.01);
+for(var i=0;i<packets.length;i++){
+var p=packets[i];
+var elapsed=t-p.t0;
+if(elapsed<0||elapsed>p.dur)continue;
+var prog=easeInOut(clamp01(elapsed/p.dur));
+var a=nodes[p.f],b=nodes[p.t],c=ctrl(a,b);
+var pos=quad(a,c,b,prog);
+var col=PAL[p.col]||PAL.muted;
+var trailN=6;
+for(var j=trailN;j>=1;j--){
+var tp=prog-j*0.03;
+if(tp<0)continue;
+var tpos=quad(a,c,b,easeInOut(tp));
+var ta=(1-j/trailN)*0.5;
+ctx.beginPath();ctx.arc(tpos.x,tpos.y,3*(1-j/trailN)+1,0,Math.PI*2);
+ctx.fillStyle=rgba(col,ta);ctx.fill();
+}
+ctx.beginPath();ctx.arc(pos.x,pos.y,5,0,Math.PI*2);
+ctx.fillStyle=rgba(col,0.9);ctx.fill();
+ctx.shadowColor=rgba(col,0.6);ctx.shadowBlur=12;
+ctx.beginPath();ctx.arc(pos.x,pos.y,5,0,Math.PI*2);ctx.fill();
+ctx.shadowBlur=0;
+if(!p.ok&&prog>0.85){
+var fa=clamp01((prog-0.85)/0.15);
+ctx.font="bold "+fs+"px system-ui,sans-serif";
+ctx.fillStyle=rgba(PAL.fail,fa);
+ctx.textAlign="center";ctx.textBaseline="bottom";
+ctx.fillText("FAIL",b.x,b.y-b.r-12);
+}
+if(p.ok&&prog>0.9){
+var sa=clamp01((prog-0.9)/0.1);
+ctx.font="bold "+fs+"px system-ui,sans-serif";
+ctx.fillStyle=rgba(PAL.accent,sa);
+ctx.textAlign="center";ctx.textBaseline="bottom";
+ctx.fillText("OK",b.x,b.y-b.r-12);
+}
+if(p.fast&&prog>0.5){
+var ba=clamp01((prog-0.5)/0.3);
+ctx.font=fs+"px system-ui,sans-serif";
+ctx.fillStyle=rgba(PAL.fail,ba*0.7);
+ctx.textAlign="center";ctx.textBaseline="top";
+ctx.fillText("circuit open",c.x,c.y+14);
+}
+}
+}
+function drawCircuitBadge(t){
+var n=nodes.svcC;
+var bx=(nodes.gateway.x+n.x)/2;
+var by=n.y-n.r-30;
+var cc=circuitColor(t);
+var pulse=Math.sin(t/350)*0.08+1;
+var br=14*pulse;
+ctx.beginPath();ctx.arc(bx,by,br,0,Math.PI*2);
+ctx.fillStyle=rgba(PAL.bg,0.9);ctx.fill();
+ctx.strokeStyle=rgba(cc,0.8);ctx.lineWidth=2.5;ctx.stroke();
+var grad=ctx.createRadialGradient(bx,by,0,bx,by,br*2);
+grad.addColorStop(0,rgba(cc,0.2));
+grad.addColorStop(1,rgba(cc,0));
+ctx.fillStyle=grad;
+ctx.beginPath();ctx.arc(bx,by,br*2,0,Math.PI*2);ctx.fill();
+var fs=Math.max(9,W*0.009);
+ctx.font="bold "+fs+"px system-ui,sans-serif";
+ctx.fillStyle=rgba(cc,0.9);
+ctx.textAlign="center";ctx.textBaseline="middle";
+ctx.fillText(circuitState(t),bx,by);
+}
+function drawHUD(t){
+var fs=Math.max(14,W*0.016);
+var sfs=Math.max(11,W*0.011);
+ctx.font="bold "+fs+"px system-ui,sans-serif";
+ctx.fillStyle=rgba(PAL.text,0.9);
+ctx.textAlign="center";ctx.textBaseline="top";
+ctx.fillText("Service Mesh Routing",W*0.5,H*0.04);
+var beats=[
+{a:0,b:1/6,label:"Route Request"},
+{a:1/6,b:2/6,label:"Retry on Failure"},
+{a:2/6,b:3/6,label:"Circuit Opens"},
+{a:3/6,b:4/6,label:"Fail Fast"},
+{a:4/6,b:5/6,label:"Half-Open Probe"},
+{a:5/6,b:1,label:"Circuit Closes"}
+];
+for(var i=0;i<beats.length;i++){
+var ba=beatAlpha(t,beats[i].a,beats[i].b,500);
+if(ba<=0)continue;
+ctx.font=sfs+"px system-ui,sans-serif";
+ctx.fillStyle=rgba(PAL.muted,ba*0.9);
+ctx.textAlign="center";ctx.textBaseline="top";
+ctx.fillText(beats[i].label,W*0.5,H*0.04+fs+8);
+}
+var rc=0;
+if(t>=5500&&t<7500)rc=1;
+if(t>=7500)rc=2;
+var ra=beatAlpha(t,1/6,2/6,400);
+if(ra>0){
+ctx.font=sfs+"px system-ui,sans-serif";
+ctx.fillStyle=rgba(PAL.muted,ra);
+ctx.textAlign="left";ctx.textBaseline="top";
+ctx.fillText("Retries: "+rc,W*0.04,H*0.92);
+}
+var mw=W*0.18,mh=6,mx=W*0.04,my=H*0.92+sfs+14;
+var fill=0;
+if(t>=10000&&t<14000)fill=clamp01((t-10000)/4000);
+else if(t>=14000&&t<20000)fill=1;
+else if(t>=20000&&t<25000)fill=lerp(1,0.3,clamp01((t-20000)/5000));
+else if(t>=25000)fill=lerp(0.3,0,clamp01((t-25000)/5000));
+var ma=beatAlpha(t,2/6,1,500);
+if(ma>0){
+ctx.fillStyle=rgba(PAL.muted,ma*0.5);
+ctx.fillRect(mx,my,mw,mh);
+ctx.fillStyle=rgba(PAL.fail,ma*0.8);
+ctx.fillRect(mx,my,mw*fill,mh);
+ctx.font=Math.max(9,W*0.008)+"px system-ui,sans-serif";
+ctx.fillStyle=rgba(PAL.muted,ma*0.7);
+ctx.textAlign="left";ctx.textBaseline="top";
+ctx.fillText("Failure Rate",mx,my+mh+4);
+}
+}
+let __seek=null;
+window.__time=function(v){__seek=v;};
+window.__loop=LOOP;
+function frame(now){
+if(__seek!=null)now=__seek;
+var t=now%LOOP;
+ctx.clearRect(0,0,W,H);
+drawBackground(t);
+drawConnections(t);
+drawNodes(t);
+drawPackets(t);
+drawCircuitBadge(t);
+drawHUD(t);
+requestAnimationFrame(frame);
+}
+resize();
+window.addEventListener("resize",resize);
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

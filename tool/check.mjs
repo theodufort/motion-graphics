@@ -100,6 +100,14 @@ for (const p of smoke) {
   }
 }
 
+// --- log iteration ------------------------------------------------------------
+import { appendFileSync } from "node:fs";
+try {
+  appendFileSync(path.join(root, "logs", "iterations.jsonl"),
+    JSON.stringify({ ts: new Date().toISOString(), kind: "check", score,
+      max: existingMax + smokeMax, failures: problems, fix: "check run" }) + "\n");
+} catch {}
+
 // --- verdict ------------------------------------------------------------------
 const existingPerfect = !graphics.some((n) => problems.some((p) => p.startsWith(`${n}:`)));
 const smokePerfect = smoke.length === 2 && !problems.some((p) => p.startsWith("smoke "));

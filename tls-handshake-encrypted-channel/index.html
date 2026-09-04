@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>TLS Handshake</title>
 <link rel="stylesheet" href="../css/brand.css" />
@@ -9,7 +9,7 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
-canvas#stage{display:block;width:100vw;height:100vh}
+canvas#stage{display:block;width:100%;height:100%}
 </style>
 </head>
 <body>
@@ -19,227 +19,358 @@ canvas#stage{display:block;width:100vw;height:100vh}
 "use strict";
 var canvas=document.getElementById("stage");
 var ctx=canvas.getContext("2d");
+var W=0,H=0,dpr=1;
+
 var LOOP=30000;
 var PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+
 function rgba(c,a){return"rgba("+c[0]+","+c[1]+","+c[2]+","+a+")";}
-var W=0,H=0,dpr=1;
-function resize(){
-dpr=window.devicePixelRatio||1;
-W=window.innerWidth;H=window.innerHeight;
-canvas.width=W*dpr;canvas.height=H*dpr;
-canvas.style.width=W+"px";canvas.style.height=H+"px";
-ctx.setTransform(dpr,0,0,dpr,0,0);
-}
+
 function lerp(a,b,t){return a+(b-a)*t;}
-function clamp01(v){return Math.max(0,Math.min(1,v));}
+function clamp01(v){return v<0?0:v>1?1:v;}
 function easeInOut(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
-function quad(a,c,b,t){
-var u=1-t;
-return{x:u*u*a.x+2*u*t*c.x+t*t*b.x,y:u*u*a.y+2*u*t*c.y+t*t*b.y};
-}
-var cPos,sPos,ctrl;
+function easeOut(t){return 1-(1-t)*(1-t);}
+
 function buildLayout(){
-cPos={x:W*0.2,y:H*0.5};
-sPos={x:W*0.8,y:H*0.5};
-ctrl={x:W*0.5,y:H*0.32};
+  var cx=W*0.22,cy=H*0.5;
+  var sx=W*0.78,sy=H*0.5;
+  var mx=W*0.5,my=H*0.38;
+  return{cx:cx,cy:cy,sx:sx,sy:sy,mx:mx,my:my};
 }
-function beatAlpha(t,start,end,fade){
-if(fade===undefined)fade=1200;
-if(t<start||t>=end)return 0;
-if(t<start+fade)return easeInOut((t-start)/fade);
-if(t>end-fade)return easeInOut((end-t)/fade);
-return 1;
+
+var L=null;
+
+function resize(){
+  dpr=window.devicePixelRatio||1;
+  W=window.innerWidth;
+  H=window.innerHeight;
+  canvas.width=W*dpr;
+  canvas.height=H*dpr;
+  canvas.style.width=W+"px";
+  canvas.style.height=H+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  L=buildLayout();
 }
-function drawBackground(t){
-ctx.fillStyle=rgba(PAL.bg,1);
-ctx.fillRect(0,0,W,H);
-ctx.strokeStyle="rgba(255,255,255,0.03)";
-ctx.lineWidth=1;
-var sp=W/24;
-var i;
-for(i=0;i<=W;i+=sp){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,H);ctx.stroke();}
-for(i=0;i<=H;i+=sp){ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(W,i);ctx.stroke();}
+
+function quad(a,c,b,t){
+  var x=(1-t)*(1-t)*a.x+2*(1-t)*t*c.x+t*t*b.x;
+  var y=(1-t)*(1-t)*a.y+2*(1-t)*t*c.y+t*t*b.y;
+  return{x:x,y:y};
 }
-function drawConnections(t){
-var ca=1;
-ctx.beginPath();
-ctx.moveTo(cPos.x,cPos.y);
-ctx.quadraticCurveTo(ctrl.x,ctrl.y,sPos.x,sPos.y);
-ctx.strokeStyle=rgba(PAL.muted,0.12*ca);
-ctx.lineWidth=1;
-ctx.stroke();
-var ta=beatAlpha(t,24000,29500,2000);
-if(ta>0){
-ctx.save();
-ctx.beginPath();
-ctx.moveTo(cPos.x,cPos.y);
-ctx.quadraticCurveTo(ctrl.x,ctrl.y,sPos.x,sPos.y);
-ctx.strokeStyle=rgba(PAL.accent,0.35*ta);
-ctx.lineWidth=10;
-ctx.shadowColor=rgba(PAL.accent,0.5);
-ctx.shadowBlur=25;
-ctx.stroke();
-ctx.shadowBlur=0;
-ctx.restore();
+
+function drawGrid(t){
+  var spacing=Math.max(40,W*0.04);
+  ctx.strokeStyle=rgba(PAL.text,0.03);
+  ctx.lineWidth=1;
+  var off=(t*0.01)%spacing;
+  for(var x=-spacing+off;x<W+spacing;x+=spacing){
+    ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();
+  }
+  for(var y=-spacing+off;y<H+spacing;y+=spacing){
+    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
+  }
 }
+
+function drawNode(x,y,r,label,sub,pulse,glowAlpha){
+  var p=1+Math.sin(pulse)*0.06;
+  var rr=r*p;
+  var g=ctx.createRadialGradient(x,y,rr*0.2,x,y,rr*2.5);
+  g.addColorStop(0,rgba(PAL.accent,glowAlpha*0.3));
+  g.addColorStop(1,rgba(PAL.accent,0));
+  ctx.fillStyle=g;
+  ctx.beginPath();ctx.arc(x,y,rr*2.5,0,Math.PI*2);ctx.fill();
+
+  ctx.fillStyle=rgba(PAL.accent,glowAlpha*0.15);
+  ctx.beginPath();ctx.arc(x,y,rr,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle=rgba(PAL.accent,glowAlpha*0.8);
+  ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(x,y,rr,0,Math.PI*2);ctx.stroke();
+
+  ctx.fillStyle=rgba(PAL.text,glowAlpha);
+  ctx.font="bold "+Math.round(W*0.018)+"px system-ui,sans-serif";
+  ctx.textAlign="center";ctx.textBaseline="top";
+  ctx.fillText(label,x,y+rr+12);
+
+  if(sub){
+    ctx.fillStyle=rgba(PAL.muted,glowAlpha*0.8);
+    ctx.font=Math.round(W*0.012)+"px system-ui,sans-serif";
+    ctx.fillText(sub,x,y+rr+12+Math.round(W*0.02));
+  }
 }
-function drawNodes(t){
-var pulse=1+Math.sin(t/400)*0.08;
-var nr=Math.min(W,H)*0.035;
-var na=1;
-var g=ctx.createRadialGradient(cPos.x,cPos.y,0,cPos.x,cPos.y,nr*2.8*pulse);
-g.addColorStop(0,rgba(PAL.accent,0.25*na));
-g.addColorStop(1,rgba(PAL.accent,0));
-ctx.fillStyle=g;
-ctx.beginPath();ctx.arc(cPos.x,cPos.y,nr*2.8*pulse,0,Math.PI*2);ctx.fill();
-ctx.fillStyle=rgba(PAL.accent,0.85*na);
-ctx.beginPath();ctx.arc(cPos.x,cPos.y,nr*pulse,0,Math.PI*2);ctx.fill();
-ctx.fillStyle=rgba(PAL.text,na);
-ctx.font="600 "+Math.min(W,H)*0.024+"px system-ui,sans-serif";
-ctx.textAlign="center";
-ctx.fillText("Client",cPos.x,cPos.y+nr*2.2+Math.min(W,H)*0.02);
-var sa=1;
-var g2=ctx.createRadialGradient(sPos.x,sPos.y,0,sPos.x,sPos.y,nr*2.8*pulse);
-g2.addColorStop(0,rgba(PAL.accent,0.25*sa));
-g2.addColorStop(1,rgba(PAL.accent,0));
-ctx.fillStyle=g2;
-ctx.beginPath();ctx.arc(sPos.x,sPos.y,nr*2.8*pulse,0,Math.PI*2);ctx.fill();
-ctx.fillStyle=rgba(PAL.accent,0.85*sa);
-ctx.beginPath();ctx.arc(sPos.x,sPos.y,nr*pulse,0,Math.PI*2);ctx.fill();
-ctx.fillStyle=rgba(PAL.text,sa);
-ctx.font="600 "+Math.min(W,H)*0.024+"px system-ui,sans-serif";
-ctx.textAlign="center";
-ctx.fillText("Server",sPos.x,sPos.y+nr*2.2+Math.min(W,H)*0.02);
+
+function drawPacket(x,y,r,color,alpha){
+  var g=ctx.createRadialGradient(x,y,0,x,y,r*3);
+  g.addColorStop(0,rgba(color,alpha));
+  g.addColorStop(0.5,rgba(color,alpha*0.4));
+  g.addColorStop(1,rgba(color,0));
+  ctx.fillStyle=g;
+  ctx.beginPath();ctx.arc(x,y,r*3,0,Math.PI*2);ctx.fill();
+
+  ctx.fillStyle=rgba(color,alpha);
+  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
 }
-function drawPacket(t,startT,dur,from,to,ctrlPt,r,color,label){
-var el=t-startT;
-if(el<0||el>dur)return;
-var p=easeInOut(el/dur);
-var pos=quad(from,ctrlPt,to,p);
-var i,tp,tpos,ta;
-for(i=5;i>=1;i--){
-tp=p-i*0.03;
-if(tp<0)continue;
-tpos=quad(from,ctrlPt,to,tp);
-ta=(1-i/6)*0.35;
-ctx.fillStyle=rgba(color,ta);
-ctx.beginPath();ctx.arc(tpos.x,tpos.y,r*(1-i*0.1),0,Math.PI*2);ctx.fill();
+
+function drawTrail(pts,color,alpha){
+  for(var i=0;i<pts.length;i++){
+    var a=alpha*(i/pts.length)*0.5;
+    ctx.fillStyle=rgba(color,a);
+    ctx.beginPath();ctx.arc(pts[i].x,pts[i].y,3,0,Math.PI*2);ctx.fill();
+  }
 }
-ctx.save();
-ctx.fillStyle=rgba(color,0.9);
-ctx.shadowColor=rgba(color,0.6);
-ctx.shadowBlur=12;
-ctx.beginPath();ctx.arc(pos.x,pos.y,r,0,Math.PI*2);ctx.fill();
-ctx.shadowBlur=0;
-ctx.restore();
-if(label){
-var la=Math.min(1,p*4)*Math.min(1,(1-p)*4);
-ctx.fillStyle=rgba(PAL.text,la*0.85);
-ctx.font="500 "+Math.min(W,H)*0.017+"px system-ui,sans-serif";
-ctx.textAlign="center";
-ctx.fillText(label,pos.x,pos.y-r*2.8);
+
+function drawConnection(t,channelActive){
+  var a={x:L.cx,y:L.cy};
+  var b={x:L.sx,y:L.sy};
+  var c={x:L.mx,y:L.my};
+  var col=channelActive?PAL.accent:PAL.muted;
+  var alpha=channelActive?0.6:0.25;
+
+  ctx.strokeStyle=rgba(col,alpha);
+  ctx.lineWidth=channelActive?2.5:1.5;
+  ctx.setLineDash(channelActive?[]:[8,6]);
+  ctx.beginPath();
+  ctx.moveTo(a.x,a.y);
+  ctx.quadraticCurveTo(c.x,c.y,b.x,b.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  if(channelActive){
+    var dashOff=(t*0.05)%20;
+    ctx.strokeStyle=rgba(PAL.accent,0.3);
+    ctx.lineWidth=1;
+    ctx.setLineDash([4,16]);
+    ctx.lineDashOffset=-dashOff;
+    ctx.beginPath();
+    ctx.moveTo(a.x,a.y);
+    ctx.quadraticCurveTo(c.x,c.y,b.x,b.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineDashOffset=0;
+  }
 }
+
+function drawLock(x,y,scale,alpha){
+  if(alpha<=0)return;
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.scale(scale,scale);
+  var s=W*0.015;
+  ctx.strokeStyle=rgba(PAL.accent,alpha);
+  ctx.lineWidth=2.5;
+  ctx.beginPath();
+  ctx.arc(0,-s*0.4,s*0.5,Math.PI,0);
+  ctx.stroke();
+  ctx.fillStyle=rgba(PAL.accent,alpha*0.9);
+  ctx.beginPath();
+  ctx.roundRect(-s*0.7,-s*0.1,s*1.4,s*1.1,s*0.15);
+  ctx.fill();
+  ctx.fillStyle=rgba(PAL.bg,alpha);
+  ctx.beginPath();ctx.arc(0,s*0.35,s*0.15,0,Math.PI*2);ctx.fill();
+  ctx.fillRect(-s*0.04,s*0.35,s*0.08,s*0.3);
+  ctx.restore();
 }
-function drawEntities(t){
-var pr=Math.min(W,H)*0.011;
-drawPacket(t,4000,3500,cPos,sPos,ctrl,pr,PAL.accent,"Client Hello");
-drawPacket(t,9000,3500,sPos,cPos,ctrl,pr,PAL.accent,"Server Hello");
-drawPacket(t,11000,3000,sPos,cPos,ctrl,pr*0.75,PAL.muted,"Certificate");
-drawPacket(t,14000,3000,cPos,sPos,ctrl,pr*0.9,PAL.accent,"Key Exchange");
-drawPacket(t,15500,3000,sPos,cPos,ctrl,pr*0.9,PAL.accent,"Key Exchange");
-drawPacket(t,19000,2500,cPos,sPos,ctrl,pr*0.7,PAL.accent,"Finished");
-drawPacket(t,20500,2500,sPos,cPos,ctrl,pr*0.7,PAL.accent,"Finished");
-var i;
-for(i=0;i<3;i++){
-drawPacket(t,24500+i*1300,2000,cPos,sPos,ctrl,pr*0.55,PAL.accent,null);
-drawPacket(t,25200+i*1300,2000,sPos,cPos,ctrl,pr*0.55,PAL.accent,null);
+
+function drawMeter(x,y,w,h,progress,label,alpha){
+  if(alpha<=0)return;
+  ctx.fillStyle=rgba(PAL.text,alpha*0.15);
+  ctx.beginPath();ctx.roundRect(x,y,w,h,h/2);ctx.fill();
+  ctx.strokeStyle=rgba(PAL.text,alpha*0.2);
+  ctx.lineWidth=1;
+  ctx.beginPath();ctx.roundRect(x,y,w,h,h/2);ctx.stroke();
+
+  var fw=w*clamp01(progress);
+  if(fw>1){
+    var g=ctx.createLinearGradient(x,0,x+fw,0);
+    g.addColorStop(0,rgba(PAL.accent,alpha*0.6));
+    g.addColorStop(1,rgba(PAL.accent,alpha));
+    ctx.fillStyle=g;
+    ctx.beginPath();ctx.roundRect(x,y,fw,h,h/2);ctx.fill();
+  }
+
+  ctx.fillStyle=rgba(PAL.text,alpha*0.7);
+  ctx.font=Math.round(W*0.011)+"px system-ui,sans-serif";
+  ctx.textAlign="left";ctx.textBaseline="bottom";
+  ctx.fillText(label,x,y-4);
 }
+
+function drawStepCounter(x,y,num,alpha){
+  if(alpha<=0)return;
+  ctx.fillStyle=rgba(PAL.accent,alpha*0.9);
+  ctx.font="bold "+Math.round(W*0.04)+"px system-ui,sans-serif";
+  ctx.textAlign="center";ctx.textBaseline="middle";
+  ctx.fillText(String(num),x,y);
+  ctx.fillStyle=rgba(PAL.muted,alpha*0.6);
+  ctx.font=Math.round(W*0.011)+"px system-ui,sans-serif";
+  ctx.textBaseline="top";
+  ctx.fillText("STEP",x,y+Math.round(W*0.025));
 }
-function drawLock(t){
-var la=beatAlpha(t,21000,29000,2000);
-if(la<=0)return;
-var cx=W*0.5,cy=H*0.32;
-var sz=Math.min(W,H)*0.02;
-var pulse=1+Math.sin(t/350)*0.06;
-ctx.save();
-ctx.globalAlpha=la;
-ctx.strokeStyle=rgba(PAL.accent,0.9);
-ctx.lineWidth=2.5;
-ctx.shadowColor=rgba(PAL.accent,0.5);
-ctx.shadowBlur=15;
-ctx.beginPath();
-ctx.arc(cx,cy-sz*0.4,sz*0.55*pulse,Math.PI,0);
-ctx.stroke();
-ctx.fillStyle=rgba(PAL.accent,0.85);
-var bw=sz*1.1,bh=sz*0.85;
-ctx.beginPath();
-ctx.roundRect(cx-bw/2,cy-sz*0.1,bw,bh,3);
-ctx.fill();
-ctx.shadowBlur=0;
-ctx.fillStyle=rgba(PAL.bg,0.9);
-ctx.beginPath();ctx.arc(cx,cy+bh*0.25,sz*0.15,0,Math.PI*2);ctx.fill();
-ctx.restore();
+
+function drawTitle(alpha){
+  if(alpha<=0)return;
+  ctx.fillStyle=rgba(PAL.text,alpha);
+  ctx.font="bold "+Math.round(W*0.028)+"px system-ui,sans-serif";
+  ctx.textAlign="center";ctx.textBaseline="top";
+  ctx.fillText("TLS Handshake",W*0.5,H*0.08);
+
+  ctx.fillStyle=rgba(PAL.muted,alpha*0.7);
+  ctx.font=Math.round(W*0.013)+"px system-ui,sans-serif";
+  ctx.fillText("Establishing Encrypted Channel",W*0.5,H*0.08+Math.round(W*0.035));
 }
-function drawHud(t){
-var ta=1;
-ctx.fillStyle=rgba(PAL.text,ta);
-ctx.font="700 "+Math.min(W,H)*0.038+"px system-ui,sans-serif";
-ctx.textAlign="center";
-ctx.fillText("TLS Handshake",W*0.5,H*0.1);
-var steps=["Hello","Cert","Keys","Lock","Secure"];
-var cs=0;
-if(t>=4000&&t<9000)cs=0;
-else if(t>=9000&&t<14000)cs=1;
-else if(t>=14000&&t<19000)cs=2;
-else if(t>=19000&&t<24000)cs=3;
-else if(t>=24000)cs=4;
-var sa=1;
-var sw=Math.min(W,H)*0.09;
-var sx=W*0.5-(steps.length-1)*sw/2;
-var i,x,active,done;
-for(i=0;i<steps.length;i++){
-x=sx+i*sw;
-active=i===cs;done=i<cs;
-var dr=Math.min(W,H)*(active?0.007*(1+Math.sin(t/300)*0.25):0.004);
-ctx.fillStyle=rgba(active||done?PAL.accent:PAL.muted,(active||done?0.8:0.25)*sa);
-ctx.beginPath();ctx.arc(x,H*0.88,dr,0,Math.PI*2);ctx.fill();
-ctx.fillStyle=rgba(active?PAL.text:PAL.muted,(active?0.9:0.45)*sa);
-ctx.font="500 "+Math.min(W,H)*0.013+"px system-ui,sans-serif";
-ctx.textAlign="center";
-ctx.fillText(steps[i],x,H*0.88+Math.min(W,H)*0.024);
+
+function drawPacketWithTrail(a,c,b,progress,color,alpha){
+  if(alpha<=0||progress<=0||progress>=1)return;
+  var pos=quad(a,c,b,easeInOut(progress));
+  var trail=[];
+  for(var i=1;i<=6;i++){
+    var tp=progress-i*0.02;
+    if(tp>0)trail.push(quad(a,c,b,easeInOut(tp)));
+  }
+  drawTrail(trail,color,alpha);
+  drawPacket(pos.x,pos.y,W*0.006,color,alpha);
 }
-for(i=0;i<steps.length-1;i++){
-var x1=sx+i*sw+Math.min(W,H)*0.008;
-var x2=sx+(i+1)*sw-Math.min(W,H)*0.008;
-var ld=i<cs;
-ctx.strokeStyle=rgba(ld?PAL.accent:PAL.muted,(ld?0.4:0.12)*sa);
-ctx.lineWidth=1;
-ctx.beginPath();ctx.moveTo(x1,H*0.88);ctx.lineTo(x2,H*0.88);ctx.stroke();
+
+function drawDataPacket(a,c,b,progress,color,alpha,dir){
+  if(alpha<=0||progress<=0||progress>=1)return;
+  var pa=dir>0?a:b;
+  var pb=dir>0?b:a;
+  var pos=quad(pa,c,pb,easeInOut(progress));
+  var trail=[];
+  for(var i=1;i<=4;i++){
+    var tp=progress-i*0.03;
+    if(tp>0)trail.push(quad(pa,c,pb,easeInOut(tp)));
+  }
+  drawTrail(trail,color,alpha*0.6);
+  drawPacket(pos.x,pos.y,W*0.004,color,alpha);
 }
-var pa=1;
-var bw2=W*0.3,bx=W*0.35,by=H*0.93,bh2=3;
-ctx.fillStyle=rgba(PAL.muted,0.15*pa);
-ctx.fillRect(bx,by,bw2,bh2);
-var prog=clamp01(t/LOOP);
-ctx.fillStyle=rgba(PAL.accent,0.6*pa);
-ctx.fillRect(bx,by,bw2*prog,bh2);
+
+function drawLabel(x,y,text,alpha){
+  if(alpha<=0)return;
+  ctx.fillStyle=rgba(PAL.text,alpha*0.85);
+  ctx.font=Math.round(W*0.013)+"px system-ui,sans-serif";
+  ctx.textAlign="center";ctx.textBaseline="middle";
+  ctx.fillText(text,x,y);
 }
-var __seek=null;
+
+let __seek=null;
 window.__time=function(v){__seek=v;};
 window.__loop=LOOP;
+
 function frame(now){
-if(__seek!==null)now=__seek;
-var t=now%LOOP;
-buildLayout();
-ctx.clearRect(0,0,W,H);
-drawBackground(t);
-drawConnections(t);
-drawNodes(t);
-drawEntities(t);
-drawLock(t);
-drawHud(t);
-requestAnimationFrame(frame);
+  if(__seek!=null)now=__seek;
+  var t=now%LOOP;
+  var beat=t/LOOP;
+
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle=rgba(PAL.bg,1);
+  ctx.fillRect(0,0,W,H);
+
+  drawGrid(t);
+
+  var fadeIn=clamp01(t/2500);
+  var fadeOut=1-clamp01((t-27500)/2500);
+  var sceneAlpha=Math.min(fadeIn,fadeOut);
+
+  var nodeR=Math.max(20,W*0.025);
+  var pulse=t/400;
+
+  var step=0;
+  var stepAlpha=0;
+  var meterProgress=0;
+  var channelActive=false;
+  var lockAlpha=0;
+  var lockScale=0;
+  var labelAlpha=0;
+  var labelText="";
+
+  if(t>=3000&&t<8000){
+    step=1;stepAlpha=1;meterProgress=0.25;
+    labelAlpha=1;labelText="Client Hello";
+  }else if(t>=8000&&t<13000){
+    step=2;stepAlpha=1;meterProgress=0.5;
+    labelAlpha=1;labelText="Server Hello + Cert";
+  }else if(t>=13000&&t<18000){
+    step=3;stepAlpha=1;meterProgress=0.75;
+    labelAlpha=1;labelText="Key Exchange";
+  }else if(t>=18000&&t<23000){
+    step=4;stepAlpha=1;meterProgress=1;
+    channelActive=true;
+    lockAlpha=easeOut(clamp01((t-19000)/1500));
+    lockScale=easeOut(clamp01((t-19000)/1500));
+    labelAlpha=1;labelText="Channel Secured";
+  }else if(t>=23000&&t<28000){
+    step=4;stepAlpha=1;meterProgress=1;
+    channelActive=true;
+    lockAlpha=1;lockScale=1;
+    labelAlpha=1;labelText="Encrypted Data Flow";
+  }
+
+  var nodeAlpha=sceneAlpha;
+  drawConnection(t,channelActive);
+
+  drawNode(L.cx,L.cy,nodeR,"Client","127.0.0.1:54321",pulse,nodeAlpha);
+  drawNode(L.sx,L.sy,nodeR,"Server","10.0.0.1:443",pulse+1.5,nodeAlpha);
+
+  var a={x:L.cx,y:L.cy};
+  var b={x:L.sx,y:L.sy};
+  var c={x:L.mx,y:L.my};
+
+  if(t>=3000&&t<8000){
+    var p1=clamp01((t-3000)/5000);
+    drawPacketWithTrail(a,c,b,p1,PAL.accent,sceneAlpha);
+  }
+  if(t>=8000&&t<13000){
+    var p2=clamp01((t-8000)/5000);
+    drawPacketWithTrail(b,c,a,p2,PAL.accent,sceneAlpha);
+  }
+  if(t>=13000&&t<15500){
+    var p3=clamp01((t-13000)/2500);
+    drawPacketWithTrail(a,c,b,p3,PAL.accent,sceneAlpha);
+  }
+  if(t>=15500&&t<18000){
+    var p4=clamp01((t-15500)/2500);
+    drawPacketWithTrail(b,c,a,p4,PAL.accent,sceneAlpha);
+  }
+  if(t>=18000&&t<21000){
+    var p5=clamp01((t-18000)/3000);
+    drawPacketWithTrail(a,c,b,p5,PAL.accent,sceneAlpha);
+  }
+
+  if(t>=23000&&t<28000){
+    var flowT=t-23000;
+    for(var i=0;i<3;i++){
+      var offset=i*0.33;
+      var prog=((flowT/2000)+offset)%1;
+      drawDataPacket(a,c,b,prog,PAL.accent,sceneAlpha*0.7,1);
+      drawDataPacket(b,c,a,prog,PAL.accent,sceneAlpha*0.7,-1);
+    }
+  }
+
+  if(stepAlpha>0){
+    drawStepCounter(W*0.5,H*0.72,step,stepAlpha*sceneAlpha);
+  }
+
+  var meterW=W*0.3;
+  var meterX=W*0.5-meterW/2;
+  drawMeter(meterX,H*0.82,meterW,Math.max(6,H*0.012),meterProgress,"Handshake Progress",sceneAlpha);
+
+  if(lockAlpha>0){
+    drawLock(W*0.5,H*0.42,lockScale,lockAlpha*sceneAlpha);
+  }
+
+  if(labelAlpha>0){
+    drawLabel(W*0.5,H*0.92,labelText,labelAlpha*sceneAlpha);
+  }
+
+  drawTitle(sceneAlpha);
+
+  if(t<3000){
+    var introA=clamp01(t/1500);
+    drawLabel(W*0.5,H*0.6,"Initializing…",introA*sceneAlpha);
+  }
+
+  requestAnimationFrame(frame);
 }
+
 resize();
 window.addEventListener("resize",resize);
 requestAnimationFrame(frame);

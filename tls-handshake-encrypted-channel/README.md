@@ -1,22 +1,26 @@
 # TLS Handshake Encrypted Channel
-Visualizes the four-phase TLS handshake (hello, certificate, key exchange, finished) culminating in a glowing encrypted channel with bidirectional data flow.
+Visualizes the four-step TLS 1.3 handshake from Client Hello to encrypted data flow, showing how a secure channel is established between two endpoints.
 ## Story beats
 | Time (s) | Beat | What's on screen |
 | -------- | ---- | ---------------- |
-| 0–4      | Idle | Title, nodes, step dots visible; no traffic |
-| 4–7.5    | Hello | Client Hello packet travels left→right |
-| 9–14     | Cert | Server Hello + Certificate packets travel right→left |
-| 14–19    | Keys | Key Exchange packets travel both directions |
-| 19–24    | Lock | Finished packets; padlock fades in at midpoint |
-| 24–30    | Secure | Encrypted channel glow; bidirectional data packets |
+| 0–3 | Intro | Title fades in, client & server nodes materialize with pulse |
+| 3–8 | Client Hello | Packet travels left→right along Bézier arc, step counter ticks to 1 |
+| 8–13 | Server Hello + Cert | Packet travels right→left, certificate badge appears on server |
+| 13–18 | Key Exchange | Two sequential packets (Key Share L→R, Finished R→L), step 3 |
+| 18–23 | Channel Lock | Client Finished L→R, padlock icon scales in, channel line turns accent |
+| 23–28 | Encrypted Flow | Bidirectional data packets stream, meters fill, "Secured" label |
+| 28–30 | Fade Out | All elements fade to black, seamless wrap into next loop |
 Loop length: 30s.
 ## Key elements
-- Client / Server nodes: accent green, pulsing
-- Packets: accent (handshake), muted (certificate), with Bézier trails
-- Padlock: accent, appears at "Lock" beat
-- Encrypted channel: accent glow line, appears at "Secure" beat
-- Step dots: muted → accent as each phase completes
+- Client node: left circle, accent pulse, label "Client"
+- Server node: right circle, accent pulse, label "Server"
+- Handshake packets: small glowing dots with fading trails along quadratic Bézier
+- Padlock icon: scales in at channel-lock beat, accent color
+- Progress meter: horizontal bar fills 0→100% across handshake steps
+- Step counter: large number ticks 1→4 during handshake
+- Data packets: bidirectional streams in encrypted-flow beat
 ## Notes
-- Title, node labels, step dots, and progress bar remain at full opacity across the entire loop to prevent label-density collapse at the seam.
-- Only transient elements (packets, lock, glow) fade in/out per beat.
-- All positions derived from W/H; DPI-aware via setTransform.
+- All packet positions are pure functions of t (no persistent state), guaranteeing a seamless loop
+- The channel line transitions from muted to accent color at the lock beat with a crossfade
+- Grid background uses rgba(255,255,255,0.03) for subtle depth
+- DPI-aware via setTransform(dpr,0,0,dpr,0,0) on every resize
