@@ -54,3 +54,10 @@
 - [x] tool/generate.mjs: prompt rule 16 (label fit via measureText);
   acceptance met: mvcc-snapshot-reads, load-balancer-health-checks,
   tcp-congestion-control all pass 5/5, 0 collision findings, 0 fix passes.
+- [ ] tool/validate.mjs: min-area sanity check — reject graphics whose
+  densest frame has < 500 content px (blank-but-quiet bug);
+  acceptance: synthetic blank-canvas fixture fails clean or a new
+  "content" bit, real graphics unaffected.
+- [ ] README.md: document MG_CONCURRENCY, MG_LLM_MODEL, MG_FIX_PASSES,
+  MG_TIMEOUT_MS env vars in the tooling section;
+  acceptance: all four vars named with defaults in README.
