@@ -32,3 +32,12 @@
   generation. Re-runs of a known prompt with `--force`/`--regen` are
   expected to be somewhat slower (full LLM call) because the fast
   guard is intentionally bypassed.
+
+## Duplicate bench output consolidation (2026-09-04)
+
+- `event-loop-timers-io-microtasks/` and `service-mesh-circuit-breaker/`
+  were deleted: earlier bench runs (before the slug map existed) let the
+  LLM pick different slugs for the same prompts; logs/slug-map.jsonl
+  owns `js-event-loop` and `service-mesh-routing` as canonical.
+- `connection-pool-reuse/` (first tool generation, no map prompt
+  recorded) is kept as-is.
