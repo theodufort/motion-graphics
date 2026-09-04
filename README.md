@@ -39,6 +39,17 @@ forces fresh generation, `./check.sh --skip-gen` skips it entirely.
 `generate.sh` refuses to overwrite an existing topic folder unless
 `--force` is passed.
 
+### Environment knobs
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `MG_LLM_BASE` | `http://127.0.0.1:8123` | llama.cpp OpenAI-compatible endpoint |
+| `MG_LLM_MODEL` | `Qwen3.8-27b-coding` | model name for chat completions |
+| `MG_FIX_PASSES` | `3` | max LLM fix passes after a failed validation |
+| `MG_TIMEOUT_MS` | `900000` | per-LLM-call timeout (15 min) |
+| `MG_CONCURRENCY` | `4` | parallel validators in `check.mjs` |
+| `MG_ALLOW_EXISTING` | unset | `1` lets `generate`/`bench`/`check` refresh existing generated folders (set automatically by bench/check; manual `generate.sh` stays protected) |
+
 ### The vision pass
 
 Deterministic probes (JS errors, `fillText` collision rects, seam pixel

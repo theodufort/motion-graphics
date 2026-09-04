@@ -52,6 +52,6 @@
   tcp-congestion-control all pass 5/5, 0 collision findings, 0 fix passes.
 - [x] tool/validate.mjs: min-area sanity ("content" bit, densest frame
   >= 500 px); acceptance met: fixtures/blank-canvas fails content:0,
-  all 26 real graphics pass (910/910).- [ ] README.md: document MG_CONCURRENCY, MG_LLM_MODEL, MG_FIX_PASSES,
-  MG_TIMEOUT_MS env vars in the tooling section;
-  acceptance: all four vars named with defaults in README.
+  all 26 real graphics pass (910/910).- [x] README.md: Environment knobs table (MG_LLM_BASE, MG_LLM_MODEL,
+  MG_FIX_PASSES, MG_TIMEOUT_MS, MG_CONCURRENCY, MG_ALLOW_EXISTING) with
+  defaults; acceptance met.
