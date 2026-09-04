@@ -137,7 +137,12 @@ try {
 // --- verdict ------------------------------------------------------------------
 const existingPerfect = !graphics.some((n) => problems.some((p) => p.startsWith(`${n}:`)));
 const smokePerfect = skipGen || (smoke.length === 2 && !problems.some((p) => p.startsWith("smoke ")));
-console.log(`graphics: ${graphics.length}${skipGen ? "  [skip-gen]" : ""}${regen ? "  [regen]" : ""}  score: ${score}/${existingMax + smokeMax}`);
-for (const p of problems) console.log(`  ✗ ${p}`);
-console.log(`SCORE: ${score}`);
+const asJson = process.argv.includes("--json");
+if (asJson) {
+  console.log(JSON.stringify({ ts: new Date().toISOString(), score, max: existingMax + smokeMax, graphics: graphics.length, problems }));
+} else {
+  console.log(`graphics: ${graphics.length}${skipGen ? "  [skip-gen]" : ""}${regen ? "  [regen]" : ""}  score: ${score}/${existingMax + smokeMax}`);
+  for (const p of problems) console.log(`  ✗ ${p}`);
+  console.log(`SCORE: ${score}`);
+}
 process.exit(existingPerfect && smokePerfect ? 0 : 1);
