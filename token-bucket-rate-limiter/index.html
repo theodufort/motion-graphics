@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
+canvas{display:block;width:100%;height:100%}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+const LOOP=20000;
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+const lerp=(a,b,t)=>a+(b-a)*t;
+const clamp01=v=>Math.max(0,Math.min(1,v));
+const ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
+const quad=(a,c,b,t)=>({x:lerp(lerp(a.x,c.x,t),lerp(c.x,b.x,t),t),y:lerp(lerp(a.y,c.y,t),lerp(c.y,b.y,t),t)});
+let W,H,dpr,bucket,srcN,outN,refN;
+function buildLayout(){
+  dpr=window.devicePixelRatio||1;W=window.innerWidth;H=window.innerHeight;
+  cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
+  bucket={x:W*.5,y:H*.45,w:W*.12,h:H*.3};
+  srcN={x:W*.15,y:H*.45};outN={x:W*.85,y:H*.45};refN={x:W*.5,y:H*.12};
+}
+let __seek=null;
+window.__time=(v)=>{__seek=v};
+window.__loop=LOOP;
+function tokenCount(b){
+  if(b<.25)return lerp(5,10,ease(b/.25));
+  if(b<.5)return lerp(10,4,ease((b-.25)/.25));
+  if(b<.75)return lerp(4,0,ease((b-.5)/.25));
+  return lerp(0,5,ease((b-.75)/.25));
+}
+function drawBg(){
+  ctx.fillStyle=rgba(PAL.bg,1);ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;
+  const gs=W/20;
+  for(let x=0;x<W;x+=gs){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+  for(let y=0;y<H;y+=gs){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+}
+function drawConns(t){
+  ctx.strokeStyle=rgba(PAL.accent,.15);ctx.lineWidth=1;ctx.setLineDash([4,4]);
+  ctx.beginPath();ctx.moveTo(refN.x,refN.y+14);ctx.quadraticCurveTo(refN.x,bucket.y-bucket.h/2-20,bucket.x,bucket.y-bucket.h/2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(srcN.x+14,srcN.y);ctx.quadraticCurveTo((srcN.x+bucket.x)/2,srcN.y-30,bucket.x-bucket.w/2,bucket.y);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(bucket.x+bucket.w/2,bucket.y);ctx.quadraticCurveTo((bucket.x+outN.x)/2,bucket.y-30,outN.x-14,outN.y);ctx.stroke();
+  ctx.setLineDash([]);
+}
+function drawBucket(t){
+  const tc=tokenCount(t/LOOP),fill=tc/10,{x,y,w,h}=bucket;
+  const pulse=1+Math.sin(t/400)*.02,bw=w*pulse;
+  ctx.strokeStyle=rgba(PAL.accent,.6);ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(x-bw/2,y-h/2);ctx.lineTo(x-bw/2,y+h/2);ctx.lineTo(x+bw/2,y+h/2);ctx.lineTo(x+bw/2,y-h/2);ctx.stroke();
+  const fh=h*fill;
+  if(fh>1){const g=ctx.createLinearGradient(0,y+h/2-fh,0,y+h/2);g.addColorStop(0,rgba(PAL.accent,.3));g.addColorStop(1,rgba(PAL.accent,.08));ctx.fillStyle=g;ctx.fillRect(x-bw/2+2,y+h/2-fh,bw-4,fh)}
+  const n=Math.floor(tc);
+  for(let i=0;i<n;i++){const ty=y+h/2-12-i*(h/10),tx=x+Math.sin(t/300+i*1.5)*bw*.15;ctx.beginPath();ctx.arc(tx,ty,5,0,Math.PI*2);ctx.fillStyle=rgba(PAL.accent,.8);ctx.fill()}
+}
+function drawNodes(t){
+  const nodes=[{p:srcN,l:'Requests',c:PAL.text},{p:refN,l:'Refill',c:PAL.accent},{p:outN,l:'Allowed',c:PAL.accent}];
+  nodes.forEach(n=>{
+    const r=14*(1+Math.sin(t/400)*.08);
+    ctx.beginPath();ctx.arc(n.p.x,n.p.y,r,0,Math.PI*2);ctx.fillStyle=rgba(n.c,.12);ctx.fill();ctx.strokeStyle=rgba(n.c,.6);ctx.lineWidth=1.5;ctx.stroke();
+    ctx.fillStyle=rgba(n.c,.9);ctx.font=`${Math.round(W*.012)}px monospace`;ctx.textAlign='center';ctx.fillText(n.l,n.p.x,n.p.y+32);
+  });
+}
+function drawPackets(t){
+  const b=t/LOOP;
+  if(b<.25||b>=.75){
+    const rb=b<.25?b/.25:(b-.75)/.25;
+    for(let i=0;i<3;i++){const pt=(rb+i/3)%1;const pos=quad(refN,{x:refN.x,y:(refN.y+bucket.y-bucket.h/2)/2},{x:bucket.x,y:bucket.y-bucket.h/2},ease(pt));ctx.beginPath();ctx.arc(pos.x,pos.y,4,0,Math.PI*2);ctx.fillStyle=rgba(PAL.accent,.9*(1-pt*.4));ctx.fill()}
+  }
+  if(b>=.25&&b<.5){
+    const cb=(b-.25)/.25;
+    for(let i=0;i<3;i++){const pt=(cb+i/3)%1;const pos=quad(srcN,{x:(srcN.x+bucket.x)/2,y:srcN.y-30},{x:bucket.x-bucket.w/2,y:bucket.y},ease(pt));ctx.beginPath();ctx.arc(pos.x,pos.y,5,0,Math.PI*2);ctx.fillStyle=rgba(PAL.text,.9*(1-pt*.3));ctx.fill()}
+  }
+  if(b>=.5&&b<.75){
+    const bb=(b-.5)/.25;
+    for(let i=0;i<5;i++){const pt=(bb+i/5)%1;const pos=quad(srcN,{x:(srcN.x+bucket.x)/2,y:srcN.y-30},{x:bucket.x-bucket.w/2,y:bucket.y},ease(pt));const rej=bb>.6&&i>=3;ctx.beginPath();ctx.arc(pos.x,pos.y,5,0,Math.PI*2);ctx.fillStyle=rgba(rej?PAL.fail:PAL.text,.9*(1-pt*.3));ctx.fill()}
+  }
+  if(b>=.25&&b<.5){
+    const ob=(b-.25)/.25;
+    for(let i=0;i<2;i++){const pt=(ob+i/2)%1;const pos=quad({x:bucket.x+bucket.w/2,y:bucket.y},{x:(bucket.x+outN.x)/2,y:bucket.y-30},outN,ease(pt));ctx.beginPath();ctx.arc(pos.x,pos.y,5,0,Math.PI*2);ctx.fillStyle=rgba(PAL.accent,.9*(1-pt*.3));ctx.fill()}
+  }
+}
+function drawHud(t){
+  const b=t/LOOP,tc=Math.round(tokenCount(b));
+  ctx.fillStyle=rgba(PAL.text,.9);ctx.font=`bold ${Math.round(W*.02)}px monospace`;ctx.textAlign='center';
+  ctx.fillText(`tokens: ${tc}`,bucket.x,bucket.y+bucket.h/2+30);
+  const mw=W*.2,mh=6,mx=bucket.x-mw/2,my=bucket.y+bucket.h/2+45;
+  ctx.fillStyle=rgba(PAL.muted,.2);ctx.fillRect(mx,my,mw,mh);
+  ctx.fillStyle=rgba(tc>2?PAL.accent:PAL.fail,.8);ctx.fillRect(mx,my,mw*(tc/10),mh);
+  const labels=[
+    {txt:'Refill',c:PAL.accent,a:b<.25?clamp01((.25-b)/.05):b>=.75?clamp01((b-.75)/.05):0},
+    {txt:'Consume',c:PAL.text,a:b>=.25&&b<.5?clamp01(Math.min((b-.25)/.05,(.5-b)/.05)):0},
+    {txt:'Burst',c:PAL.fail,a:b>=.5&&b<.75?clamp01(Math.min((b-.5)/.05,(.75-b)/.05)):0}
+  ];
+  labels.forEach(l=>{if(l.a>0){ctx.fillStyle=rgba(l.c,l.a*.85);ctx.font=`${Math.round(W*.014)}px monospace`;ctx.fillText(l.txt,bucket.x,H*.85)}});
+}
+function frame(now){
+  if(__seek!=null)now=__seek;
+  const t=now%LOOP;
+  ctx.clearRect(0,0,W,H);
+  drawBg();drawConns(t);drawBucket(t);drawNodes(t);drawPackets(t);drawHud(t);
+  requestAnimationFrame(frame);
+}
+buildLayout();
+window.addEventListener('resize',buildLayout);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

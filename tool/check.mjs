@@ -28,6 +28,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 let score = 0;
 let existingMax = 0;
 let smokeMax = 110;
+const skipGen = process.argv.includes("--skip-gen");
+if (skipGen) smokeMax = 0;
 const problems = [];
 
 // --- locate validator -------------------------------------------------------
@@ -62,6 +64,7 @@ for (const name of graphics) {
 }
 
 // --- smoke generation ---------------------------------------------------------
+if (skipGen) problems.push("skip-gen: smoke generation skipped (passing only if graphics all pass)");
 const benchPath = path.join(root, "tool", "bench", "prompts.jsonl");
 let smoke = [];
 if (existsSync(benchPath)) {
@@ -79,7 +82,7 @@ for (let i = 0; i < 2 - smoke.length; i++) {
   problems.push(`smoke slot ${i + 1}: no smoke:true prompt available`);
 }
 
-for (const p of smoke) {
+for (const p of (skipGen ? [] : smoke)) {
   const res = spawnSync("node", [path.join(root, "tool", "generate.mjs"), p.prompt], {
     cwd: root, encoding: "utf8", timeout: 10 * 60 * 1000,
   });
@@ -110,8 +113,8 @@ try {
 
 // --- verdict ------------------------------------------------------------------
 const existingPerfect = !graphics.some((n) => problems.some((p) => p.startsWith(`${n}:`)));
-const smokePerfect = smoke.length === 2 && !problems.some((p) => p.startsWith("smoke "));
-console.log(`graphics: ${graphics.length}  score: ${score}/${existingMax + smokeMax}`);
+const smokePerfect = skipGen || (smoke.length === 2 && !problems.some((p) => p.startsWith("smoke ")));
+console.log(`graphics: ${graphics.length}${skipGen ? "  [skip-gen]" : ""}  score: ${score}/${existingMax + smokeMax}`);
 for (const p of problems) console.log(`  ✗ ${p}`);
 console.log(`SCORE: ${score}`);
 process.exit(existingPerfect && smokePerfect ? 0 : 1);

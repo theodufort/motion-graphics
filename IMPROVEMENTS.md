@@ -7,9 +7,11 @@
 - [x] tool/check.mjs: append `{ts, score, failures, seconds}` to
   logs/iterations.jsonl on every check run;
   acceptance: file gains one line per `./check.sh` run.
-- [ ] tool/generate.mjs: cut wall time — instruct terser HTML in the system
-  prompt (~120-160 lines target) and lower max_tokens;
-  acceptance: a smoke prompt generates + passes in ≤ 150s.
+- [x] tool/generate.mjs: terser data-driven HTML (rule 15);
+  acceptance met: token-bucket-rate-limiter generated 117-line file (vs
+  380-400 before), passed 5/5. Wall time is LLM-bound (~19 tok/s output,
+  250-400s); reasoning_effort API param has no effect. Line count is the
+  only controllable lever — treat ~150 lines as the quality target.
 - [x] tool/validate.mjs: seam check currently uses label-density only; add a
   pixel-brightness cross-check (mean content-pixel luminance at seam vs
   mid-loop) and a synthetic dark-seam fixture under tool/fixtures/;
@@ -24,3 +26,10 @@
   folder (refuse or require --force) so bench runs never clobber the
   curated 9; acceptance: second run with same slug exits 2 without
   overwriting (unless --force).
+
+- [ ] tool/check.mjs + check.sh: add --skip-gen flag (validate all existing
+  folders, no LLM calls); acceptance: `./check.sh --skip-gen` finishes in
+  < 120s and prints the same SCORE format.
+- [ ] tool/validate.mjs: validate multiple folders concurrently (two
+  chromium instances); acceptance: all 10+ graphics validate in < 90s
+  total via check.mjs --skip-gen.
