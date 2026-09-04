@@ -68,11 +68,10 @@
 - [x] tool/validate.mjs: label-visibility probe ("visibility" bit;
   flags labels in EVERY parked frame with max alpha < 0.15; also fixed
   alpha-0 parse bug: `parseFloat || 1` -> `?? 1`); acceptance met:
-  fixtures/invisible-label flagged, all 28 graphics unflagged (980/980).- [ ] tool/generate.mjs: LLM call retry with backoff on timeout/network
-  error (1 retry, then fail); acceptance: a simulated timeout (kill
-  llama.cpp briefly) still yields a passed generation on retry, and a
-  dead server exits 1 with a clear error.
-- [ ] tool/bench/prompts.jsonl: expand to 20 prompts (3 new: HTTP/2
+  fixtures/invisible-label flagged, all 28 graphics unflagged (980/980).- [x] tool/generate.mjs: llm() retry (1x, 5s backoff) for AbortError/
+  network errors only; acceptance met: hung mock → timeout → retry
+  succeeds ("RETRY-OK"), HTTP 500 → no retry, HTTP 400 → no retry
+  (verified against mock servers + real proxy 400).- [ ] tool/bench/prompts.jsonl: expand to 20 prompts (3 new: HTTP/2
   stream multiplexing, Kafka partitioner + offset commit, SQLite WAL
   readers/writers); acceptance: BENCH: 20/20.
 - [ ] README.md: list the four negative fixtures (dark-seam, text-

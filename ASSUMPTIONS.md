@@ -41,3 +41,10 @@
   owns `js-event-loop` and `service-mesh-routing` as canonical.
 - `connection-pool-reuse/` (first tool generation, no map prompt
   recorded) is kept as-is.
+
+## Port 18123 is a socat proxy (2026-09-04)
+
+127.0.0.1:18123 is held by a socat process forwarding to llama.cpp;
+tests that need a mock LLM must use another port (28123+ used).
+HTTP 500 is treated as non-transient by the llm() retry (only
+AbortError/fetch-failed retry once).

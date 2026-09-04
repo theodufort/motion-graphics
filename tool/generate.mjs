@@ -96,7 +96,7 @@ Loop length: <N>s.
 ===HTML===
 <!DOCTYPE html> ... complete file ...`;
 
-async function llm(messages) {
+async function llmOnce(messages) {
   const ctl = new AbortController();
   const to = setTimeout(() => ctl.abort(), TIMEOUT);
   try {
@@ -109,6 +109,20 @@ async function llm(messages) {
     const d = await res.json();
     return d.choices?.[0]?.message?.content ?? "";
   } finally { clearTimeout(to); }
+}
+
+// one retry with backoff for timeout/network flakiness; HTTP 4xx/5xx is
+// a real failure (bad request), not transient
+export async function llm(messages) {
+  try {
+    return await llmOnce(messages);
+  } catch (e) {
+    const transient = e?.name === "AbortError" || /fetch failed|ECONNREFUSED|ECONNRESET|socket/i.test(String(e?.message || e));
+    if (!transient) throw e;
+    console.error(`llm: transient error (${e.name || e.message}); retrying in 5s`);
+    await new Promise((r) => setTimeout(r, 5000));
+    return llmOnce(messages);
+  }
 }
 
 function slugify(s) {
