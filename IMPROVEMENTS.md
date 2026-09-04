@@ -57,3 +57,7 @@
   its enclosing shape (measure with ctx.measureText before fillText,
   shrink font if wider than 0.9x the shape); acceptance: next 3 bench
   prompts produce 0 collision findings without a fix pass.
+- [ ] tool/generate.mjs: system prompt rule — every text label must fit
+  its enclosing shape (measure with ctx.measureText before fillText,
+  shrink font if wider than 0.9x the shape); acceptance: next 3 bench
+  prompts produce 0 collision findings without a fix pass.
