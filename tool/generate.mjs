@@ -63,6 +63,10 @@ HARD RULES
     unused helpers, no commented-out alternatives, no repetitive per-entity code when a
     small loop over a data array does the job. Data-driven: nodes/packets/beats are
     arrays of plain objects drawn in loops, not hand-written draw calls per element.
+16. Label fit: before every fillText near a box/shape, size the font so
+    ctx.measureText(label).width < 0.9 * the shape's width (measure at draw
+    time; if too wide, drop the font size by 2px steps or shorten the
+    label). Never let a label visually overflow its box.
 
 REQUIRED STRUCTURE (adapt content, keep shape):
   setup (canvas, ctx, LOOP, PAL, rgba helper) → buildLayout() (positions from W/H) →
@@ -166,9 +170,11 @@ export async function generate(prompt, { force = false, allowExisting = process.
   writeFileSync(path.join(folder, "README.md"), readme + "\n");
   let report = await validateFolder(folder);
   let pass = report.clean && report.seek && report.collisions && report.seam && report.readme;
+  let fixPasses = 0;
 
   // self-improvement fix loop
   for (let i = 0; !pass && i < FIX_PASSES; i++) {
+    fixPasses = i + 1;
     const errs = report.errors.slice(0, 8).join("; ");
     messages.push({ role: "assistant", content: html.slice(0, 20000) },
       { role: "user", content:
@@ -185,7 +191,7 @@ Reply with the COMPLETE corrected file between ===HTML=== markers (keep TOPIC an
     report = await validateFolder(folder);
     pass = report.clean && report.seek && report.collisions && report.seam && report.readme;
   }
-  return { folder, topic, pass, report, seconds: (Date.now() - t0) / 1000 };
+  return { folder, topic, pass, report, seconds: (Date.now() - t0) / 1000, fixPasses };
 }
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;

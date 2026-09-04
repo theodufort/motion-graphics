@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+*{margin:0;box-sizing:border-box}
+body{background:var(--bg);overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+const LOOP=24000;
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+let W,H,dpr,nodes,snapY,titleY;
+function resize(){dpr=devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);buildLayout()}
+const lerp=(a,b,t)=>a+(b-a)*t,clamp01=v=>Math.max(0,Math.min(1,v)),ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
+function buildLayout(){
+  const cx=W*.5,cy=H*.42,sp=W*.16;
+  nodes=[{x:cx-sp*1.5,y:cy,label:'V1',sub:'txn 1',vis:false},{x:cx-sp*.5,y:cy,label:'V2',sub:'txn 2',vis:false},{x:cx+sp*.5,y:cy,label:'V3',sub:'txn 3',vis:true},{x:cx+sp*1.5,y:cy,label:'V4',sub:'txn 4',vis:true}];
+  snapY=cy+H*.14;titleY=H*.08;
+}
+function beatA(t,s,e,f=1200){const b=t/LOOP,ss=s/LOOP,ee=e/LOOP,ff=f/LOOP;if(b<ss||b>=ee)return 0;if(b<ss+ff)return ease(clamp01((b-ss)/ff));if(b>ee-ff)return ease(clamp01((ee-b)/ff));return 1}
+let __seek=null;window.__time=v=>{__seek=v};window.__loop=LOOP;
+function nR(){return Math.min(W,H)*.055}
+function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath()}
+function fitFont(label,maxW,base,weight){let fs=base;ctx.font=`${weight} ${fs}px monospace`;while(ctx.measureText(label).width>maxW&&fs>8){fs-=2;ctx.font=`${weight} ${fs}px monospace`}return fs}
+function drawBg(){ctx.fillStyle=rgba(PAL.bg,1);ctx.fillRect(0,0,W,H);ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;const s=W/22;for(let x=0;x<W;x+=s){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=s){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}}
+function drawChain(t){
+  for(let i=0;i<3;i++){const n1=nodes[i],n2=nodes[i+1],mx=(n1.x+n2.x)/2,my=n1.y-H*.05;ctx.strokeStyle=rgba(PAL.muted,.45);ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(n1.x+nR(),n1.y);ctx.quadraticCurveTo(mx,my,n2.x-nR(),n2.y);ctx.stroke();const ang=Math.atan2(n2.y-my,n2.x-mx);ctx.fillStyle=rgba(PAL.muted,.6);ctx.beginPath();ctx.moveTo(n2.x-nR(),n2.y);ctx.lineTo(n2.x-nR()-8*Math.cos(ang-.4),n2.y-8*Math.sin(ang-.4));ctx.lineTo(n2.x-nR()-8*Math.cos(ang+.4),n2.y-8*Math.sin(ang+.4));ctx.fill()}
+  nodes.forEach((n,i)=>{const r=nR()*(1+.06*Math.sin(t/400+i*1.2));const g=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,r*2);g.addColorStop(0,rgba(PAL.accent,.12));g.addColorStop(1,rgba(PAL.accent,0));ctx.fillStyle=g;ctx.fillRect(n.x-r*2,n.y-r*2,r*4,r*4);ctx.fillStyle=rgba(PAL.bg,.9);ctx.strokeStyle=rgba(PAL.accent,.7);ctx.lineWidth=2;rr(n.x-r,n.y-r,r*2,r*2,8);ctx.fill();ctx.stroke();const fs=fitFont(n.label,r*1.6,Math.floor(r*.7),'bold');ctx.fillStyle=rgba(PAL.text,1);ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(n.label,n.x,n.y-4);ctx.font=`${Math.floor(fs*.55)}px monospace`;ctx.fillStyle=rgba(PAL.muted,.8);ctx.fillText(n.sub,n.x,n.y+fs*.55)});
+}
+function drawSnap(t){
+  const a=beatA(t,6000,15000,1200);if(a<=0)return;const y=snapY,x1=W*.15,x2=W*.85;
+  ctx.strokeStyle=rgba(PAL.accent,.6*a);ctx.lineWidth=2;ctx.setLineDash([8,6]);ctx.beginPath();ctx.moveTo(x1,y);ctx.lineTo(x2,y);ctx.stroke();ctx.setLineDash([]);
+  fitFont('Snapshot @ txn 3',W*.3,Math.floor(Math.min(W,H)*.028),'bold');ctx.fillStyle=rgba(PAL.accent,a);ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText('Snapshot @ txn 3',W*.5,y-8);
+  nodes.forEach((n,i)=>{const ma=beatA(t,7000+i*800,15000,600);if(ma<=0)return;const col=n.vis?PAL.accent:PAL.fail;ctx.font=`bold ${Math.floor(nR()*.6)}px monospace`;ctx.fillStyle=rgba(col,ma);ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(n.vis?'\u2713':'\u2717',n.x,n.y+nR()+8);ctx.strokeStyle=rgba(col,.3*ma);ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(n.x,n.y+nR()+4);ctx.lineTo(n.x,y-4);ctx.stroke()});
+}
+function drawVac(t){
+  const a=beatA(t,15000,23000,1500);if(a<=0)return;
+  const sx=lerp(W*.1,W*.9,ease(clamp01((t-15000)/6000)));
+  ctx.strokeStyle=rgba(PAL.fail,.5*a);ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(sx,H*.22);ctx.lineTo(sx,H*.62);ctx.stroke();
+  fitFont('VACUUM',W*.15,Math.floor(Math.min(W,H)*.025),'bold');ctx.fillStyle=rgba(PAL.fail,a);ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText('VACUUM',sx,H*.19);
+  nodes.forEach((n,i)=>{if(n.vis)return;const fa=clamp01((t-15500-i*1200)/1500);if(fa<=0)return;for(let p=0;p<5;p++){ctx.fillStyle=rgba(PAL.fail,(1-fa)*.5*a);ctx.beginPath();ctx.arc(n.x+(p-2)*14*fa,n.y-22*fa-p*5,3*(1-fa),0,Math.PI*2);ctx.fill()}});
+  const cleaned=Math.floor(clamp01((t-16500)/4000)*2);
+  fitFont(cleaned+' dead rows removed',W*.4,Math.floor(Math.min(W,H)*.032),'bold');ctx.fillStyle=rgba(PAL.text,a);ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(cleaned+' dead rows removed',W*.5,H*.72);
+}
+function drawHud(t){fitFont('MVCC Snapshot Reads',W*.5,Math.floor(Math.min(W,H)*.038),'bold');ctx.fillStyle=rgba(PAL.text,1);ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText('MVCC Snapshot Reads',W*.5,titleY)}
+function frame(now){if(__seek!=null)now=__seek;const t=now%LOOP;ctx.clearRect(0,0,W,H);drawBg();drawChain(t);drawSnap(t);drawVac(t);drawHud(t);requestAnimationFrame(frame)}
+resize();window.addEventListener('resize',resize);requestAnimationFrame(frame);
+</script>
+</body>
+</html>

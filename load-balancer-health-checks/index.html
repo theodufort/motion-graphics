@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+*{margin:0;box-sizing:border-box}
+body{background:var(--bg);overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+const LOOP=30000;
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+let W,H,dpr,lb,nodes;
+function resize(){dpr=devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);buildLayout()}
+function buildLayout(){lb={x:W*.22,y:H*.5,r:Math.min(W,H)*.06};nodes=[{x:W*.68,y:H*.2,r:Math.min(W,H)*.045,label:'Node A'},{x:W*.68,y:H*.5,r:Math.min(W,H)*.045,label:'Node B'},{x:W*.68,y:H*.8,r:Math.min(W,H)*.045,label:'Node C'}]}
+addEventListener('resize',resize);resize();
+const lerp=(a,b,t)=>a+(b-a)*t,clamp01=v=>Math.max(0,Math.min(1,v)),ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
+const quad=(a,c,b,t)=>({x:lerp(lerp(a.x,c.x,t),lerp(c.x,b.x,t),t),y:lerp(lerp(a.y,c.y,t),lerp(c.y,b.y,t),t)});
+const lc=(a,b,t)=>[lerp(a[0],b[0],t)|0,lerp(a[1],b[1],t)|0,lerp(a[2],b[2],t)|0];
+let __seek=null;window.__time=v=>{__seek=v};window.__loop=LOOP;
+function nodeState(i,b){if(i!==1)return{color:PAL.accent,health:1,active:true};if(b<.17)return{color:PAL.accent,health:1,active:true};if(b<.33){const p=(b-.17)/.16;return{color:lc(PAL.accent,PAL.fail,p),health:1-p,active:true}}if(b<.5)return{color:PAL.fail,health:0,active:false};if(b<.67){const p=(b-.5)/.17;return{color:lc(PAL.fail,PAL.accent,p),health:p,active:false}}if(b<.83){const p=(b-.67)/.16;return{color:PAL.accent,health:1,active:p>.5}}return{color:PAL.accent,health:1,active:true}}
+function fitLabel(txt,x,y,maxW,base,weight){let fs=base;ctx.font=`${weight} ${fs}px system-ui`;while(ctx.measureText(txt).width>maxW*.9&&fs>8){fs-=2;ctx.font=`${weight} ${fs}px system-ui`}}
+function frame(now){if(__seek!=null)now=__seek;const t=now%LOOP,b=t/LOOP;ctx.clearRect(0,0,W,H);
+// grid
+ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;for(let x=0;x<W;x+=60){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=60){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+// connections
+nodes.forEach((n,i)=>{const s=nodeState(i,b),m={x:(lb.x+n.x)/2,y:(lb.y+n.y)/2+(i-1)*30};ctx.beginPath();ctx.moveTo(lb.x,lb.y);ctx.quadraticCurveTo(m.x,m.y,n.x,n.y);ctx.strokeStyle=rgba(s.color,s.active?.3:.08);ctx.lineWidth=s.active?2:1;ctx.stroke()});
+// LB node
+const pl=1+.05*Math.sin(t/400);ctx.beginPath();ctx.arc(lb.x,lb.y,lb.r*pl,0,Math.PI*2);ctx.fillStyle=rgba(PAL.accent,.15);ctx.fill();ctx.strokeStyle=rgba(PAL.accent,.8);ctx.lineWidth=2;ctx.stroke();ctx.fillStyle=rgba(PAL.text,.9);ctx.font=`600 ${Math.max(12,lb.r*.5)}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('LB',lb.x,lb.y);
+// backend nodes
+nodes.forEach((n,i)=>{const s=nodeState(i,b),p=1+.04*Math.sin(t/400+i*2);ctx.beginPath();ctx.arc(n.x,n.y,n.r*p,0,Math.PI*2);ctx.fillStyle=rgba(s.color,.12);ctx.fill();ctx.strokeStyle=rgba(s.color,s.active?.8:.4);ctx.lineWidth=s.active?2:1.5;ctx.stroke();fitLabel(n.label,n.x,n.y,n.r*1.8,Math.max(11,n.r*.55),'500');ctx.fillStyle=rgba(PAL.text,s.active?.9:.5);ctx.fillText(n.label,n.x,n.y)});
+// probes
+const DUR=1200;nodes.forEach((n,i)=>{const s=nodeState(i,b);if(!s.active&&b>.33&&b<.67)return;const off=i*400,cyc=(t+off)%(DUR*2);if(cyc>DUR)return;const p=ease(cyc/DUR),m={x:(lb.x+n.x)/2,y:(lb.y+n.y)/2+(i-1)*30},pos=quad(lb,m,n,p),al=1-p*.5;ctx.beginPath();ctx.arc(pos.x,pos.y,4,0,Math.PI*2);ctx.fillStyle=rgba(s.color,al);ctx.fill();for(let k=1;k<=3;k++){const tp=Math.max(0,p-k*.08),tp2=quad(lb,m,n,ease(tp));ctx.beginPath();ctx.arc(tp2.x,tp2.y,3-k*.5,0,Math.PI*2);ctx.fillStyle=rgba(s.color,al*(1-k*.25));ctx.fill()}});
+// meters
+nodes.forEach((n,i)=>{const s=nodeState(i,b),mw=n.r*2.2,mh=5,mx=n.x-mw/2,my=n.y+n.r+12;ctx.fillStyle=rgba(PAL.muted,.15);ctx.fillRect(mx,my,mw,mh);ctx.fillStyle=rgba(s.color,.8);ctx.fillRect(mx,my,mw*s.health,mh);const lbl=s.active?'healthy':(s.health>.5?'recovering':'ejected');fitLabel(lbl,n.x,my+mh+14,mw,10,'400');ctx.fillStyle=rgba(PAL.muted,.7);ctx.textAlign='center';ctx.fillText(lbl,n.x,my+mh+14)});
+// HUD
+const ac=nodes.filter((_,i)=>nodeState(i,b).active).length,conns=ac*128+Math.floor(Math.sin(t/600)*8);ctx.textAlign='left';ctx.font=`700 ${Math.max(14,W*.018)}px system-ui`;ctx.fillStyle=rgba(PAL.text,.9);ctx.fillText(`${conns}`,W*.04,H*.08);ctx.font=`400 ${Math.max(10,W*.011)}px system-ui`;ctx.fillStyle=rgba(PAL.muted,.7);ctx.fillText('active conns',W*.04,H*.08+Math.max(16,W*.018));
+let st='All Healthy',sc=PAL.accent;if(b>=.17&&b<.33){st='Degraded';sc=[255,180,50]}else if(b>=.33&&b<.5){st='Ejected';sc=PAL.fail}else if(b>=.5&&b<.83){st='Recovering';sc=[255,180,50]}
+const fade=clamp01(Math.min((b-.17)/.02,(.33-b)/.02,(b-.33)/.02,(.5-b)/.02,(b-.5)/.02,(.83-b)/.02,(1-b)/.02,b/.02));ctx.textAlign='right';ctx.font=`600 ${Math.max(13,W*.015)}px system-ui`;ctx.fillStyle=rgba(sc,.9*clamp01(fade));ctx.fillText(st,W*.96,H*.08);
+ctx.textAlign='center';ctx.font=`700 ${Math.max(16,W*.02)}px system-ui`;ctx.fillStyle=rgba(PAL.text,.85);ctx.fillText('Load Balancer Health Checks',W*.5,H*.06);
+requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
