@@ -18,36 +18,37 @@ const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
 const LOOP=30000;
 const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
 const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
-let W,H,dpr,roots,nodes,edges;
+let W,H,dpr,roots,nodes,edges,markPkts;
 
 // layout
 function buildLayout(){
-roots=[{x:W*.35,y:H*.12,label:'Root A'},{x:W*.65,y:H*.12,label:'Root B'}];
+roots=[{x:W*.35,y:H*.14,label:'Root A'},{x:W*.65,y:H*.14,label:'Root B'}];
 nodes=[
-{x:W*.22,y:H*.38,label:'obj 1',r:1},{x:W*.5,y:H*.38,label:'obj 2',r:1},
-{x:W*.78,y:H*.38,label:'obj 3',r:1},{x:W*.35,y:H*.62,label:'obj 4',r:1},
-{x:W*.65,y:H*.62,label:'obj 5',r:1},{x:W*.18,y:H*.82,label:'obj 6',r:0},
-{x:W*.82,y:H*.82,label:'obj 7',r:0}];
-edges=[{f:0,t:0},{f:0,t:1},{f:1,t:2},{f:1,t:3},{f:2,t:4}];
+{x:W*.22,y:H*.40,label:'obj 1',r:1},{x:W*.50,y:H*.40,label:'obj 2',r:1},
+{x:W*.78,y:H*.40,label:'obj 3',r:1},{x:W*.35,y:H*.64,label:'obj 4',r:1},
+{x:W*.65,y:H*.64,label:'obj 5',r:1},{x:W*.18,y:H*.84,label:'obj 6',r:0},
+{x:W*.82,y:H*.84,label:'obj 7',r:0}];
+edges=[
+{a:roots[0],b:nodes[0]},{a:roots[0],b:nodes[1]},
+{a:roots[1],b:nodes[2]},{a:roots[1],b:nodes[3]},
+{a:nodes[2],b:nodes[4]}];
+markPkts=[
+{a:roots[0],b:nodes[0],s:3000,d:1200},
+{a:roots[0],b:nodes[1],s:4800,d:1200},
+{a:roots[1],b:nodes[2],s:4800,d:1200},
+{a:roots[1],b:nodes[3],s:6600,d:1200},
+{a:nodes[2],b:nodes[4],s:6600,d:1200}];
 }
 
 // easing
 const lerp=(a,b,t)=>a+(b-a)*t,clamp01=v=>Math.max(0,Math.min(1,v));
 const ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
 const quad=(a,c,b,t)=>({x:lerp(lerp(a.x,c.x,t),lerp(c.x,b.x,t),t),y:lerp(lerp(a.y,c.y,t),lerp(c.y,b.y,t),t)});
-const beat=(t,a,b)=>{const p=(t-a)/(b-a);if(p<0||p>1)return 0;return Math.min(clamp01(p/.15),clamp01((1-p)/.15))};
 
 // hooks
 let __seek=null;
 window.__time=v=>{__seek=v};
 window.__loop=LOOP;
-
-// packets (deterministic spawn windows)
-const markPkts=[
-{f:roots[0],t:nodes[0],s:3000,d:1200},{f:roots[0],t:nodes[1],s:4800,d:1200},
-{f:roots[1],t:nodes[2],s:4800,d:1200},{f:nodes[1],t:nodes[3],s:6600,d:1200},
-{f:nodes[2],t:nodes[4],s:6600,d:1200}];
-const markTimes=[3000,4800,4800,6600,6600];
 
 // frame
 function frame(now){
@@ -67,43 +68,39 @@ for(let y=0;y<H;y+=s){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke
 }
 
 function drawEdges(t){
-const a=beat(t,2000,15500);
 ctx.lineWidth=1.5;
 edges.forEach(e=>{
-const A=roots[e.f],B=nodes[e.t],m={x:(A.x+B.x)/2,y:(A.y+B.y)/2-H*.06};
-ctx.strokeStyle=rgba(PAL.muted,.12+a*.25);
-ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.quadraticCurveTo(m.x,m.y,B.x,B.y);ctx.stroke();
+const m={x:(e.a.x+e.b.x)/2,y:(e.a.y+e.b.y)/2-H*.06};
+ctx.strokeStyle=rgba(PAL.muted,.2);
+ctx.beginPath();ctx.moveTo(e.a.x,e.a.y);ctx.quadraticCurveTo(m.x,m.y,e.b.x,e.b.y);ctx.stroke();
 });
 }
 
 function drawNodes(t){
 const r=Math.min(W,H)*.035,pulse=Math.sin(t/400)*.08+1;
 roots.forEach(n=>{
-const a=beat(t,500,LOOP-500);
 ctx.beginPath();ctx.arc(n.x,n.y,r*.8*pulse,0,Math.PI*2);
-ctx.fillStyle=rgba(PAL.accent,.3*a);ctx.fill();
-ctx.strokeStyle=rgba(PAL.accent,.8*a);ctx.lineWidth=2;ctx.stroke();
-ctx.fillStyle=rgba(PAL.text,a);ctx.font=`${Math.min(W,H)*.018}px monospace`;ctx.textAlign='center';
-ctx.fillText(n.label,n.x,n.y-r*1.3);
+ctx.fillStyle=rgba(PAL.accent,.3);ctx.fill();
+ctx.strokeStyle=rgba(PAL.accent,.8);ctx.lineWidth=2;ctx.stroke();
+ctx.fillStyle=rgba(PAL.text,.9);ctx.font=`${Math.min(W,H)*.018}px monospace`;ctx.textAlign='center';
+ctx.fillText(n.label,n.x,n.y-r*1.4);
 });
 nodes.forEach((n,i)=>{
-const appear=beat(t,1000+i*200,LOOP-500);
-const mi=markTimes.indexOf(3000+i*1800);
-const isMarked=n.r===1;
-const markT=isMarked?3000+i*1800:0;
-const marked=isMarked&&t>markT;
-const sweepT=!isMarked?17000+i*800:0;
-const swept=!isMarked&&t>sweepT;
-const sp=swept?ease(clamp01((t-sweepT)/1200)):0;
-const alpha=appear*(swept?1-sp:1);
-if(alpha<=0)return;
-const col=marked?PAL.accent:swept?PAL.fail:PAL.muted;
-if(marked){const g=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,r*2.5);g.addColorStop(0,rgba(PAL.accent,.2*alpha));g.addColorStop(1,rgba(PAL.accent,0));ctx.fillStyle=g;ctx.fillRect(n.x-r*3,n.y-r*3,r*6,r*6)}
-ctx.beginPath();ctx.arc(n.x,n.y,r*pulse*(1-sp),0,Math.PI*2);
+const markT=3000+i*1800;
+const marked=n.r===1&&t>markT;
+const sweepOut=n.r===0?clamp01((t-(15000+i*800))/1200):0;
+const sweepIn=n.r===0?clamp01((t-(28000+i*800))/1200):1;
+const vis=n.r===0?1-ease(sweepOut)+ease(sweepIn):1;
+const scale=n.r===0?lerp(1,.3,ease(sweepOut))*lerp(.3,1,ease(sweepIn)):1;
+const alpha=n.r===0?lerp(1,.15,ease(sweepOut))*lerp(.15,1,ease(sweepIn)):1;
+if(alpha<.01)return;
+const col=marked?PAL.accent:(n.r===0&&sweepOut>.5&&sweepIn<.5?PAL.fail:PAL.muted);
+if(marked){const g=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,r*2.5);g.addColorStop(0,rgba(PAL.accent,.15*alpha));g.addColorStop(1,rgba(PAL.accent,0));ctx.fillStyle=g;ctx.fillRect(n.x-r*3,n.y-r*3,r*6,r*6)}
+ctx.beginPath();ctx.arc(n.x,n.y,r*pulse*scale,0,Math.PI*2);
 ctx.fillStyle=rgba(col,.2*alpha);ctx.fill();
 ctx.strokeStyle=rgba(col,.9*alpha);ctx.lineWidth=2;ctx.stroke();
 ctx.fillStyle=rgba(PAL.text,alpha);ctx.font=`${Math.min(W,H)*.016}px monospace`;ctx.textAlign='center';
-ctx.fillText(n.label,n.x,n.y+r*1.5);
+ctx.fillText(n.label,n.x,n.y+r*1.5*scale);
 });
 }
 
@@ -112,13 +109,12 @@ const r=Math.min(W,H)*.012;
 markPkts.forEach(p=>{
 const pr=(t-p.s)/p.d;
 if(pr<0||pr>1)return;
-const m={x:(p.f.x+p.t.x)/2,y:(p.f.y+p.t.y)/2-H*.08};
-const pos=quad(p.f,m,p.t,ease(pr));
+const m={x:(p.a.x+p.b.x)/2,y:(p.a.y+p.b.y)/2-H*.08};
 for(let i=4;i>=0;i--){
 const tp=pr-i*.04;if(tp<0)continue;
-const pp=quad(p.f,m,p.t,ease(tp));
+const pp=quad(p.a,m,p.b,ease(tp));
 ctx.beginPath();ctx.arc(pp.x,pp.y,r*(1-i*.15),0,Math.PI*2);
-ctx.fillStyle=rgba(PAL.accent,(1-i*.18)*(1-pr*.4));ctx.fill();
+ctx.fillStyle=rgba(PAL.accent,(1-i*.18)*(1-pr*.3));ctx.fill();
 }
 });
 }
@@ -126,17 +122,18 @@ ctx.fillStyle=rgba(PAL.accent,(1-i*.18)*(1-pr*.4));ctx.fill();
 function drawHud(t){
 const fs=Math.min(W,H)*.028;
 ctx.font=`bold ${fs}px monospace`;ctx.textAlign='center';
-const mA=beat(t,2000,15500),sA=beat(t,14500,28000);
-if(mA>0){ctx.fillStyle=rgba(PAL.accent,mA);ctx.fillText('MARK',W*.5,H*.06)}
-if(sA>0){ctx.fillStyle=rgba(PAL.fail,sA);ctx.fillText('SWEEP',W*.5,H*.06)}
+const markA=clamp01((t-2000)/1000)*clamp01((14000-t)/1000);
+const sweepA=clamp01((t-14000)/1000)*clamp01((22000-t)/1000);
+if(markA>0){ctx.fillStyle=rgba(PAL.accent,markA);ctx.fillText('MARK',W*.5,H*.05)}
+if(sweepA>0){ctx.fillStyle=rgba(PAL.fail,sweepA);ctx.fillText('SWEEP',W*.5,H*.05)}
 const mx=W*.3,mw=W*.4,my=H*.94,mh=H*.02;
-const used=t<16000?1:lerp(1,.55,ease(clamp01((t-16000)/8000)));
+const used=t<15000?1:lerp(1,.55,ease(clamp01((t-15000)/6000)));
 ctx.fillStyle=rgba(PAL.muted,.2);ctx.fillRect(mx,my,mw,mh);
-ctx.fillStyle=rgba(t<16000?PAL.accent:PAL.fail,.7);ctx.fillRect(mx,my,mw*used,mh);
+ctx.fillStyle=rgba(t<15000?PAL.accent:PAL.fail,.7);ctx.fillRect(mx,my,mw*used,mh);
 ctx.fillStyle=rgba(PAL.text,.6);ctx.font=`${fs*.6}px monospace`;
 ctx.fillText(`heap ${Math.round(used*100)}%`,W*.5,my-mh*.8);
 const marked=nodes.filter((n,i)=>n.r===1&&t>3000+i*1800).length;
-const freed=nodes.filter((n,i)=>n.r===0&&t>17000+i*800).length;
+const freed=nodes.filter((n,i)=>n.r===0&&t>15000+i*800).length;
 ctx.fillStyle=rgba(PAL.text,.5);ctx.font=`${fs*.55}px monospace`;
 ctx.textAlign='left';ctx.fillText(`marked: ${marked}`,mx,my+mh*2.5);
 ctx.textAlign='right';ctx.fillText(`freed: ${freed}`,mx+mw,my+mh*2.5);

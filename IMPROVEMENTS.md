@@ -36,9 +36,9 @@
 - [x] tool/generate.mjs: logs/generations.jsonl metadata;
   acceptance met: {ts, prompt, topic, model, seconds:248, lines:129,
   fixPasses, pass:1} appended per run.
-- [ ] tool/bench.mjs: reuse existing folders on re-runs (validate only, no
-  LLM) and add --regen to force; acceptance: bench re-run with all 10
-  folders present finishes in < 5 min and prints BENCH: N/10.
+- [x] tool/bench.mjs: folder-reuse on re-runs (slug map) + --regen;
+  acceptance met: full reuse re-run = BENCH: 10/10 in 21s (vs 1704s full
+  regen; < 5 min target).
 - [x] tool/validate.mjs: JSON report now includes shotsPath (+ shots
   array); acceptance met: dir exists, 6 files listed.
 - [ ] tool/bench/prompts.jsonl: expand to 15 prompts (5 new: MVCC
