@@ -21,10 +21,6 @@
   all 22 graphics still 770/770.
 - [x] README.md / AGENTS.md: "The vision pass" section with the 6-shot
   table (t15/t40/t65/t90, seam-a, seam-b) + review checklist.
-- [ ] tool/generate.mjs: guard against re-generating into an existing
-  folder (refuse or require --force) so bench runs never clobber the
-  curated 9; acceptance: second run with same slug exits 2 without
-  overwriting (unless --force).
 
 - [x] tool/check.mjs + check.sh: --skip-gen flag;
   acceptance met: 16s for 22 graphics, same SCORE format.
