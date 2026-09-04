@@ -54,4 +54,12 @@
   >= 500 px); acceptance met: fixtures/blank-canvas fails content:0,
   all 26 real graphics pass (910/910).- [x] README.md: Environment knobs table (MG_LLM_BASE, MG_LLM_MODEL,
   MG_FIX_PASSES, MG_TIMEOUT_MS, MG_CONCURRENCY, MG_ALLOW_EXISTING) with
-  defaults; acceptance met.
+  defaults; acceptance met.- [ ] tool/generate.mjs: prompt rule 17 — beats must have visible
+  state change (at least one element's position/size/alpha changes
+  between consecutive beats); acceptance: next 2 fresh prompts pass
+  and their shots at 40%/65% differ by > 5% content px.
+- [ ] tool/validate.mjs: crossbeat motion probe — sample 3 consecutive
+  parked frames 200ms apart mid-loop; if canvas content-px deltas are
+  all < 0.5% for 8+ consecutive samples across the loop, flag
+  "frozen animation"; acceptance: synthetic static-canvas fixture
+  flagged, all 26 real graphics unflagged.
