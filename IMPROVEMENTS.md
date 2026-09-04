@@ -37,12 +37,8 @@
   regen; < 5 min target).
 - [x] tool/validate.mjs: JSON report now includes shotsPath (+ shots
   array); acceptance met: dir exists, 6 files listed.
-- [ ] tool/bench/prompts.jsonl: expand to 15 prompts (5 new: MVCC
-  snapshot read, load balancer health checks, TCP congestion control
-  AIMD, LSM-tree compaction, circuit breaker half-open probing);
-  acceptance: 15 lines with 2 smoke, `node tool/bench.mjs` prints
-  BENCH: N/15.
-- [x] check.mjs: --json flag (single JSON line: ts, score, max,
+- [x] tool/bench/prompts.jsonl: expanded to 15 prompts (5 new domains
+  generated clean); acceptance met: BENCH: 15/15 in 38s (reuse path).- [x] check.mjs: --json flag (single JSON line: ts, score, max,
   graphics, problems[]); acceptance met: parsed ok, 805/805 on 23
   graphics.".
 - [x] tool/validate.mjs: viewport-resize robustness check (1366x768
