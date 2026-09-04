@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Backpressure Pipeline</title>
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
+canvas#stage{display:block;width:100%;height:100%}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+(function(){
+"use strict";
+var canvas=document.getElementById("stage");
+var ctx=canvas.getContext("2d");
+var LOOP=30000;
+var PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+function rgba(c,a){return"rgba("+c[0]+","+c[1]+","+c[2]+","+a+")";}
+var W=0,H=0,dpr=1;
+var L={};
+function buildLayout(){
+var s=Math.min(W,H);
+L.producer={x:W*0.14,y:H*0.44,r:s*0.055};
+L.buffer={x:W*0.5,y:H*0.44,w:s*0.11,h:s*0.17};
+L.consumer={x:W*0.86,y:H*0.44,r:s*0.055};
+L.gauge={x:W*0.5,y:H*0.76,r:s*0.07};
+L.title={x:W*0.5,y:H*0.1};
+L.counter={x:W*0.5,y:H*0.92};
+L.status={x:W*0.5,y:H*0.62};
+L.lane1a={x:L.producer.x+L.producer.r,y:L.producer.y};
+L.lane1c={x:(L.producer.x+L.buffer.x)/2,y:L.producer.y-s*0.06};
+L.lane1b={x:L.buffer.x-L.buffer.w/2,y:L.buffer.y};
+L.lane2a={x:L.buffer.x+L.buffer.w/2,y:L.buffer.y};
+L.lane2c={x:(L.buffer.x+L.consumer.x)/2,y:L.buffer.y-s*0.06};
+L.lane2b={x:L.consumer.x-L.consumer.r,y:L.consumer.y};
+}
+function lerp(a,b,t){return a+(b-a)*t;}
+function clamp01(v){return Math.max(0,Math.min(1,v));}
+function easeIO(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
+function quad(a,c,b,t){
+var u=1-t;
+return{x:u*u*a.x+2*u*t*c.x+t*t*b.x,y:u*u*a.y+2*u*t*c.y+t*t*b.y};
+}
+function smoothVal(t,kf){
+if(t<=kf[0].t)return kf[0].v;
+if(t>=kf[kf.length-1].t)return kf[kf.length-1].v;
+for(var i=0;i<kf.length-1;i++){
+if(t>=kf[i].t&&t<kf[i+1].t){
+var lt=(t-kf[i].t)/(kf[i+1].t-kf[i].t);
+return lerp(kf[i].v,kf[i+1].v,easeIO(lt));
+}}
+return kf[kf.length-1].v;
+}
+var KF_FILL=[{t:0,v:0.3},{t:5000,v:0.3},{t:10000,v:0.92},{t:15000,v:1.0},{t:20000,v:0.3},{t:25000,v:0.3},{t:30000,v:0.3}];
+var KF_PRESS=[{t:0,v:0.2},{t:5000,v:0.2},{t:10000,v:0.82},{t:15000,v:1.0},{t:20000,v:0.2},{t:25000,v:0.2},{t:30000,v:0.2}];
+var KF_THRU=[{t:0,v:1200},{t:5000,v:1200},{t:10000,v:400},{t:15000,v:100},{t:20000,v:1200},{t:25000,v:1200},{t:30000,v:1200}];
+var KF_SPEED=[{t:0,v:1},{t:5000,v:1},{t:10000,v:0.35},{t:15000,v:0.12},{t:20000,v:1},{t:25000,v:1},{t:30000,v:1}];
+var KF_CONS_PULSE=[{t:0,v:1},{t:5000,v:1},{t:10000,v:0.4},{t:15000,v:0.3},{t:20000,v:1},{t:25000,v:1},{t:30000,v:1}];
+var KF_PROD_THROTTLE=[{t:0,v:0},{t:5000,v:0},{t:10000,v:0.7},{t:15000,v:1},{t:20000,v:0},{t:25000,v:0},{t:30000,v:0}];
+var STATUS_LABELS=["Flowing","Slowing","Backpressure","Draining","Stable","Flowing"];
+var STATUS_STARTS=[0,5000,10000,15000,20000,25000];
+var FADE=600;
+function statusAlpha(t,idx){
+var s=STATUS_STARTS[idx];
+var e=idx<5?STATUS_STARTS[idx+1]:LOOP;
+if(t<s||t>=e)return 0;
+var fi=clamp01((t-s)/FADE);
+var fo=clamp01((e-t)/FADE);
+return Math.min(fi,fo);
+}
+function lerpColor(c1,c2,t){
+return[lerp(c1[0],c2[0],t),lerp(c1[1],c2[1],t),lerp(c1[2],c2[2],t)];
+}
+function drawBackground(t){
+ctx.fillStyle=rgba(PAL.bg,1);
+ctx.fillRect(0,0,W,H);
+var gs=Math.max(40,W*0.03);
+ctx.strokeStyle="rgba(255,255,255,0.03)";
+ctx.lineWidth=1;
+ctx.beginPath();
+for(var x=0;x<W;x+=gs){ctx.moveTo(x,0);ctx.lineTo(x,H);}
+for(var y=0;y<H;y+=gs){ctx.moveTo(0,y);ctx.lineTo(W,y);}
+ctx.stroke();
+}
+function drawConnections(t){
+var sp=smoothVal(t,KF_SPEED);
+var alpha=0.15+0.1*Math.sin(t/800);
+ctx.strokeStyle=rgba(PAL.accent,alpha);
+ctx.lineWidth=2;
+ctx.setLineDash([6,8]);
+ctx.lineDashOffset=-t*0.02*sp;
+ctx.beginPath();
+ctx.moveTo(L.lane1a.x,L.lane1a.y);
+ctx.quadraticCurveTo(L.lane1c.x,L.lane1c.y,L.lane1b.x,L.lane1b.y);
+ctx.stroke();
+ctx.beginPath();
+ctx.moveTo(L.lane2a.x,L.lane2a.y);
+ctx.quadraticCurveTo(L.lane2c.x,L.lane2c.y,L.lane2b.x,L.lane2b.y);
+ctx.stroke();
+ctx.setLineDash([]);
+}
+function drawPackets(t){
+var sp=smoothVal(t,KF_SPEED);
+var baseCycle=2200;
+var N=6;
+var lanes=[
+{a:L.lane1a,c:L.lane1c,b:L.lane1b},
+{a:L.lane2a,c:L.lane2c,b:L.lane2b}
+];
+for(var li=0;li<lanes.length;li++){
+var lane=lanes[li];
+for(var i=0;i<N;i++){
+var prog=((t*sp)/baseCycle+i/N)%1;
+if(prog<0)prog+=1;
+var pos=quad(lane.a,lane.c,lane.b,prog);
+var trailN=4;
+for(var tr=trailN;tr>=0;tr--){
+var tp=prog-tr*0.025;
+if(tp<0)tp+=1;
+var tpos=quad(lane.a,lane.c,lane.b,tp);
+var ta=(1-tr/(trailN+1))*0.5;
+ctx.beginPath();
+ctx.arc(tpos.x,tpos.y,3*(1-tr/(trailN+1)),0,Math.PI*2);
+ctx.fillStyle=rgba(PAL.accent,ta);
+ctx.fill();
+}
+ctx.beginPath();
+ctx.arc(pos.x,pos.y,4,0,Math.PI*2);
+ctx.fillStyle=rgba(PAL.accent,0.9);
+ctx.fill();
+ctx.shadowColor=rgba(PAL.accent,0.5);
+ctx.shadowBlur=8;
+ctx.beginPath();
+ctx.arc(pos.x,pos.y,4,0,Math.PI*2);
+ctx.fill();
+ctx.shadowBlur=0;
+}}
+}
+function drawNodes(t){
+var fill=smoothVal(t,KF_FILL);
+var press=smoothVal(t,KF_PRESS);
+var consPulse=smoothVal(t,KF_CONS_PULSE);
+var prodThrottle=smoothVal(t,KF_PROD_THROTTLE);
+var pulse=1+0.08*Math.sin(t/400);
+var prodColor=lerpColor(PAL.accent,PAL.fail,prodThrottle);
+// Producer
+var px=L.producer.x,py=L.producer.y,pr=L.producer.r*pulse;
+ctx.beginPath();
+ctx.arc(px,py,pr,0,Math.PI*2);
+ctx.fillStyle=rgba(prodColor,0.15);
+ctx.fill();
+ctx.strokeStyle=rgba(prodColor,0.8);
+ctx.lineWidth=2;
+ctx.stroke();
+ctx.shadowColor=rgba(prodColor,0.4);
+ctx.shadowBlur=12;
+ctx.beginPath();
+ctx.arc(px,py,pr*0.4,0,Math.PI*2);
+ctx.fillStyle=rgba(prodColor,0.6);
+ctx.fill();
+ctx.shadowBlur=0;
+ctx.font="600 "+Math.max(11,W*0.012)+"px system-ui,sans-serif";
+ctx.textAlign="center";
+ctx.textBaseline="top";
+ctx.fillStyle=rgba(PAL.text,0.9);
+ctx.fillText("Producer",px,py+pr+8);
+// Buffer
+var bx=L.buffer.x,by=L.buffer.y,bw=L.buffer.w,bh=L.buffer.h;
+var bufColor=lerpColor(PAL.accent,PAL.fail,clamp01((fill-0.5)*2));
+var r=Math.min(bw,bh)*0.15;
+ctx.beginPath();
+ctx.moveTo(bx-bw/2+r,by-bh/2);
+ctx.lineTo(bx+bw/2-r,by-bh/2);
+ctx.arcTo(bx+bw/2,by-bh/2,bx+bw/2,by-bh/2+r,r);
+ctx.lineTo(bx+bw/2,by+bh/2-r);
+ctx.arcTo(bx+bw/2,by+bh/2,bx+bw/2-r,by+bh/2,r);
+ctx.lineTo(bx-bw/2+r,by+bh/2);
+ctx.arcTo(bx-bw/2,by+bh/2,bx-bw/2,by+bh/2-r,r);
+ctx.lineTo(bx-bw/2,by-bh/2+r);
+ctx.arcTo(bx-bw/2,by-bh/2,bx-bw/2+r,by-bh/2,r);
+ctx.closePath();
+ctx.fillStyle=rgba(PAL.bg,0.8);
+ctx.fill();
+ctx.strokeStyle=rgba(bufColor,0.7);
+ctx.lineWidth=2;
+ctx.stroke();
+// Fill
+var fillH=bh*fill;
+var fillY=by+bh/2-fillH;
+ctx.save();
+ctx.clip();
+ctx.fillStyle=rgba(bufColor,0.25+0.15*Math.sin(t/300));
+ctx.fillRect(bx-bw/2,fillY,bw,fillH);
+ctx.restore();
+// Fill line
+ctx.beginPath();
+ctx.moveTo(bx-bw/2,fillY);
+ctx.lineTo(bx+bw/2,fillY);
+ctx.strokeStyle=rgba(bufColor,0.9);
+ctx.lineWidth=2;
+ctx.stroke();
+// Buffer label
+ctx.font="600 "+Math.max(11,W*0.012)+"px system-ui,sans-serif";
+ctx.textAlign="center";
+ctx.textBaseline="top";
+ctx.fillStyle=rgba(PAL.text,0.9);
+ctx.fillText("Buffer",bx,by+bh/2+8);
+// Fill %
+ctx.font="500 "+Math.max(10,W*0.01)+"px system-ui,sans-serif";
+ctx.fillStyle=rgba(bufColor,0.9);
+ctx.fillText(Math.round(fill*100)+"%",bx,by+bh/2+24);
+// Consumer
+var cx=L.consumer.x,cy=L.consumer.y,cr=L.consumer.r*(1+0.08*Math.sin(t/400*consPulse));
+ctx.beginPath();
+ctx.arc(cx,cy,cr,0,Math.PI*2);
+ctx.fillStyle=rgba(PAL.accent,0.15);
+ctx.fill();
+ctx.strokeStyle=rgba(PAL.accent,0.8);
+ctx.lineWidth=2;
+ctx.stroke();
+ctx.shadowColor=rgba(PAL.accent,0.4);
+ctx.shadowBlur=12;
+ctx.beginPath();
+ctx.arc(cx,cy,cr*0.4,0,Math.PI*2);
+ctx.fillStyle=rgba(PAL.accent,0.6);
+ctx.fill();
+ctx.shadowBlur=0;
+ctx.font="600 "+Math.max(11,W*0.012)+"px system-ui,sans-serif";
+ctx.textAlign="center";
+ctx.textBaseline="top";
+ctx.fillStyle=rgba(PAL.text,0.9);
+ctx.fillText("Consumer",cx,cy+cr+8);
+}
+function drawGauge(t){
+var press=smoothVal(t,KF_PRESS);
+var gx=L.gauge.x,gy=L.gauge.y,gr=L.gauge.r;
+var startA=Math.PI*0.75;
+var endA=Math.PI*2.25;
+var sweep=endA-startA;
+var col=lerpColor(PAL.accent,PAL.fail,clamp01((press-0.5)*2));
+// Track
+ctx.beginPath();
+ctx.arc(gx,gy,gr,startA,endA);
+ctx.strokeStyle=rgba(PAL.muted,0.15);
+ctx.lineWidth=6;
+ctx.lineCap="round";
+ctx.stroke();
+// Fill arc
+var fillEnd=startA+sweep*press;
+ctx.beginPath();
+ctx.arc(gx,gy,gr,startA,fillEnd);
+ctx.strokeStyle=rgba(col,0.85);
+ctx.lineWidth=6;
+ctx.lineCap="round";
+ctx.stroke();
+// Needle
+var na=startA+sweep*press;
+var nx=gx+Math.cos(na)*gr*0.7;
+var ny=gy+Math.sin(na)*gr*0.7;
+ctx.beginPath();
+ctx.moveTo(gx,gy);
+ctx.lineTo(nx,ny);
+ctx.strokeStyle=rgba(PAL.text,0.7);
+ctx.lineWidth=2;
+ctx.stroke();
+// Center dot
+ctx.beginPath();
+ctx.arc(gx,gy,4,0,Math.PI*2);
+ctx.fillStyle=rgba(PAL.text,0.8);
+ctx.fill();
+// Label
+ctx.font="500 "+Math.max(10,W*0.01)+"px system-ui,sans-serif";
+ctx.textAlign="center";
+ctx.textBaseline="top";
+ctx.fillStyle=rgba(PAL.muted,0.8);
+ctx.fillText("Pressure",gx,gy+gr+10);
+}
+function drawCounter(t){
+var thru=Math.round(smoothVal(t,KF_THRU));
+var cx=L.counter.x,cy=L.counter.y;
+var str=thru.toLocaleString()+" msg/s";
+ctx.font="700 "+Math.max(14,W*0.016)+"px system-ui,sans-serif";
+ctx.textAlign="center";
+ctx.textBaseline="middle";
+var col=lerpColor(PAL.accent,PAL.fail,clamp01((1-thru/1200)*1.5));
+ctx.fillStyle=rgba(col,0.9);
+ctx.fillText(str,cx,cy);
+}
+function drawStatus(t){
+var sx=L.status.x,sy=L.status.y;
+for(var i=0;i<STATUS_LABELS.length;i++){
+var a=statusAlpha(t,i);
+if(a<=0)continue;
+ctx.font="600 "+Math.max(13,W*0.014)+"px system-ui,sans-serif";
+ctx.textAlign="center";
+ctx.textBaseline="middle";
+var col=PAL.accent;
+if(i===2)col=PAL.fail;
+ctx.fillStyle=rgba(col,a);
+ctx.fillText(STATUS_LABELS[i],sx,sy);
+}
+}
+function drawTitle(t){
+var tx=L.title.x,ty=L.title.y;
+var a=0.9+0.1*Math.sin(t/1200);
+ctx.font="700 "+Math.max(16,W*0.02)+"px system-ui,sans-serif";
+ctx.textAlign="center";
+ctx.textBaseline="middle";
+ctx.fillStyle=rgba(PAL.text,a);
+ctx.fillText("Backpressure Pipeline",tx,ty);
+}
+function drawRule(t){
+var a=0.4+0.1*Math.sin(t/900);
+ctx.font="400 "+Math.max(10,W*0.009)+"px system-ui,sans-serif";
+ctx.textAlign="center";
+ctx.textBaseline="bottom";
+ctx.fillStyle=rgba(PAL.muted,a);
+ctx.fillText("Producer throttles when buffer saturates",W*0.5,H*0.97);
+}
+let __seek=null;
+window.__time=function(v){__seek=v;};
+window.__loop=LOOP;
+function frame(now){
+if(__seek!=null)now=__seek;
+var t=now%LOOP;
+ctx.clearRect(0,0,W,H);
+drawBackground(t);
+drawConnections(t);
+drawPackets(t);
+drawNodes(t);
+drawGauge(t);
+drawCounter(t);
+drawStatus(t);
+drawTitle(t);
+drawRule(t);
+requestAnimationFrame(frame);
+}
+function resize(){
+dpr=window.devicePixelRatio||1;
+W=window.innerWidth;
+H=window.innerHeight;
+canvas.width=W*dpr;
+canvas.height=H*dpr;
+canvas.style.width=W+"px";
+canvas.style.height=H+"px";
+ctx.setTransform(dpr,0,0,dpr,0,0);
+buildLayout();
+}
+window.addEventListener("resize",resize);
+resize();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

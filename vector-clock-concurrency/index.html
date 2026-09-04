@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Vector Clock Concurrency</title>
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
+canvas{display:block;width:100%;height:100%}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+(function(){
+"use strict";
+var canvas=document.getElementById("stage");
+var ctx=canvas.getContext("2d");
+var W=0,H=0,dpr=1;
+
+var LOOP=30000;
+var PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+function rgba(c,a){return"rgba("+c[0]+","+c[1]+","+c[2]+","+a+")";}
+
+function lerp(a,b,t){return a+(b-a)*t;}
+function clamp01(v){return v<0?0:v>1?1:v;}
+function easeInOut(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
+
+function beatAlpha(t,start,end,fade){
+  fade=fade||600;
+  if(t<start||t>=end)return 0;
+  var fi=clamp01((t-start)/fade);
+  var fo=clamp01((end-t)/fade);
+  return Math.min(fi,fo);
+}
+
+function quad(a,c,b,t){
+  var u=1-t;
+  return{x:u*u*a.x+2*u*t*c.x+t*t*b.x, y:u*u*a.y+2*u*t*c.y+t*t*b.y};
+}
+
+var nodes={};
+function buildLayout(){
+  nodes.A={x:W*0.5,y:H*0.22,r:Math.min(W,H)*0.045};
+  nodes.B={x:W*0.24,y:H*0.72,r:Math.min(W,H)*0.045};
+  nodes.C={x:W*0.76,y:H*0.72,r:Math.min(W,H)*0.045};
+}
+
+function getClocks(t){
+  var A=[0,0,0],B=[0,0,0],C=[0,0,0];
+  if(t>=5000)A[0]=1;
+  if(t>=7000){B[0]=1;C[0]=1;}
+  if(t>=12000){B[1]=1;C[2]=1;}
+  return{A:A,B:B,C:C};
+}
+
+function getPacketProgress(t,start,end){
+  if(t<start||t>=end)return null;
+  return clamp01((t-start)/(end-start));
+}
+
+function drawGrid(t){
+  var spacing=Math.max(40,W*0.04);
+  var offset=(t*0.005)%spacing;
+  ctx.strokeStyle=rgba(PAL.text,0.03);
+  ctx.lineWidth=1;
+  ctx.beginPath();
+  for(var x=-spacing+offset;x<W+spacing;x+=spacing){
+    ctx.moveTo(x,0);ctx.lineTo(x,H);
+  }
+  for(var y=-spacing+offset;y<H+spacing;y+=spacing){
+    ctx.moveTo(0,y);ctx.lineTo(W,y);
+  }
+  ctx.stroke();
+}
+
+function drawNode(n,label,t,alpha){
+  var pulse=1+0.06*Math.sin(t/400);
+  var r=n.r*pulse;
+  var a=alpha;
+  if(a<=0)return;
+
+  // glow
+  var g=ctx.createRadialGradient(n.x,n.y,r*0.3,n.x,n.y,r*2.5);
+  g.addColorStop(0,rgba(PAL.accent,0.12*a));
+  g.addColorStop(1,rgba(PAL.accent,0));
+  ctx.fillStyle=g;
+  ctx.beginPath();ctx.arc(n.x,n.y,r*2.5,0,Math.PI*2);ctx.fill();
+
+  // circle
+  ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);
+  ctx.fillStyle=rgba(PAL.accent,0.15*a);
+  ctx.fill();
+  ctx.strokeStyle=rgba(PAL.accent,0.7*a);
+  ctx.lineWidth=2;
+  ctx.stroke();
+
+  // label
+  ctx.font="bold "+Math.round(r*0.7)+"px monospace";
+  ctx.fillStyle=rgba(PAL.text,a);
+  ctx.textAlign="center";ctx.textBaseline="middle";
+  ctx.fillText(label,n.x,n.y);
+}
+
+function drawClock(n,vals,t,alpha,highlight){
+  if(alpha<=0)return;
+  var boxW=Math.min(W,H)*0.035;
+  var gap=boxW*0.15;
+  var totalW=boxW*3+gap*2;
+  var startX=n.x-totalW/2;
+  var y=n.y+n.r*1.6;
+  var fontSize=Math.round(boxW*0.55);
+
+  for(var i=0;i<3;i++){
+    var bx=startX+i*(boxW+gap);
+    var isHL=highlight&&highlight[i];
+    var bg=isHL?rgba(PAL.fail,0.25*alpha):rgba(PAL.accent,0.08*alpha);
+    var border=isHL?rgba(PAL.fail,0.8*alpha):rgba(PAL.accent,0.4*alpha);
+    var textColor=isHL?rgba(PAL.fail,alpha):rgba(PAL.text,alpha);
+
+    ctx.fillStyle=bg;
+    ctx.strokeStyle=border;
+    ctx.lineWidth=1.5;
+    roundRect(bx,y,boxW,boxW,4);
+    ctx.fill();ctx.stroke();
+
+    ctx.font="bold "+fontSize+"px monospace";
+    ctx.fillStyle=textColor;
+    ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.fillText(String(vals[i]),bx+boxW/2,y+boxW/2);
+  }
+}
+
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+function drawPacket(from,to,progress,t,alpha){
+  if(progress===null||alpha<=0)return;
+  var mid={x:(from.x+to.x)/2,y:(from.y+to.y)/2-30};
+  var pos=quad(from,mid,to,easeInOut(progress));
+  var trailLen=0.15;
+  var trailStart=Math.max(0,progress-trailLen);
+
+  // trail
+  for(var i=0;i<8;i++){
+    var tp=trailStart+(progress-trailStart)*(i/8);
+    var tpPos=quad(from,mid,to,easeInOut(tp));
+    var ta=alpha*(i/8)*0.5;
+    ctx.beginPath();ctx.arc(tpPos.x,tpPos.y,3*(i/8),0,Math.PI*2);
+    ctx.fillStyle=rgba(PAL.accent,ta);ctx.fill();
+  }
+
+  // head
+  var g=ctx.createRadialGradient(pos.x,pos.y,0,pos.x,pos.y,12);
+  g.addColorStop(0,rgba(PAL.accent,alpha));
+  g.addColorStop(1,rgba(PAL.accent,0));
+  ctx.fillStyle=g;
+  ctx.beginPath();ctx.arc(pos.x,pos.y,12,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(pos.x,pos.y,4,0,Math.PI*2);
+  ctx.fillStyle=rgba(PAL.text,alpha);ctx.fill();
+}
+
+function drawComparison(t,alpha){
+  if(alpha<=0)return;
+  var cx=W*0.5,cy=H*0.48;
+  var boxW=Math.min(W,H)*0.03;
+  var gap=boxW*0.12;
+  var rowH=boxW*1.4;
+
+  // B vector
+  var bVals=[1,2,0];
+  var cVals=[1,0,2];
+  var bStartX=cx-boxW*1.5-gap*1.5-boxW*0.3;
+  var cStartX=cx+boxW*0.3;
+  var bY=cy-rowH*0.7;
+  var cY=cy+rowH*0.3;
+
+  // labels
+  ctx.font="bold "+Math.round(boxW*0.45)+"px monospace";
+  ctx.fillStyle=rgba(PAL.muted,alpha);
+  ctx.textAlign="right";ctx.textBaseline="middle";
+  ctx.fillText("B",bStartX-boxW*0.5,bY+boxW/2);
+  ctx.textAlign="left";
+  ctx.fillText("C",cStartX+boxW*1.5+boxW*0.5,cY+boxW/2);
+
+  // highlight indices: B[1]>C[1] and C[2]>B[2]
+  var bHL=[false,true,false];
+  var cHL=[false,false,true];
+
+  for(var i=0;i<3;i++){
+    var bx=bStartX+i*(boxW+gap);
+    var cx2=cStartX+i*(boxW+gap);
+
+    // B box
+    ctx.fillStyle=bHL[i]?rgba(PAL.fail,0.2*alpha):rgba(PAL.accent,0.08*alpha);
+    ctx.strokeStyle=bHL[i]?rgba(PAL.fail,0.7*alpha):rgba(PAL.accent,0.3*alpha);
+    ctx.lineWidth=1.5;
+    roundRect(bx,bY,boxW,boxW,3);ctx.fill();ctx.stroke();
+    ctx.font="bold "+Math.round(boxW*0.5)+"px monospace";
+    ctx.fillStyle=bHL[i]?rgba(PAL.fail,alpha):rgba(PAL.text,alpha);
+    ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.fillText(String(bVals[i]),bx+boxW/2,bY+boxW/2);
+
+    // C box
+    ctx.fillStyle=cHL[i]?rgba(PAL.fail,0.2*alpha):rgba(PAL.accent,0.08*alpha);
+    ctx.strokeStyle=cHL[i]?rgba(PAL.fail,0.7*alpha):rgba(PAL.accent,0.3*alpha);
+    roundRect(cx2,cY,boxW,boxW,3);ctx.fill();ctx.stroke();
+    ctx.fillStyle=cHL[i]?rgba(PAL.fail,alpha):rgba(PAL.text,alpha);
+    ctx.fillText(String(cVals[i]),cx2+boxW/2,cY+boxW/2);
+
+    // comparison arrow
+    var arrowY=bY+boxW+(cY-bY-boxW)/2;
+    var ax=bx+boxW/2;
+    ctx.strokeStyle=rgba(PAL.muted,0.4*alpha);
+    ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(ax,bY+boxW+2);ctx.lineTo(ax,cY-2);ctx.stroke();
+  }
+
+  // "vs" text
+  ctx.font="bold "+Math.round(boxW*0.4)+"px monospace";
+  ctx.fillStyle=rgba(PAL.muted,alpha*0.6);
+  ctx.textAlign="center";
+  ctx.fillText("vs",cx,bY+boxW*1.5);
+}
+
+function drawConflict(t,alpha){
+  if(alpha<=0)return;
+  var cx=W*0.5,cy=H*0.48;
+  var pulse=1+0.15*Math.sin(t/150);
+  var r=Math.min(W,H)*0.08*pulse;
+
+  // red ring
+  ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);
+  ctx.strokeStyle=rgba(PAL.fail,0.8*alpha);
+  ctx.lineWidth=3;
+  ctx.stroke();
+
+  // inner glow
+  var g=ctx.createRadialGradient(cx,cy,0,cx,cy,r);
+  g.addColorStop(0,rgba(PAL.fail,0.15*alpha));
+  g.addColorStop(1,rgba(PAL.fail,0));
+  ctx.fillStyle=g;
+  ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();
+
+  // text
+  ctx.font="bold "+Math.round(r*0.35)+"px monospace";
+  ctx.fillStyle=rgba(PAL.fail,alpha);
+  ctx.textAlign="center";ctx.textBaseline="middle";
+  ctx.fillText("INCOMPARABLE",cx,cy);
+}
+
+function drawCausalMeter(t,alpha){
+  if(alpha<=0)return;
+  var mx=W*0.5,my=H*0.88;
+  var mw=Math.min(W,H)*0.25;
+  var mh=Math.min(W,H)*0.015;
+
+  // label
+  ctx.font=Math.round(mh*0.8)+"px monospace";
+  ctx.fillStyle=rgba(PAL.muted,alpha*0.7);
+  ctx.textAlign="center";ctx.textBaseline="bottom";
+  ctx.fillText("CAUSAL ORDER",mx,my-mh*0.8);
+
+  // track
+  ctx.fillStyle=rgba(PAL.text,0.05*alpha);
+  roundRect(mx-mw/2,my,mw,mh,3);ctx.fill();
+
+  // fill: 0 during conflict, partial during sync
+  var fill=0;
+  if(t>=17000&&t<22000)fill=clamp01((t-17000)/5000)*0.3;
+  if(t>=22000)fill=0;
+
+  if(fill>0){
+    ctx.fillStyle=rgba(PAL.accent,0.6*alpha);
+    roundRect(mx-mw/2,my,mw*fill,mh,3);ctx.fill();
+  }
+}
+
+function drawTitle(t,alpha){
+  if(alpha<=0)return;
+  ctx.font="bold "+Math.round(Math.min(W,H)*0.035)+"px monospace";
+  ctx.fillStyle=rgba(PAL.text,alpha);
+  ctx.textAlign="center";ctx.textBaseline="top";
+  ctx.fillText("Vector Clock Concurrency",W*0.5,H*0.04);
+}
+
+function drawRule(t,alpha){
+  if(alpha<=0)return;
+  ctx.font=Math.round(Math.min(W,H)*0.018)+"px monospace";
+  ctx.fillStyle=rgba(PAL.muted,alpha*0.6);
+  ctx.textAlign="center";ctx.textBaseline="bottom";
+  ctx.fillText("neither v_B \u2264 v_C nor v_C \u2264 v_B  \u2192  concurrent",W*0.5,H*0.96);
+}
+
+let __seek=null;
+window.__time=function(v){__seek=v;};
+window.__loop=LOOP;
+
+function frame(now){
+  if(__seek!=null)now=__seek;
+  var t=now%LOOP;
+
+  ctx.clearRect(0,0,W,H);
+
+  // background
+  ctx.fillStyle=rgba(PAL.bg,1);
+  ctx.fillRect(0,0,W,H);
+  drawGrid(t);
+
+  // beat alphas
+  var aNodes=beatAlpha(t,0,LOOP,800);
+  var aAUpdate=beatAlpha(t,5000,7000,400);
+  var aPropagate=beatAlpha(t,7000,12000,400);
+  var aConcurrent=beatAlpha(t,12000,17000,400);
+  var aSync=beatAlpha(t,17000,22000,400);
+  var aConflict=beatAlpha(t,22000,29000,800);
+  var aTitle=beatAlpha(t,0,LOOP,1000);
+
+  // draw connections (faint lines between nodes)
+  var connAlpha=0.08*aNodes;
+  ctx.strokeStyle=rgba(PAL.accent,connAlpha);
+  ctx.lineWidth=1;
+  ctx.setLineDash([4,6]);
+  ctx.beginPath();ctx.moveTo(nodes.A.x,nodes.A.y);ctx.lineTo(nodes.B.x,nodes.B.y);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(nodes.A.x,nodes.A.y);ctx.lineTo(nodes.C.x,nodes.C.y);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(nodes.B.x,nodes.B.y);ctx.lineTo(nodes.C.x,nodes.C.y);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // packets
+  var pAB=getPacketProgress(t,5000,7000);
+  var pAC=getPacketProgress(t,5000,7000);
+  var pBC=getPacketProgress(t,17000,22000);
+  var pCB=getPacketProgress(t,17000,22000);
+
+  drawPacket(nodes.A,nodes.B,pAB,t,aAUpdate);
+  drawPacket(nodes.A,nodes.C,pAC,t,aAUpdate);
+  drawPacket(nodes.B,nodes.C,pBC,t,aSync);
+  drawPacket(nodes.C,nodes.B,pCB,t,aSync);
+
+  // nodes
+  var clocks=getClocks(t);
+  drawNode(nodes.A,"A",t,aNodes);
+  drawNode(nodes.B,"B",t,aNodes);
+  drawNode(nodes.C,"C",t,aNodes);
+
+  // clocks under nodes
+  drawClock(nodes.A,clocks.A,t,aNodes,null);
+  drawClock(nodes.B,clocks.B,t,aNodes,null);
+  drawClock(nodes.C,clocks.C,t,aNodes,null);
+
+  // comparison panel (during sync)
+  drawComparison(t,aSync);
+
+  // conflict (after sync)
+  drawConflict(t,aConflict);
+
+  // causal meter
+  drawCausalMeter(t,aSync+aConflict);
+
+  // title and rule
+  drawTitle(t,aTitle);
+  drawRule(t,aConflict);
+
+  requestAnimationFrame(frame);
+}
+
+function resize(){
+  dpr=window.devicePixelRatio||1;
+  W=window.innerWidth;
+  H=window.innerHeight;
+  canvas.width=W*dpr;
+  canvas.height=H*dpr;
+  canvas.style.width=W+"px";
+  canvas.style.height=H+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  buildLayout();
+}
+
+window.addEventListener("resize",resize);
+resize();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

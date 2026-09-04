@@ -1,16 +1,16 @@
 # IMPROVEMENTS (loop backlog — take top open item each iteration)
 
-- [ ] tool/check.mjs + tool/bench/prompts.jsonl: add `tool/bench.mjs` that
+- [x] tool/check.mjs + tool/bench/prompts.jsonl: add `tool/bench.mjs` (10/10 pass, 2832s) that
   runs all 10 bench prompts via generate.mjs and reports pass rate;
   acceptance: `node tool/bench.mjs` prints N/10 and appends to
   logs/iterations.jsonl.
-- [ ] tool/check.mjs: append `{ts, score, failures, seconds}` to
+- [x] tool/check.mjs: append `{ts, score, failures, seconds}` to
   logs/iterations.jsonl on every check run;
   acceptance: file gains one line per `./check.sh` run.
 - [ ] tool/generate.mjs: cut wall time — instruct terser HTML in the system
   prompt (~120-160 lines target) and lower max_tokens;
   acceptance: a smoke prompt generates + passes in ≤ 150s.
-- [ ] tool/validate.mjs: seam check currently uses label-density only; add a
+- [x] tool/validate.mjs: seam check currently uses label-density only; add a
   pixel-brightness cross-check (mean content-pixel luminance at seam vs
   mid-loop) and a synthetic dark-seam fixture under tool/fixtures/;
   acceptance: fixture graphic fails the seam check, real graphics pass.

@@ -104,13 +104,14 @@ async function validateFolder(folderPath) {
   }
 
   const rectsByTime = {};
+  const contentsByTime = {};
   for (const f of FRAMES) {
     const t = Math.round(LOOP * f);
     const p = await park(t);
     const shot = path.join(shotDir, `t${t}.png`);
     await page.screenshot({ path: shot });
     r.shots.push(shot);
-    if (p) rectsByTime[t] = p.ft;
+    if (p) { rectsByTime[t] = p.ft; contentsByTime[t] = p.content; }
   }
   const seamA = await park(LOOP - 300);
   const seamB = await park(300);
@@ -144,13 +145,17 @@ async function validateFolder(folderPath) {
   if (culls.length) errors.push(`collisions: ${culls.slice(0, 5).join("; ")}`);
 
   // seam: content density at both sides must not collapse vs densest frame
-  const contents = Object.values(rectsByTime).map(() => 0); // placeholder (rects only)
   const midContent = Math.max(...FRAMES.map((f) => rectsByTime[Math.round(LOOP * f)]?.length || 0));
   const seamContent = Math.max(seamA?.ft?.length || 0, seamB?.ft?.length || 0);
   const emptySeam = seamA?.content < 100 && seamB?.content < 100;
   const collapsed = midContent > 4 && seamContent < 0.3 * midContent && !emptySeam;
-  r.seam = hasSeek && !emptySeam && !collapsed ? 1 : 0;
-  if (emptySeam) errors.push("seam: near-empty frames at loop wrap");
+  // pixel cross-check: seam frames must not be dark/empty vs the densest frame
+  const midPx = Math.max(...Object.values(contentsByTime));
+  const seamPx = Math.max(seamA?.content || 0, seamB?.content || 0);
+  const darkSeam = midPx > 1000 && seamPx < 0.35 * midPx;
+  r.seam = hasSeek && !emptySeam && !collapsed && !darkSeam ? 1 : 0;
+  if (darkSeam) errors.push(`seam: dark frame at loop wrap (content px ${seamPx} vs mid ${midPx})`);
+  else if (emptySeam) errors.push("seam: near-empty frames at loop wrap");
   else if (collapsed) errors.push("seam: label density collapses at loop wrap");
 
   r.readme = (() => {
