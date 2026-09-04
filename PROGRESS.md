@@ -1,20 +1,31 @@
 # PROGRESS
 
-## State — GOAL MET (check.sh SCORE 460/460, endless mode: improvements)
-- M1-M5 DONE. Tool chain: tool/generate.sh "<prompt>" → LLM (llama.cpp
-  :8123 Qwen3.8-27b-coding) → index.html+README → validate.mjs (5 checks +
-  6 vision shots) → ≤3 LLM fix passes. First gen passed 5/5 in 195s, 0 fixes.
-- check.sh: 10 graphics ×35 + 2 smoke ×55 = 460 max; currently 460/460.
-- M6 docs DONE (README.md + AGENTS.md tooling sections).
-- IMPROVEMENTS.md backlog created (7 items) — endless loop continues.
+## State — GOAL MET + 26 iterations of improvements (endless mode)
+- Full pipeline: `tool/generate.sh "<prompt>"` → llama.cpp :8123
+  (Qwen3.8-27b-coding) → `<topic>/index.html` + README → validate →
+  ≤3 LLM fix passes → `logs/generations.jsonl` metadata line.
+- **check.sh: 980/980, exit 0, zero problems** (28 graphics × 35 + 2
+  smoke × 55). `--skip-gen` ≈ 20s, `--only <topic>` ≈ 5s, `--json`
+  single-line machine output, `--regen` forces fresh smoke generation.
+- **Bench: 17/17 in 51s** (reuse path via `logs/slug-map.jsonl`; full
+  regen ~28 min).
+- validate.mjs checks: clean, seek, collisions (deduped ×N), seam
+  (label-density + 4-point pixel window), readme, **content** (min
+  area), **frozen** (loop-wide max content-px delta), **resize**
+  (1366×768 mid-run), shotsPath + 6 PNGs.
+- Fixtures (negative tests): dark-seam, text-overlap, blank-canvas,
+  static-canvas — all correctly failing their target check.
+- Prompt rules 1-17 in generate.mjs (terser data-driven HTML, label
+  fit via measureText, per-beat visible motion).
 
 ## Decisions
-- LLM = llama.cpp 127.0.0.1:8123 only (operator rule). Qwen3.8-27b-coding
-  preloaded; reasoning model → max_tokens 16000.
-- Vision pass = deterministic probes + tool/shots PNGs (model lacks vision).
-- hypa_shell kills >30s commands → long runs: nohup to /tmp, poll next turn.
+- LLM = llama.cpp 127.0.0.1:8123 only (operator rule).
+- Vision pass = deterministic probes + tool/shots PNGs + documented
+  6-shot human review table (README "The vision pass").
+- Overwrite guard: slug-map fast path (exit 2 pre-LLM); only bench/
+  check set MG_ALLOW_EXISTING=1.
+- hypa_shell kills >30s commands → long runs: nohup to /tmp, poll.
 
 ## Next steps (top of IMPROVEMENTS.md)
-1. tool/bench.mjs — full 10-prompt bench → N/10 + logs/iterations.jsonl.
-2. check.mjs — log every run to logs/iterations.jsonl.
-3. generate.mjs — terser-HTML prompt → ≤150s smoke.
+1. tool/validate.mjs — label-visibility (zero-alpha) probe + fixture.
+2. (backlog refresh as items close)
