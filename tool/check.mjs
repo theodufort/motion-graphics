@@ -64,7 +64,7 @@ async function worker() {
     }
     const pts = 10 * r.clean + 5 * r.seek + 10 * r.collisions + 5 * r.seam + 5 * r.readme;
     score += pts;
-    if (pts < 35) problems.push(`${name}: ${pts}/35 (${(r.errors || []).join("; ") || "check bits failed"})`);
+    if (pts < 35 || r.resize === 0) problems.push(`${name}: ${pts}/35 (${(r.errors || []).join("; ") || (r.resize === 0 ? "resize check failed" : "check bits failed")})`);
   }
 }
 await Promise.all(Array.from({ length: Math.min(CONCURRENCY, graphics.length) }, worker));

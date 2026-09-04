@@ -49,7 +49,6 @@
 - [x] check.mjs: --json flag (single JSON line: ts, score, max,
   graphics, problems[]); acceptance met: parsed ok, 805/805 on 23
   graphics.".
-- [ ] tool/validate.mjs: viewport-resize robustness check — resize to
-  1366x768 mid-validation and seek again; acceptance: pageerror count
-  stays 0 for all 22 graphics (check added to report JSON as
-  "resize": 0|1).
+- [x] tool/validate.mjs: viewport-resize robustness check (1366x768
+  mid-validation + re-seek, report JSON "resize": 0|1, enforced by
+  check.mjs); acceptance met: all 23 graphics resize:1, 805/805.

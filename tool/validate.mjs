@@ -174,6 +174,22 @@ async function validateFolder(folderPath) {
     return existsSync(p) && readFileSync(p, "utf8").length > 200 ? 1 : 0;
   })();
   if (!r.readme) errors.push("README.md missing or trivial");
+
+  // resize robustness: change viewport mid-validation, then seek again
+  r.resize = 0;
+  try {
+    const before = pageErrors.length;
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await page.evaluate(() => window.dispatchEvent(new Event("resize")));
+    if (hasSeek) await page.evaluate((v) => window.__time(v), Math.floor(LOOP * 0.5));
+    await page.waitForTimeout(300);
+    const n = pageErrors.length - before;
+    if (n > 0) errors.push(`resize: ${n} error(s) after viewport change to 1366x768`);
+    else r.resize = 1;
+  } catch (e) {
+    errors.push(`resize: ${e.message}`);
+  }
+
   r.errors = [...pageErrors, ...errors];
   await browser.close();
   return r;
