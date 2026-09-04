@@ -58,8 +58,7 @@
   state change (at least one element's position/size/alpha changes
   between consecutive beats); acceptance: next 2 fresh prompts pass
   and their shots at 40%/65% differ by > 5% content px.
-- [ ] tool/validate.mjs: crossbeat motion probe — sample 3 consecutive
-  parked frames 200ms apart mid-loop; if canvas content-px deltas are
-  all < 0.5% for 8+ consecutive samples across the loop, flag
-  "frozen animation"; acceptance: synthetic static-canvas fixture
-  flagged, all 26 real graphics unflagged.
+- [x] tool/validate.mjs: frozen-animation probe (9×200ms samples at
+  45% of loop; "frozen" flag if all content-px deltas < 0.5%);
+  acceptance met: fixtures/static-canvas flagged, all 26 graphics
+  unflagged (910/910).

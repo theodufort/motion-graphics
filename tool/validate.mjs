@@ -59,7 +59,7 @@ async function validateFolder(folderPath) {
     };
   });
 
-  const r = { clean: 0, seek: 0, collisions: 0, seam: 0, readme: 0, content: 0, errors: [...pageErrors, ...errors], shots: [], shotsPath: shotDir, LOOP };
+  const r = { clean: 0, seek: 0, collisions: 0, seam: 0, readme: 0, content: 0, frozen: 0, errors: [...pageErrors, ...errors], shots: [], shotsPath: shotDir, LOOP };
   await page.goto("file://" + htmlPath, { waitUntil: "load", timeout: 15000 });
   await page.waitForTimeout(300);
 
@@ -179,6 +179,20 @@ async function validateFolder(folderPath) {
   if (!r.readme) errors.push("README.md missing or trivial");
 
   // resize robustness: change viewport mid-validation, then seek again
+  // frozen-animation probe: 9 consecutive 200ms samples mid-loop must not
+  // all have near-zero content-px deltas (a static canvas never moves)
+  if (hasSeek) {
+    const step = 200, n = 9;
+    const samples = [];
+    for (let k = 0; k < n; k++) samples.push((await park(LOOP * 0.45 + k * step))?.content || 0);
+    const deltas = samples.slice(1).map((c, i) => Math.abs(c - samples[i]));
+    const base = Math.max(...samples, 1);
+    if (deltas.every((d) => d / base < 0.005)) {
+      r.frozen = 1;
+      errors.push("frozen: content-px deltas < 0.5% across 9 consecutive 200ms samples (static canvas?)");
+    }
+  }
+
   r.resize = 0;
   try {
     const before = pageErrors.length;
@@ -210,5 +224,5 @@ if (isMain) {
   }
   const r = await validateFolder(path.resolve(arg));
   console.log(JSON.stringify({ folder: path.basename(arg), ...r }, null, 2));
-  process.exit(r.clean && r.seek && r.collisions && r.seam && r.readme && r.content ? 0 : 1);
+  process.exit(r.clean && r.seek && r.collisions && r.seam && r.readme && r.content && !r.frozen ? 0 : 1);
 }
