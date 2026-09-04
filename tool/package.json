@@ -1,0 +1,13 @@
+{
+  "name": "motion-graphics-tool",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "validate": "node validate.mjs",
+    "generate": "node generate.mjs",
+    "check": "node check.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.62.1"
+  }
+}
