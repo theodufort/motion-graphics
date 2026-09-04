@@ -59,7 +59,7 @@ async function validateFolder(folderPath) {
     };
   });
 
-  const r = { clean: 0, seek: 0, collisions: 0, seam: 0, readme: 0, errors: [...pageErrors, ...errors], shots: [], shotsPath: shotDir, LOOP };
+  const r = { clean: 0, seek: 0, collisions: 0, seam: 0, readme: 0, content: 0, errors: [...pageErrors, ...errors], shots: [], shotsPath: shotDir, LOOP };
   await page.goto("file://" + htmlPath, { waitUntil: "load", timeout: 15000 });
   await page.waitForTimeout(300);
 
@@ -161,7 +161,10 @@ async function validateFolder(folderPath) {
   const emptySeam = seamA?.content < 100 && seamB?.content < 100;
   const collapsed = midContent > 4 && seamContent < 0.3 * midContent && !emptySeam;
   // pixel cross-check: seam frames must not be dark/empty vs the densest frame
-  const midPx = Math.max(...Object.values(contentsByTime));
+  const midPx = Object.keys(contentsByTime).length ? Math.max(...Object.values(contentsByTime)) : 0;
+  // min-area sanity: a real graphic fills its densest frame; blank-but-quiet is a bug
+  r.content = midPx >= 500 ? 1 : 0;
+  if (!r.content) errors.push(`content: densest frame only ${midPx} px (blank canvas?)`);
   const seamPx = Math.max(...seamPts.map((p) => p?.content || 0));
   const darkSeam = midPx > 1000 && seamPx < 0.3 * midPx;
   r.seam = hasSeek && !emptySeam && !collapsed && !darkSeam ? 1 : 0;
@@ -207,5 +210,5 @@ if (isMain) {
   }
   const r = await validateFolder(path.resolve(arg));
   console.log(JSON.stringify({ folder: path.basename(arg), ...r }, null, 2));
-  process.exit(r.clean && r.seek && r.collisions && r.seam && r.readme ? 0 : 1);
+  process.exit(r.clean && r.seek && r.collisions && r.seam && r.readme && r.content ? 0 : 1);
 }

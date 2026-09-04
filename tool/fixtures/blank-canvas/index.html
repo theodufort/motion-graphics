@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>blank fixture</title>
+<style>body{margin:0;background:#090909}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+const LOOP = 8000;
+window.__loop = LOOP;
+let W = 960, H = 540, __seek = null;
+canvas.width = W; canvas.height = H;
+window.__time = (v) => { __seek = v; };
+function frame(now) {
+  if (__seek != null) now = __seek;
+  const t = now % LOOP;
+  ctx.clearRect(0, 0, W, H); // draws nothing — blank but quiet
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
