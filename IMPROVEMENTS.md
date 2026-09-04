@@ -46,10 +46,9 @@
   AIMD, LSM-tree compaction, circuit breaker half-open probing);
   acceptance: 15 lines with 2 smoke, `node tool/bench.mjs` prints
   BENCH: N/15.
-- [ ] check.sh/check.mjs: add --json flag printing a machine-readable
-  summary {ts, score, max, graphics, problems[]} as the only stdout;
-  acceptance: `./check.sh --skip-gen --json` parses with
-  python3 -c "import json,sys; json.load(sys.stdin)".
+- [x] check.mjs: --json flag (single JSON line: ts, score, max,
+  graphics, problems[]); acceptance met: parsed ok, 805/805 on 23
+  graphics.".
 - [ ] tool/validate.mjs: viewport-resize robustness check — resize to
   1366x768 mid-validation and seek again; acceptance: pageerror count
   stays 0 for all 22 graphics (check added to report JSON as
