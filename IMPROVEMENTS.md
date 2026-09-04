@@ -16,9 +16,9 @@
   pixel-brightness cross-check (mean content-pixel luminance at seam vs
   mid-loop) and a synthetic dark-seam fixture under tool/fixtures/;
   acceptance: fixture graphic fails the seam check, real graphics pass.
-- [ ] tool/validate.mjs: dedupe collision findings across parked frames
-  (same pair at 3+ times = 1 finding with count);
-  acceptance: JSON `errors` lists a pair once with "×N".
+- [x] tool/validate.mjs: collision findings deduped per pair;
+  acceptance met: fixtures/text-overlap reports '"alpha label" x "beta label" ×4',
+  all 22 graphics still 770/770.
 - [ ] README.md / AGENTS.md: add a short "vision pass" note — how a
   human/vision model reviews tool/shots/<topic>/ after generation;
   acceptance: section exists and names the 6 shot files.

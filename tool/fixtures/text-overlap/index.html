@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>overlap fixture</title>
+<style>body{margin:0;background:#090909;display:flex;align-items:center;justify-content:center;min-height:100vh}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+const LOOP = 8000;
+window.__loop = LOOP;
+let W, H;
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  W = 960; H = 540;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + "px"; canvas.style.height = H + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener("resize", resize);
+let __seek = null;
+window.__time = (v) => { __seek = v; };
+function frame(now) {
+  if (__seek != null) now = __seek;
+  const t = now % LOOP;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(62,207,142,0.9)";
+  ctx.fillRect(W * 0.3 + Math.sin(t / 300) * 30, H * 0.5, 220, 100);
+  ctx.font = "700 24px monospace";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(237,237,237,0.95)";
+  ctx.fillText("alpha label", W / 2, H * 0.3);
+  ctx.fillStyle = "rgba(239,68,68,0.95)";
+  ctx.fillText("beta label", W / 2 + 10, H * 0.3); // overlaps alpha at all t
+  requestAnimationFrame(frame);
+}
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
