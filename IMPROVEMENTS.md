@@ -51,4 +51,11 @@
   graphics.".
 - [x] tool/validate.mjs: viewport-resize robustness check (1366x768
   mid-validation + re-seek, report JSON "resize": 0|1, enforced by
-  check.mjs); acceptance met: all 23 graphics resize:1, 805/805.
+  check.mjs); acceptance met: all 23 graphics resize:1, 805/805.- [ ] tool/generate.mjs: system prompt rule — every text label must fit
+  its enclosing shape (measure with ctx.measureText before fillText,
+  shrink font if wider than 0.9x the shape); acceptance: next 3 bench
+  prompts produce 0 collision findings without a fix pass.
+- [ ] repo hygiene: consolidate duplicate bench-output folders
+  (service-mesh-routing vs service-mesh-circuit-breaker, gc-mark-sweep vs
+  the newer gc slug) into the slug-mapped one;
+  acceptance: duplicate removed, check.sh still passes at the same max.
