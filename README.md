@@ -14,6 +14,26 @@ theodufort.com.
         ├── index.html                    the graphic itself
         └── README.md                     standard description of the visual (kept in sync)
 
+## Generating a graphic from a prompt
+
+The repo doubles as a prompt-to-graphic tool (spec: `GOAL.md`):
+
+```sh
+./tool/generate.sh "make a motion graphic about how X works"
+```
+
+That one call: prompts the local LLM (llama.cpp on `127.0.0.1:8123`,
+`MG_LLM_MODEL`, default `Qwen3.8-27b-coding`), writes `<topic>/index.html`
++ `README.md`, then validates headlessly (`tool/validate.mjs`: pageerrors,
+`__time` seek, fillText collision rects, loop-seam density, README, plus
+screenshots to `tool/shots/<topic>/` for vision review) and feeds any
+failures back to the LLM for up to 3 fix passes. Exit 0 + JSON summary =
+a graphic that passed every check (~3 min typical).
+
+`./check.sh` scores the whole repo (`SCORE: <n>`, exit 0 = all graphics
+pass + both smoke prompts from `tool/bench/prompts.jsonl` generate
+cleanly). Unattended runs log each iteration to `logs/iterations.jsonl`.
+
 ## Building or changing a graphic
 
 Follow the `motion-graphics` skill (`skills/motion-graphics/SKILL.md`) and

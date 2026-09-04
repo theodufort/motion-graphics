@@ -71,6 +71,16 @@ reference and workflow):
 6. **Minimal text.** Short title (3–6 words), 2–4 word node labels, no
    paragraphs. Prefer `.counter` numbers over sentences.
 
+## Automated tooling (tool/)
+
+`tool/generate.sh "<prompt>"` generates + self-validates a graphic end to
+end (LLM via llama.cpp :8123 → file → headless validation → LLM fix
+passes). `tool/validate.mjs <folder>` is the standalone validator (also
+imported by `tool/check.mjs`). `./check.sh` is the repo-wide goal check
+(print `SCORE: <n>`, exit 0 = all criteria met; see `GOAL.md`). Generated
+graphics count as first-class citizens: same rules, same validation as
+hand-written ones.
+
 ## Self-validation loop (mandatory — never skip)
 
 Every graphic you create **or edit** must pass the validation loop before you
