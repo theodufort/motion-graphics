@@ -1,22 +1,22 @@
-# TCP Congestion Control Visualized
-A looping animation tracing the classic sawtooth of window growth through slow start, congestion avoidance, and AIMD loss recovery.
+# TCP Congestion Control Cycle
+Visualizes the full slow-start → congestion-avoidance → AIMD cycle as a live cwnd-vs-RTT graph with packet flow between sender, network, and receiver.
 ## Story beats
 | Time (s) | Beat | What's on screen |
 | -------- | ---- | ---------------- |
-| 0–7.5 | Slow Start | cwnd doubles each RTT, exponential curve rises, green trace |
-| 7.5–15 | Congestion Avoidance | Linear +1/RTT growth, steady packet flow |
-| 15–16.5 | Loss Detected | Red flash, cwnd halves (24→12), packets scatter |
-| 16.5–24 | Additive Increase | Linear recovery, cwnd climbs 12→18 |
-| 24–25.5 | Loss Detected | Second red flash, cwnd halves (18→9) |
-| 25.5–30 | Multi Decrease → Slow Start | Exponential recovery 9→16, crossfades into loop start |
+| 0–7.5    | Slow Start | cwnd doubles each RTT (1→16), green curve rises exponentially |
+| 7.5–15   | Congestion Avoidance | cwnd grows linearly (16→24), steady green line |
+| 15–16.5  | Loss Detected | Red flash at peak, cwnd halves to 12 |
+| 16.5–24  | Additive Increase | cwnd climbs linearly (12→18) |
+| 24–25.5  | Loss Detected | Second red flash, cwnd halves to 9 |
+| 25.5–30  | Multiplicative Decrease | cwnd drops 9→1, resets for next cycle |
 Loop length: 30s.
 ## Key elements
-- Sawtooth graph: accent green trace, fail red on loss segments
-- Three network nodes: Sender / Network / Receiver, muted pulse
-- Packet dots: accent color, travel quadratic Bézier paths
-- cwnd counter: large monospace number, ticks with window size
-- Phase label: bottom HUD, crossfades between beats
+- cwnd graph: accent green (normal) / fail red (loss), full-viewport left panel
+- Sender / Network / Receiver nodes: surface fill, accent stroke, pulsing radius
+- Packets: accent dots on quadratic Bézier paths with fading trails
+- HUD counter + meter bar: ticks with cwnd value, color-shifts on loss
+- Phase label: bottom-center, swaps with crossfade via fitLabel
 ## Notes
-- The full curve is always drawn faintly; a bright trace follows the playhead
-- Loss segments use the fail color and a radial red glow at the drop point
-- Edge fade (first/last 8%) ensures seamless loop wrap with no dark frame
+- cwndAt(0) = cwndAt(1) = 1 ensures a seamless loop with no dark seam frame
+- No edgeFade; all elements remain visible throughout the cycle
+- PAL.surface added to resolve the undefined-token crash

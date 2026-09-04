@@ -13,31 +13,30 @@
 <script>
 const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
 const LOOP=30000;
-const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9],surface:[28,28,28]};
 const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
 let W,H,dpr,gL,gT,gW,gH,nodes;
-function resize(){dpr=devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0);gL=W*.06;gT=H*.1;gW=W*.52;gH=H*.6;nodes=[{x:W*.68,y:H*.28,l:'Sender'},{x:W*.84,y:H*.5,l:'Network'},{x:W*.68,y:H*.72,l:'Receiver'}]}
+function resize(){dpr=devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0);gL=W*.06;gT=H*.1;gW=W*.52;gH=H*.55;nodes=[{x:W*.72,y:H*.3,l:'Sender'},{x:W*.86,y:H*.5,l:'Network'},{x:W*.72,y:H*.7,l:'Receiver'}]}
 const lerp=(a,b,t)=>a+(b-a)*t,clamp01=v=>Math.max(0,Math.min(1,v)),ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
-const edgeFade=b=>Math.min(clamp01(b/.08),clamp01((1-b)/.08));
-function cwndAt(b){if(b<.25)return Math.pow(2,b/.25*4);if(b<.5)return 16+(b-.25)/.25*8;if(b<.55)return 24-(b-.5)/.05*12;if(b<.8)return 12+(b-.55)/.25*6;if(b<.85)return 18-(b-.8)/.05*9;return 9*Math.pow(16/9,(b-.85)/.15)}
+function cwndAt(b){if(b<.25)return Math.pow(2,b/.25*4);if(b<.5)return 16+(b-.25)/.25*8;if(b<.55)return 24-(b-.5)/.05*12;if(b<.8)return 12+(b-.55)/.25*6;if(b<.85)return 18-(b-.8)/.05*9;return 9-(b-.85)/.15*8}
 function phaseAt(b){if(b<.25)return'SLOW START';if(b<.5)return'CONGESTION AVOIDANCE';if(b<.55)return'LOSS DETECTED';if(b<.8)return'ADDITIVE INCREASE';if(b<.85)return'LOSS DETECTED';return'MULTIPLICATIVE DECREASE'}
 function isLoss(b){return(b>=.5&&b<.55)||(b>=.8&&b<.85)}
 function graphXY(b){return{x:gL+b*gW,y:gT+gH-(cwndAt(b)/28)*gH}}
 function quad(a,c,b2,t){return{x:lerp(lerp(a.x,c.x,t),lerp(c.x,b2.x,t),t),y:lerp(lerp(a.y,c.y,t),lerp(c.y,b2.y,t),t)}}
 function fitLabel(txt,maxW){let s=13;ctx.font=s+'px monospace';while(ctx.measureText(txt).width>maxW*.9&&s>8){s-=2;ctx.font=s+'px monospace'}return s}
 function drawBg(){ctx.fillStyle=rgba(PAL.bg,1);ctx.fillRect(0,0,W,H);ctx.strokeStyle=rgba(PAL.muted,.03);ctx.lineWidth=1;for(let x=0;x<W;x+=48){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=48){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}}
-function drawGraph(beat,now){const a=edgeFade(beat);ctx.strokeStyle=rgba(PAL.muted,.2*a);ctx.lineWidth=1;ctx.strokeRect(gL,gT,gW,gH);ctx.fillStyle=rgba(PAL.muted,.5*a);ctx.font='11px monospace';ctx.textAlign='center';ctx.fillText('RTT',gL+gW/2,gT+gH+16);ctx.save();ctx.translate(gL-12,gT+gH/2);ctx.rotate(-Math.PI/2);ctx.fillText('cwnd',0,0);ctx.restore();
-ctx.beginPath();for(let i=0;i<=200;i++){const p=graphXY(i/200);i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)}ctx.strokeStyle=rgba(PAL.muted,.12*a);ctx.lineWidth=1;ctx.stroke();
-ctx.beginPath();const steps=Math.floor(beat*200);for(let i=0;i<=steps;i++){const p=graphXY(i/200);i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)}const loss=isLoss(beat);ctx.strokeStyle=rgba(loss?PAL.fail:PAL.accent,.9*a);ctx.lineWidth=2.5;ctx.stroke();
-const hp=graphXY(beat);ctx.beginPath();ctx.arc(hp.x,hp.y,5+Math.sin(now/300)*1.5,0,Math.PI*2);ctx.fillStyle=rgba(loss?PAL.fail:PAL.accent,a);ctx.fill();
-if(loss){const g=ctx.createRadialGradient(hp.x,hp.y,0,hp.x,hp.y,40);g.addColorStop(0,rgba(PAL.fail,.3*a));g.addColorStop(1,rgba(PAL.fail,0));ctx.fillStyle=g;ctx.fillRect(hp.x-40,hp.y-40,80,80)}}
-function drawNodes(beat,now){const a=edgeFade(beat);nodes.forEach((n,i)=>{const r=18+Math.sin(now/400+i*1.2)*3;ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);ctx.fillStyle=rgba(PAL.surface,.8*a);ctx.fill();ctx.strokeStyle=rgba(PAL.accent,.4*a);ctx.lineWidth=1.5;ctx.stroke();const fs=fitLabel(n.l,r*2.2);ctx.font=fs+'px monospace';ctx.fillStyle=rgba(PAL.text,.85*a);ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(n.l,n.x,n.y)});
-const pairs=[[0,1],[1,2]];pairs.forEach(([ai,bi],pi)=>{const A=nodes[ai],B=nodes[bi],mid={x:(A.x+B.x)/2,y:(A.y+B.y)/2-25};const count=3;for(let k=0;k<count;k++){const pt=((now/1200)+k/count+pi*.33)%1;const pos=quad(A,mid,B,ease(pt));const trail=quad(A,mid,B,Math.max(0,ease(pt)-.08));ctx.beginPath();ctx.arc(trail.x,trail.y,2,0,Math.PI*2);ctx.fillStyle=rgba(PAL.accent,.2*a);ctx.fill();ctx.beginPath();ctx.arc(pos.x,pos.y,3,0,Math.PI*2);ctx.fillStyle=rgba(PAL.accent,.8*a);ctx.fill()}})}
-function drawHud(beat,now){const a=edgeFade(beat);const cwnd=cwndAt(beat),loss=isLoss(beat);
-ctx.font='bold 28px monospace';ctx.textAlign='left';ctx.fillStyle=rgba(loss?PAL.fail:PAL.accent,a);ctx.fillText(Math.round(cwnd),gL,gT+gH+48);
-ctx.font='12px monospace';ctx.fillStyle=rgba(PAL.muted,.7*a);ctx.fillText('cwnd',gL+52,gT+gH+48);
-const barW=gW*.4,barH=6,barX=gL,barY=gT+gH+58;ctx.fillStyle=rgba(PAL.muted,.15*a);ctx.fillRect(barX,barY,barW,barH);ctx.fillStyle=rgba(loss?PAL.fail:PAL.accent,.7*a);ctx.fillRect(barX,barY,barW*(cwnd/28),barH);
-const label=phaseAt(beat);const fs=fitLabel(label,W*.3);ctx.font=fs+'px monospace';ctx.textAlign='center';ctx.fillStyle=rgba(loss?PAL.fail:PAL.text,.9*a);ctx.fillText(label,W*.5,H*.92)}
+function drawGraph(beat,now){ctx.strokeStyle=rgba(PAL.muted,.2);ctx.lineWidth=1;ctx.strokeRect(gL,gT,gW,gH);ctx.fillStyle=rgba(PAL.muted,.5);ctx.font='11px monospace';ctx.textAlign='center';ctx.fillText('RTT',gL+gW/2,gT+gH+16);ctx.save();ctx.translate(gL-12,gT+gH/2);ctx.rotate(-Math.PI/2);ctx.fillText('cwnd',0,0);ctx.restore();
+ctx.beginPath();for(let i=0;i<=200;i++){const p=graphXY(i/200);i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)}ctx.strokeStyle=rgba(PAL.muted,.12);ctx.lineWidth=1;ctx.stroke();
+ctx.beginPath();const steps=Math.floor(beat*200);for(let i=0;i<=steps;i++){const p=graphXY(i/200);i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)}const loss=isLoss(beat);ctx.strokeStyle=rgba(loss?PAL.fail:PAL.accent,.9);ctx.lineWidth=2.5;ctx.stroke();
+const hp=graphXY(beat);ctx.beginPath();ctx.arc(hp.x,hp.y,5+Math.sin(now/300)*1.5,0,Math.PI*2);ctx.fillStyle=rgba(loss?PAL.fail:PAL.accent,1);ctx.fill();
+if(loss){const g=ctx.createRadialGradient(hp.x,hp.y,0,hp.x,hp.y,40);g.addColorStop(0,rgba(PAL.fail,.3));g.addColorStop(1,rgba(PAL.fail,0));ctx.fillStyle=g;ctx.fillRect(hp.x-40,hp.y-40,80,80)}}
+function drawNodes(beat,now){nodes.forEach((n,i)=>{const r=18+Math.sin(now/400+i*1.2)*3;ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);ctx.fillStyle=rgba(PAL.surface,.8);ctx.fill();ctx.strokeStyle=rgba(PAL.accent,.4);ctx.lineWidth=1.5;ctx.stroke();const fs=fitLabel(n.l,r*2.2);ctx.font=fs+'px monospace';ctx.fillStyle=rgba(PAL.text,.85);ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(n.l,n.x,n.y)});
+const pairs=[[0,1],[1,2]];pairs.forEach(([ai,bi],pi)=>{const A=nodes[ai],B=nodes[bi],mid={x:(A.x+B.x)/2,y:(A.y+B.y)/2-25};for(let k=0;k<3;k++){const pt=((now/1200)+k/3+pi*.33)%1;const pos=quad(A,mid,B,ease(pt));const trail=quad(A,mid,B,Math.max(0,ease(pt)-.08));ctx.beginPath();ctx.arc(trail.x,trail.y,2,0,Math.PI*2);ctx.fillStyle=rgba(PAL.accent,.2);ctx.fill();ctx.beginPath();ctx.arc(pos.x,pos.y,3,0,Math.PI*2);ctx.fillStyle=rgba(PAL.accent,.8);ctx.fill()}})}
+function drawHud(beat,now){const cwnd=cwndAt(beat),loss=isLoss(beat);
+ctx.font='bold 28px monospace';ctx.textAlign='left';ctx.fillStyle=rgba(loss?PAL.fail:PAL.accent,1);ctx.fillText(Math.round(cwnd),gL,gT+gH+48);
+ctx.font='12px monospace';ctx.fillStyle=rgba(PAL.muted,.7);ctx.fillText('cwnd',gL+52,gT+gH+48);
+const barW=gW*.4,barH=6,barX=gL,barY=gT+gH+58;ctx.fillStyle=rgba(PAL.muted,.15);ctx.fillRect(barX,barY,barW,barH);ctx.fillStyle=rgba(loss?PAL.fail:PAL.accent,.7);ctx.fillRect(barX,barY,barW*(cwnd/28),barH);
+const label=phaseAt(beat);const fs=fitLabel(label,W*.3);ctx.font=fs+'px monospace';ctx.textAlign='center';ctx.fillStyle=rgba(loss?PAL.fail:PAL.text,.9);ctx.fillText(label,W*.5,H*.92)}
 let __seek=null;
 window.__time=v=>{__seek=v};
 window.__loop=LOOP;
