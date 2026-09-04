@@ -59,6 +59,10 @@ HARD RULES
 13. Glow: radial gradients, shadowBlur sparingly. Grid background: faint 1px lines at
     rgba(255,255,255,0.03).
 14. Zero JS errors. No undeclared variables, no duplicate const, no await at top level.
+15. Be terse: ~120-180 lines of HTML total. No comments except one per section, no
+    unused helpers, no commented-out alternatives, no repetitive per-entity code when a
+    small loop over a data array does the job. Data-driven: nodes/packets/beats are
+    arrays of plain objects drawn in loops, not hand-written draw calls per element.
 
 REQUIRED STRUCTURE (adapt content, keep shape):
   setup (canvas, ctx, LOOP, PAL, rgba helper) → buildLayout() (positions from W/H) →

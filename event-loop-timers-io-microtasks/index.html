@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Event Loop</title>
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
+canvas#stage{display:block;width:100%;height:100%}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+(function(){
+"use strict";
+
+var canvas = document.getElementById("stage");
+var ctx = canvas.getContext("2d");
+var W = 0, H = 0, dpr = 1;
+
+var LOOP = 30000;
+
+var PAL = {
+  accent: [62, 207, 142],
+  fail: [239, 68, 68],
+  text: [237, 237, 237],
+  muted: [143, 143, 143],
+  bg: [9, 9, 9],
+  surface: [28, 28, 28],
+  border: [255, 255, 255]
+};
+
+function rgba(c, a) {
+  return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + a + ")";
+}
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+function easeInOut(t) { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; }
+
+function quad(a, c, b, t) {
+  var u = 1 - t;
+  return {
+    x: u * u * a.x + 2 * u * t * c.x + t * t * b.x,
+    y: u * u * a.y + 2 * u * t * c.y + t * t * b.y
+  };
+}
+
+function beatAlpha(t, start, end, fade) {
+  fade = fade || 0.4;
+  if (t < start || t >= end) return 0;
+  var a = 1;
+  if (t < start + fade) a = easeInOut((t - start) / fade);
+  if (t > end - fade) a = easeInOut((end - t) / fade);
+  return a;
+}
+
+// Layout positions (fractions of W/H)
+var NODES = {
+  timers:    { fx: 0.14, fy: 0.18, r: 0.038, label: "Timers", sub: "setTimeout" },
+  io:        { fx: 0.86, fy: 0.18, r: 0.038, label: "IO Callbacks", sub: "network / file" },
+  taskQ:     { fx: 0.2,  fy: 0.5,  r: 0.042, label: "Task Queue", sub: "macrotasks" },
+  loop:      { fx: 0.5,  fy: 0.5,  r: 0.058, label: "Event Loop", sub: "" },
+  microQ:    { fx: 0.8,  fy: 0.5,  r: 0.042, label: "Microtask Q", sub: "Promise / queue" },
+  stack:     { fx: 0.5,  fy: 0.82, r: 0.045, label: "Call Stack", sub: "execution" }
+};
+
+function nodePos(n) {
+  return { x: n.fx * W, y: n.fy * H, r: n.r * W };
+}
+
+// Bézier paths for packet travel
+function buildPaths() {
+  var t = nodePos(NODES.timers);
+  var i = nodePos(NODES.io);
+  var tq = nodePos(NODES.taskQ);
+  var el = nodePos(NODES.loop);
+  var mq = nodePos(NODES.microQ);
+  var cs = nodePos(NODES.stack);
+
+  return {
+    timersToTaskQ: { a: t, c: { x: (t.x + tq.x) / 2, y: Math.min(t.y, tq.y) - W * 0.05 }, b: tq },
+    ioToTaskQ:     { a: i, c: { x: (i.x + tq.x) / 2, y: Math.min(i.y, tq.y) - W * 0.08 }, b: tq },
+    loopToTaskQ:   { a: el, c: { x: (el.x + tq.x) / 2, y: el.y - W * 0.06 }, b: tq },
+    taskQToStack:  { a: tq, c: { x: (tq.x + cs.x) / 2, y: (tq.y + cs.y) / 2 + W * 0.04 }, b: cs },
+    stackToMicroQ: { a: cs, c: { x: (cs.x + mq.x) / 2, y: (cs.y + mq.y) / 2 + W * 0.04 }, b: mq },
+    microQToStack: { a: mq, c: { x: (mq.x + cs.x) / 2, y: (mq.y + cs.y) / 2 + W * 0.04 }, b: cs },
+    loopToMicroQ:  { a: el, c: { x: (el.x + mq.x) / 2, y: el.y - W * 0.06 }, b: mq }
+  };
+}
+
+var paths = {};
+
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + "px";
+  canvas.style.height = H + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  paths = buildPaths();
+}
+
+// Packet spawning: deterministic windows
+function getActivePackets(t) {
+  var packets = [];
+  var beat = t / LOOP;
+
+  // Beat 1: Timers (4s-11s) → 4000-11000ms
+  if (t >= 4000 && t < 11000) {
+    // Timers → Task Queue: 3 packets
+    var timerSpawns = [4200, 5400, 6600];
+    for (var i = 0; i < timerSpawns.length; i++) {
+      var st = timerSpawns[i];
+      var dur = 1200;
+      if (t >= st && t < st + dur) {
+        var pt = easeInOut((t - st) / dur);
+        packets.push({ path: paths.timersToTaskQ, t: pt, color: PAL.accent, size: 4 });
+      }
+    }
+    // Task Queue → Call Stack: 2 packets
+    var tqSpawns = [5800, 7200];
+    for (var j = 0; j < tqSpawns.length; j++) {
+      var st2 = tqSpawns[j];
+      var dur2 = 1000;
+      if (t >= st2 && t < st2 + dur2) {
+        var pt2 = easeInOut((t - st2) / dur2);
+        packets.push({ path: paths.taskQToStack, t: pt2, color: PAL.accent, size: 5 });
+      }
+    }
+    // Event Loop → Task Queue (pull): 2 packets
+    var pullSpawns = [5600, 7000];
+    for (var k = 0; k < pullSpawns.length; k++) {
+      var st3 = pullSpawns[k];
+      var dur3 = 800;
+      if (t >= st3 && t < st3 + dur3) {
+        var pt3 = easeInOut((t - st3) / dur3);
+        packets.push({ path: paths.loopToTaskQ, t: pt3, color: PAL.muted, size: 3 });
+      }
+    }
+  }
+
+  // Beat 2: IO (11s-18s) → 11000-18000ms
+  if (t >= 11000 && t < 18000) {
+    var ioSpawns = [11200, 12400, 13600];
+    for (var m = 0; m < ioSpawns.length; m++) {
+      var st4 = ioSpawns[m];
+      var dur4 = 1200;
+      if (t >= st4 && t < st4 + dur4) {
+        var pt4 = easeInOut((t - st4) / dur4);
+        packets.push({ path: paths.ioToTaskQ, t: pt4, color: PAL.accent, size: 4 });
+      }
+    }
+    var ioTqSpawns = [13000, 14400];
+    for (var n = 0; n < ioTqSpawns.length; n++) {
+      var st5 = ioTqSpawns[n];
+      var dur5 = 1000;
+      if (t >= st5 && t < st5 + dur5) {
+        var pt5 = easeInOut((t - st5) / dur5);
+        packets.push({ path: paths.taskQToStack, t: pt5, color: PAL.accent, size: 5 });
+      }
+    }
+    var ioPullSpawns = [12800, 14200];
+    for (var p = 0; p < ioPullSpawns.length; p++) {
+      var st6 = ioPullSpawns[p];
+      var dur6 = 800;
+      if (t >= st6 && t < st6 + dur6) {
+        var pt6 = easeInOut((t - st6) / dur6);
+        packets.push({ path: paths.loopToTaskQ, t: pt6, color: PAL.muted, size: 3 });
+      }
+    }
+  }
+
+  // Beat 3: Microtasks (18s-26s) → 18000-26000ms
+  if (t >= 18000 && t < 26000) {
+    // Call Stack → Microtask Queue: 4 packets (queuing)
+    var mqSpawns = [18200, 18800, 19400, 20000];
+    for (var q = 0; q < mqSpawns.length; q++) {
+      var st7 = mqSpawns[q];
+      var dur7 = 700;
+      if (t >= st7 && t < st7 + dur7) {
+        var pt7 = easeInOut((t - st7) / dur7);
+        packets.push({ path: paths.stackToMicroQ, t: pt7, color: PAL.fail, size: 4 });
+      }
+    }
+    // Microtask Queue → Call Stack: 4 rapid drain packets
+    var drainSpawns = [21000, 21400, 21800, 22200];
+    for (var r = 0; r < drainSpawns.length; r++) {
+      var st8 = drainSpawns[r];
+      var dur8 = 500;
+      if (t >= st8 && t < st8 + dur8) {
+        var pt8 = easeInOut((t - st8) / dur8);
+        packets.push({ path: paths.microQToStack, t: pt8, color: PAL.fail, size: 5 });
+      }
+    }
+    // Event Loop → Microtask Queue (drain signal)
+    var drainSignal = [20800];
+    for (var s = 0; s < drainSignal.length; s++) {
+      var st9 = drainSignal[s];
+      var dur9 = 600;
+      if (t >= st9 && t < st9 + dur9) {
+        var pt9 = easeInOut((t - st9) / dur9);
+        packets.push({ path: paths.loopToMicroQ, t: pt9, color: PAL.muted, size: 3 });
+      }
+    }
+  }
+
+  // Beat 4: Full cycle (26s-30s) → 26000-30000ms
+  if (t >= 26000 && t < 30000) {
+    var fcSpawns = [26200, 27000, 27800];
+    for (var u = 0; u < fcSpawns.length; u++) {
+      var stA = fcSpawns[u];
+      var durA = 900;
+      if (t >= stA && t < stA + durA) {
+        var ptA = easeInOut((t - stA) / durA);
+        packets.push({ path: paths.timersToTaskQ, t: ptA, color: PAL.accent, size: 3 });
+        packets.push({ path: paths.ioToTaskQ, t: ptA, color: PAL.accent, size: 3 });
+        packets.push({ path: paths.stackToMicroQ, t: ptA, color: PAL.fail, size: 3 });
+      }
+    }
+    var fcDrain = [27400, 28200];
+    for (var v = 0; v < fcDrain.length; v++) {
+      var stB = fcDrain[v];
+      var durB = 700;
+      if (t >= stB && t < stB + durB) {
+        var ptB = easeInOut((t - stB) / durB);
+        packets.push({ path: paths.microQToStack, t: ptB, color: PAL.fail, size: 4 });
+        packets.push({ path: paths.taskQToStack, t: ptB, color: PAL.accent, size: 4 });
+      }
+    }
+  }
+
+  return packets;
+}
+
+function drawGrid(t) {
+  var spacing = W * 0.06;
+  ctx.strokeStyle = rgba(PAL.border, 0.03);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (var x = 0; x < W; x += spacing) {
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, H);
+  }
+  for (var y = 0; y < H; y += spacing) {
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+  }
+  ctx.stroke();
+}
+
+function drawNode(n, t, alpha, highlight) {
+  if (alpha <= 0) return;
+  var pos = nodePos(n);
+  var pulse = 1 + 0.06 * Math.sin(t / 400 + pos.x * 0.01);
+  var r = pos.r * pulse;
+
+  // Glow
+  var glowR = r * 2.2;
+  var grad = ctx.createRadialGradient(pos.x, pos.y, r * 0.3, pos.x, pos.y, glowR);
+  var gc = highlight ? PAL.accent : PAL.surface;
+  grad.addColorStop(0, rgba(gc, 0.15 * alpha));
+  grad.addColorStop(1, rgba(gc, 0));
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(pos.x, pos.y, glowR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Node body
+  ctx.fillStyle = rgba(PAL.surface, 0.9 * alpha);
+  ctx.strokeStyle = rgba(highlight ? PAL.accent : PAL.muted, 0.4 * alpha);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Inner ring pulse
+  var ringR = r * (0.7 + 0.1 * Math.sin(t / 300 + pos.y * 0.02));
+  ctx.strokeStyle = rgba(highlight ? PAL.accent : PAL.muted, 0.2 * alpha);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(pos.x, pos.y, ringR, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Label
+  var fontSize = Math.max(11, W * 0.012);
+  ctx.font = "600 " + fontSize + "px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = rgba(PAL.text, alpha);
+  ctx.fillText(n.label, pos.x, pos.y - r * 0.15);
+
+  if (n.sub) {
+    ctx.font = "400 " + (fontSize * 0.7) + "px system-ui, sans-serif";
+    ctx.fillStyle = rgba(PAL.muted, alpha * 0.8);
+    ctx.fillText(n.sub, pos.x, pos.y + r * 0.35);
+  }
+}
+
+function drawPacket(p, t) {
+  var pos = quad(p.path.a, p.path.c, p.path.b, p.t);
+
+  // Trail
+  var trailLen = 6;
+  for (var i = trailLen; i >= 1; i--) {
+    var tt = p.t - i * 0.04;
+    if (tt < 0) continue;
+    var tp = quad(p.path.a, p.path.c, p.path.b, tt);
+    var ta = (1 - i / trailLen) * 0.4;
+    ctx.fillStyle = rgba(p.color, ta);
+    ctx.beginPath();
+    ctx.arc(tp.x, tp.y, p.size * (1 - i / trailLen) * 0.7, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Head
+  ctx.shadowBlur = 8;
+  ctx.shadowColor = rgba(p.color, 0.6);
+  ctx.fillStyle = rgba(p.color, 0.9);
+  ctx.beginPath();
+  ctx.arc(pos.x, pos.y, p.size, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+function drawConnections(t, alpha) {
+  if (alpha <= 0) return;
+  var connPaths = [
+    paths.timersToTaskQ,
+    paths.ioToTaskQ,
+    paths.loopToTaskQ,
+    paths.taskQToStack,
+    paths.stackToMicroQ,
+    paths.microQToStack,
+    paths.loopToMicroQ
+  ];
+  ctx.strokeStyle = rgba(PAL.muted, 0.08 * alpha);
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 6]);
+  for (var i = 0; i < connPaths.length; i++) {
+    var p = connPaths[i];
+    ctx.beginPath();
+    ctx.moveTo(p.a.x, p.a.y);
+    ctx.quadraticCurveTo(p.c.x, p.c.y, p.b.x, p.b.y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+}
+
+function drawQueueMeter(n, t, alpha, fillLevel, color) {
+  if (alpha <= 0) return;
+  var pos = nodePos(n);
+  var barW = pos.r * 1.6;
+  var barH = 4;
+  var barX = pos.x - barW / 2;
+  var barY = pos.y + pos.r + 10;
+
+  // Background
+  ctx.fillStyle = rgba(PAL.surface, 0.8 * alpha);
+  ctx.fillRect(barX, barY, barW, barH);
+
+  // Fill
+  var fw = barW * clamp01(fillLevel);
+  ctx.fillStyle = rgba(color, 0.7 * alpha);
+  ctx.fillRect(barX, barY, fw, barH);
+
+  // Border
+  ctx.strokeStyle = rgba(PAL.muted, 0.2 * alpha);
+  ctx.lineWidth = 1;
+  ctx.strokeRect(barX, barY, barW, barH);
+}
+
+function drawCounter(x, y, value, label, t, alpha) {
+  if (alpha <= 0) return;
+  var fontSize = Math.max(10, W * 0.01);
+  ctx.font = "700 " + (fontSize * 1.4) + "px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = rgba(PAL.accent, alpha);
+  ctx.fillText(Math.round(value).toString(), x, y);
+  ctx.font = "400 " + (fontSize * 0.7) + "px system-ui, sans-serif";
+  ctx.fillStyle = rgba(PAL.muted, alpha * 0.7);
+  ctx.fillText(label, x, y + fontSize * 1.2);
+}
+
+function drawTitle(t, alpha) {
+  if (alpha <= 0) return;
+  var fontSize = Math.max(18, W * 0.022);
+  ctx.font = "700 " + fontSize + "px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = rgba(PAL.text, alpha);
+  ctx.fillText("The Event Loop", W * 0.5, H * 0.06);
+
+  var subSize = Math.max(10, W * 0.009);
+  ctx.font = "400 " + subSize + "px system-ui, sans-serif";
+  ctx.fillStyle = rgba(PAL.muted, alpha * 0.7);
+  ctx.fillText("timers · IO callbacks · microtasks", W * 0.5, H * 0.06 + fontSize * 0.9);
+}
+
+function drawBeatLabel(t, alpha, text, color) {
+  if (alpha <= 0) return;
+  var fontSize = Math.max(11, W * 0.011);
+  ctx.font = "600 " + fontSize + "px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = rgba(color, alpha);
+  ctx.fillText(text, W * 0.5, H * 0.95);
+}
+
+function drawRuleLine(t, alpha) {
+  if (alpha <= 0) return;
+  var fontSize = Math.max(9, W * 0.008);
+  ctx.font = "400 " + fontSize + "px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = rgba(PAL.muted, alpha * 0.6);
+  ctx.fillText("drain all microtasks before next macrotask", W * 0.5, H * 0.92);
+}
+
+function frame(now) {
+  if (__seek != null) now = __seek;
+  var t = now % LOOP;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Background
+  ctx.fillStyle = rgba(PAL.bg, 1);
+  ctx.fillRect(0, 0, W, H);
+  drawGrid(t);
+
+  // Beat alphas
+  var aIntro = beatAlpha(t, 0, 4500, 800);
+  var aTimers = beatAlpha(t, 4000, 11500, 600);
+  var aIO = beatAlpha(t, 11000, 18500, 600);
+  var aMicro = beatAlpha(t, 18000, 26500, 600);
+  var aFull = beatAlpha(t, 26000, 30000, 800);
+
+  var aNodes = Math.max(aIntro, aTimers, aIO, aMicro, aFull);
+  var aConns = Math.max(aTimers, aIO, aMicro, aFull);
+
+  // Connections
+  drawConnections(t, aConns);
+
+  // Nodes
+  var highlightLoop = aTimers > 0 || aIO > 0 || aMicro > 0 || aFull > 0;
+  drawNode(NODES.timers, t, aNodes, aTimers > 0.5 || aFull > 0.5);
+  drawNode(NODES.io, t, aNodes, aIO > 0.5 || aFull > 0.5);
+  drawNode(NODES.taskQ, t, aNodes, aTimers > 0.3 || aIO > 0.3 || aFull > 0.3);
+  drawNode(NODES.loop, t, aNodes, highlightLoop);
+  drawNode(NODES.microQ, t, aNodes, aMicro > 0.3 || aFull > 0.3);
+  drawNode(NODES.stack, t, aNodes, aTimers > 0.3 || aIO > 0.3 || aMicro > 0.3 || aFull > 0.3);
+
+  // Queue meters
+  var tqFill = 0;
+  if (t >= 4200 && t < 11000) {
+    tqFill = clamp01((t - 4200) / 2000) * 0.8;
+    if (t > 7000) tqFill = clamp01(1 - (t - 7000) / 3000) * 0.8;
+  }
+  if (t >= 11200 && t < 18000) {
+    tqFill = clamp01((t - 11200) / 2000) * 0.8;
+    if (t > 14000) tqFill = clamp01(1 - (t - 14000) / 3000) * 0.8;
+  }
+  drawQueueMeter(NODES.taskQ, t, aNodes, tqFill, PAL.accent);
+
+  var mqFill = 0;
+  if (t >= 18200 && t < 26000) {
+    mqFill = clamp01((t - 18200) / 2000) * 0.9;
+    if (t > 21000) mqFill = clamp01(1 - (t - 21000) / 1500) * 0.9;
+  }
+  drawQueueMeter(NODES.microQ, t, aNodes, mqFill, PAL.fail);
+
+  // Packets
+  var packets = getActivePackets(t);
+  for (var i = 0; i < packets.length; i++) {
+    drawPacket(packets[i], t);
+  }
+
+  // Counters
+  var counterVal = 0;
+  if (t >= 5800 && t < 11000) counterVal = clamp01((t - 5800) / 5000) * 2;
+  if (t >= 13000 && t < 18000) counterVal = 2 + clamp01((t - 13000) / 5000) * 2;
+  if (t >= 21000 && t < 26000) counterVal = 4 + clamp01((t - 21000) / 5000) * 4;
+  if (t >= 26000 && t < 30000) counterVal = 8 + clamp01((t - 26000) / 4000) * 2;
+
+  var counterAlpha = Math.max(aTimers, aIO, aMicro, aFull);
+  drawCounter(W * 0.5, H * 0.68, counterVal, "tasks executed", t, counterAlpha);
+
+  // Title
+  var titleAlpha = aIntro;
+  if (t > 26000) titleAlpha = aFull * 0.5;
+  drawTitle(t, titleAlpha);
+
+  // Beat labels
+  drawBeatLabel(t, aTimers, "macrotask: timer fires", PAL.accent);
+  drawBeatLabel(t, aIO, "macrotask: IO callback", PAL.accent);
+  drawBeatLabel(t, aMicro, "microtask: drain all", PAL.fail);
+  drawBeatLabel(t, aFull, "full cycle", PAL.muted);
+
+  // Rule line (only during microtask beat)
+  drawRuleLine(t, aMicro);
+
+  requestAnimationFrame(frame);
+}
+
+// Hooks
+var __seek = null;
+window.__time = function(v) { __seek = v; };
+window.__loop = LOOP;
+
+// Init
+resize();
+window.addEventListener("resize", resize);
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>
