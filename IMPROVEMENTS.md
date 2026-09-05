@@ -253,7 +253,7 @@
   first-pass response was truncated mid-file (===HTML=== without closing
   marker); acceptance: a mock LLM that truncates its first response and
   returns a complete one on the retry yields pass=1.
-- [ ] validate.mjs: add a `labels` count to the report (distinct
+- [x] validate.mjs: add a `labels` count to the report (distinct
   full-opacity strings captured by fillText) so the manifest records how
   many texts each graphic actually draws; acceptance: manifest.json
   entries gain a labels field and existing graphics show counts > 0.
