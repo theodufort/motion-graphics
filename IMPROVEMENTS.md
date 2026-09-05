@@ -234,6 +234,6 @@
   README check into report.timings (only frames/seam/collisions/frozen/
   resize are timed today); acceptance: timings has clipMs and readmeMs
   keys in a normal run.
-- [ ] docs: GOAL.md "measurable criteria" should mention the warning-tier
+- [x] docs: GOAL.md "measurable criteria" should mention the warning-tier
   checks (edge-clip, near-frozen) so the criteria match the current
   validator; acceptance: GOAL.md lists both warning classes.

@@ -82,6 +82,14 @@ Higher SCORE = better (partial credit per check). The loop continues past
 exit 0: extend full-bench pass rate (10/10) and reduce mean generation wall
 time, recording every iteration in `logs/iterations.jsonl`.
 
+Warning tier (⚠, not scored): two checks emit warnings instead of failures
+because they are ambiguous against legitimate designs — `edge-clip`
+(content hugging the canvas edge in ≥2 parked states; a clipped label is the
+case a reviewer should confirm) and `near-frozen` (px churn 0.5–2%: real but
+subtle motion). Warnings appear in the human verdict, in `--json`
+(`warnings` / `graphicsWarnings`), and in the fix-loop hint list; a clean
+⚠-free pass is the loop's quality bar even though the score ignores them.
+
 ## Milestones (small, sequential)
 
 - **M1 — Harness.** `tool/package.json`; `npm i playwright`; install
