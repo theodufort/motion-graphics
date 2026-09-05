@@ -140,3 +140,12 @@
 - [x] check.mjs: --only <topic> --watch combo (watch a single folder's
   index.html with per-file debounce); acceptance: editing the one file
   re-validates only that folder.
+- [ ] docs: README tooling table should list close.sh (verified item
+  closer) and MG_DEBUG=1 (fillText rect dump); acceptance: both appear
+  with one-line usage in README.md.
+- [ ] bench.mjs: --topics a,b,c to run a subset of the 20 prompts;
+  acceptance: --topics kafka-exactly-once-path,sqlite-wal-checkpoint
+  runs exactly those two and prints BENCH: 2/2.
+- [ ] validate.mjs: README H1 must contain the folder name's topic words
+  (catches copied-pasted READMEs from another graphic); acceptance: a
+  fixture with the wrong H1 is flagged with "readme".
