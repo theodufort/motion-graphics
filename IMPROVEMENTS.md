@@ -282,7 +282,7 @@
   labels that only overlap in the t near-LOOP seam window), to keep the
   collision detector honest across the wrap; acceptance: the fixture
   fails the collisions or seam check and a clean variant passes.
-- [ ] check.mjs: --json output should also include a `graphicsLabels`
+- [x] check.mjs: --json output should also include a `graphicsLabels`
   map (topic -> label count from the report) so consumers can see text
   density per graphic; acceptance: --json has a graphicsLabels object
   with numeric values.
