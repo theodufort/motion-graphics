@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>edge label top fixture</title>
+<style>body{margin:0;background:#090909}canvas{display:block}</style></head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+const LOOP = 6000;
+window.__loop = LOOP;
+let W = 960, H = 540, __seek = null;
+canvas.width = W; canvas.height = H;
+window.__time = (v) => { __seek = v; };
+function frame(now) {
+  if (__seek != null) now = __seek;
+  const t = now % LOOP;
+  const beat = t / LOOP;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "#0b0d12"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#1a2332"; ctx.fillRect(80, 80, W-160, H-160);
+  // a label hugging the TOP edge at y=5 (triggers edge-clip warning)
+  ctx.font = "18px monospace"; ctx.fillStyle = "#fff";
+  ctx.fillText("top edge label", 100, 5);
+  // a second label at y=300 (no collision with the top one)
+  ctx.fillText("middle label", 400, 300);
+  // a moving dot (for churn)
+  const px = 100 + beat * 700;
+  ctx.fillStyle = "#f00"; ctx.beginPath(); ctx.arc(px, 450, 12, 0, 7); ctx.fill();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
