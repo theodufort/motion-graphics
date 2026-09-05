@@ -152,7 +152,7 @@
 - [x] validate.mjs: frozen probe should also detect near-frozen (delta < 2%
   but > 0.5%) and report it as a soft warning in errors without failing;
   acceptance: a fixture moving one pixel per frame warns but keeps score.
-- [ ] check.sh: --since <git-rev> to validate only folders changed since
+- [x] check.sh: --since <git-rev> to validate only folders changed since
   a commit; acceptance: after touching one folder, --since HEAD~1
   validates exactly that folder.
 - [ ] bench.mjs: record per-prompt tps in bench-runs.jsonl (currently

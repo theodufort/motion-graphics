@@ -94,6 +94,16 @@ if (only) {
     process.exit(2);
   }
 }
+const sinceIdx = process.argv.indexOf("--since");
+if (sinceIdx >= 0 && process.argv[sinceIdx + 1]) {
+  const rev = process.argv[sinceIdx + 1];
+  const out = spawnSync("git", ["diff", "--name-only", rev + "..HEAD"], { cwd: root, encoding: "utf8" }).stdout
+    .split("\n").map((l) => l.split("/")[0]).filter((f) => graphics.includes(f));
+  graphics = [...new Set(out)];
+  if (!graphics.length) { console.log(`no graphic folders changed since ${rev}`); process.exit(0); }
+  smokeMax = 0;
+  console.log(`[since ${rev}] validating ${graphics.length} changed folder(s): ${graphics.join(", ")}`);
+}
 
 graphics.forEach((name) => (existingMax += 35));
 const CONCURRENCY = +(process.env.MG_CONCURRENCY || 4);
