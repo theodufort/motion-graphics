@@ -32,6 +32,8 @@ function frame(now){if(__seek!=null)now=__seek;const t=now%LOOP,b=t/LOOP;ctx.cle
 ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;for(let x=0;x<W;x+=60){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=60){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
 // connections
 nodes.forEach((n,i)=>{const s=nodeState(i,b),m={x:(lb.x+n.x)/2,y:(lb.y+n.y)/2+(i-1)*30};ctx.beginPath();ctx.moveTo(lb.x,lb.y);ctx.quadraticCurveTo(m.x,m.y,n.x,n.y);ctx.strokeStyle=rgba(s.color,s.active?.3:.08);ctx.lineWidth=s.active?2:1;ctx.stroke()});
+// request ping: a packet travelling LB -> active node (per-frame pixel change)
+{const ni=nodes.findIndex((n,i)=>nodeState(i,b).active);if(ni>=0){const n=nodes[ni],u=((t%250)/250),m={x:(lb.x+n.x)/2,y:(lb.y+n.y)/2+(ni-1)*30},ix=(1-u)*(1-u)*lb.x+2*(1-u)*u*m.x+u*u*n.x,iy=(1-u)*(1-u)*lb.y+2*(1-u)*u*m.y+u*u*n.y;ctx.beginPath();ctx.arc(ix,iy,4,0,Math.PI*2);ctx.fillStyle=rgba(PAL.accent,.9);ctx.fill()}}
 // LB node
 const pl=1+.05*Math.sin(t/400);ctx.beginPath();ctx.arc(lb.x,lb.y,lb.r*pl,0,Math.PI*2);ctx.fillStyle=rgba(PAL.accent,.15);ctx.fill();ctx.strokeStyle=rgba(PAL.accent,.8);ctx.lineWidth=2;ctx.stroke();ctx.fillStyle=rgba(PAL.text,.9);ctx.font=`600 ${Math.max(12,lb.r*.5)}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('LB',lb.x,lb.y);
 // backend nodes

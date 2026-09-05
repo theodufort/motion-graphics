@@ -82,6 +82,7 @@ export async function validateWithBrowser(browser, folderPath) {
     return await page.evaluate(() => {
       const c = document.querySelector("canvas");
       let content = 0, mid = 0;
+      let buf = [];
       if (c && c.width) {
         const ctx = c.getContext("2d");
         const w = c.width, h = c.height;
@@ -89,6 +90,7 @@ export async function validateWithBrowser(browser, folderPath) {
         for (let i = 0; i < d.length; i += 16) { // sample every 4th pixel
           const R = d[i], G = d[i + 1], B = d[i + 2];
           if (Math.abs(R - 9) + Math.abs(G - 9) + Math.abs(B - 9) > 40) { content++; mid += R + G + B; }
+          buf.push(R, G, B);
         }
       }
       const seen = new Set();
@@ -99,7 +101,12 @@ export async function validateWithBrowser(browser, folderPath) {
         return true;
       });
       window.__ft = [];
-      return { content, lum: content ? mid / content : 0, ft };
+      let churn = 0;
+      const P = window.__prevBuf;
+      if (P && P.length === buf.length) for (let i = 0; i < buf.length; i += 3)
+        if (P[i] !== buf[i] || P[i + 1] !== buf[i + 1] || P[i + 2] !== buf[i + 2]) churn++;
+      window.__prevBuf = buf; // stays in-page, never transferred
+      return { content, lum: content ? mid / content : 0, ft, churn };
     });
   }
 
@@ -123,6 +130,15 @@ export async function validateWithBrowser(browser, folderPath) {
     }
   }
   timings.frames = Date.now() - tFrames;
+  // loop-wide px churn (sampled before the seam check, which may reference it)
+  let maxChurn = 0;
+  if (hasSeek) {
+    const nc = QUICK ? 5 : 25;
+    await page.evaluate(() => (window.__prevBuf = null));
+    const csamples = [];
+    for (let k = 0; k < nc; k++) csamples.push(await park((LOOP * (k + 0.5)) / nc));
+    maxChurn = Math.max(...csamples.map((s) => s?.churn || 0), 0);
+  }
   const tSeam = Date.now();
   // seam window: max content across the wrap neighbourhood (crossfades dip
   // briefly at the exact seam but a real dark frame stays empty over the window)
@@ -194,6 +210,10 @@ export async function validateWithBrowser(browser, folderPath) {
   r.content = midPx >= 500 ? 1 : 0;
   if (!r.content) errors.push(`content: densest frame only ${midPx} px (blank canvas?)`);
   const seamPx = Math.max(...seamPts.map((p) => p?.content || 0));
+  // a moving element (spinner, marquee, ping) crossing the wrap can keep a seam
+  // frame's content high while it is visually dark — a churn-gated variant of
+  // this test was tried and regressed dark-band-post (its moving bar churns at
+  // the wrap too), so the plain content rule stands.
   const darkSeam = midPx > 1000 && Math.min(seamPx, seamPts[4]?.content ?? seamPx) < 0.3 * midPx;
   r.seam = hasSeek && !emptySeam && !collapsed && !darkSeam ? 1 : 0;
   if (darkSeam) { const darkPx = Math.min(seamPx, seamPts[4]?.content ?? seamPx); errors.push(`seam: dark frame at loop wrap (darkest seam probe ${darkPx}px vs mid ${midPx}px)`); }
@@ -237,26 +257,22 @@ export async function validateWithBrowser(browser, folderPath) {
   if (r.visibility === 0 && invisible.length)
     errors.push(`visibility: always-invisible labels: ${invisible.slice(0, 3).map(([s, o]) => `"${s}" (max a=${o.a.toFixed(2)}, ${o.n} frames)`).join(", ")}`);
 
-  const tFrz = Date.now();
-  // frozen-animation probe: sample evenly across the loop; a real graphic
-  // shows a big content-px delta at least once (beat transitions), so freeze
-  // only when the MAX delta is near zero (beat-hold regions are fine)
+  const tFrozen = Date.now();
+  // frozen probe: uses the loop-wide churn sampled above — churn (not a
+  // content COUNT) also catches pure translations.
   if (hasSeek) {
-    const n = QUICK ? 5 : 25;
-    const samples = [];
-    for (let k = 0; k < n; k++) samples.push((await park((LOOP * (k + 0.5)) / n))?.content || 0);
-    const deltas = samples.slice(1).map((c, i) => Math.abs(c - samples[i]));
-    const base = Math.max(...samples, 1);
-    const maxD = Math.max(...deltas) / base;
+    const base = Math.max(...Object.values(contentsByTime), 1);
+    const maxD = maxChurn / base;
     if (maxD < 0.005) {
       r.frozen = 1;
-      errors.push(`frozen: max content-px delta ${Math.max(...deltas)} over ${n} loop-wide samples (static canvas?)`);
+      errors.push(`frozen: max px churn ${maxChurn} over loop-wide samples (static canvas?)`);
     } else if (maxD < 0.02) {
-      r.warnings.push(`near-frozen: max content-px delta ${Math.round(maxD * 100)}% over ${n} samples (subtle motion?)`); // soft: warn, do not fail
+      r.warnings.push(`near-frozen: max px churn ${maxChurn} (${Math.round(maxD * 100)}%) over loop-wide samples (subtle motion?)`); // soft: warn, do not fail
     }
+    timings.frozen = Date.now() - tFrozen;
   }
 
-  timings.frozen = Date.now() - tFrz;
+  
   r.quick = QUICK ? 1 : 0;
   r.resize = 0;
   const tRes = Date.now();

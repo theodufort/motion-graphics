@@ -166,7 +166,7 @@
 - [x] AGENTS.md: document the new tools (close.sh, MG_DEBUG, --since,
   --watch --only, near-frozen band) in the tooling section; acceptance:
   AGENTS.md mentions all five.
-- [ ] fix the two near-frozen graphics (load-balancer-health-checks 1%,
+- [x] fix the two near-frozen graphics (load-balancer-health-checks 1%,
   lsm-tree-compaction 2%): add a per-beat state change (counter tick,
   pulse, position drift) so each clears >2%; acceptance: full check
   prints zero ⚠ lines and 1265/1265.

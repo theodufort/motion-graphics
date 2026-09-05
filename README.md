@@ -54,7 +54,8 @@ regressed):
 | `dark-seam/` | seam (dark frame at loop wrap) |
 | `text-overlap/` | collisions (overlapping fillText rects) |
 | `blank-canvas/` | content (densest frame < 500 px) |
-| `static-canvas/` | frozen (near-zero content-px delta across the loop) |
+| `static-canvas/` | frozen (near-zero px churn across the loop) |
+| `near-frozen/` | soft `near-frozen` warning only (0.5–2% churn) |
 | `invisible-label/` | visibility (all-frames label at alpha 0) |
 | `lost-label-seam/` | seamContinuity (label vanishes at wrap, never reappears) |
 | `dark-band-post/` | seam (dark band 300-900ms *after* the wrap) |

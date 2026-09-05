@@ -48,6 +48,7 @@ const al=active?.6+.4*pulse:.25;
 ctx.strokeStyle=rgba(active?PAL.accent:PAL.muted,al);ctx.lineWidth=active?2:1;ctx.strokeRect(lx,ly,lw,lh);
 ctx.fillStyle=rgba(PAL.text,.7);ctx.font=`500 ${Math.round(W*.014)}px system-ui`;ctx.textAlign='left';ctx.fillText(lv.l,lx+8,ly+lh*.6);
 const cnt=runsFor(i,t),rw=(lw-40)/5;
+if(active){const sx=lx+28+((now%600)/600)*(lw-56);ctx.fillStyle=rgba(PAL.accent,.6);ctx.fillRect(sx,ly+2,2.5,lh-4)}
 for(let r=0;r<cnt;r++){const rx=lx+30+r*rw,ry=ly+lh*.25,rh=lh*.5,rp=.7+.3*Math.sin(now/350+r*1.2);ctx.fillStyle=rgba(PAL.accent,.15+.15*rp);ctx.fillRect(rx,ry,rw*.8,rh);ctx.strokeStyle=rgba(PAL.accent,.4*rp);ctx.strokeRect(rx,ry,rw*.8,rh)}
 });
 packets(t).forEach(p=>{

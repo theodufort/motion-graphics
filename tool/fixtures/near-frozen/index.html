@@ -18,7 +18,7 @@ function frame(now) {
   const t = now % LOOP;
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = "rgba(62,207,142,0.9)";
-  ctx.fillRect(200, 350, 300 + 40 * Math.sin(t / 8000), 100);
+  ctx.fillRect(200, 350, 300 + 8 * Math.sin(t / 8000), 100);
   ctx.textAlign = "center";
   ctx.font = "700 64px monospace";
   ctx.fillStyle = "rgba(237,237,237,0.95)";
