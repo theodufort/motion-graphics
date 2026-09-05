@@ -33,6 +33,7 @@ const prompts = readFileSync(path.join(ROOT, "tool", "bench", "prompts.jsonl"), 
 const t0 = Date.now();
 let pass = 0;
 const failures = [];
+const rows = [];
 for (let i = 0; i < prompts.length; i++) {
   const p = prompts[i];
   process.stderr.write(`[bench ${i + 1}/${prompts.length}] ${p.prompt.slice(0, 60)}\n`);
@@ -49,9 +50,11 @@ for (let i = 0; i < prompts.length; i++) {
     }
     if (g.pass) pass++;
     else failures.push(`${g.topic}: ${g.report.errors.slice(0, 2).join("; ")}`);
+    rows.push({ topic: g.topic, seconds: Math.round(g.seconds), fix: g.reused ? 0 : (g.fixPasses || 0), pass: g.pass });
     process.stderr.write(`  -> ${g.pass ? "PASS" : "FAIL"} in ${Math.round(g.seconds)}s\n`);
   } catch (e) {
     failures.push(`${p.prompt.slice(0, 40)}: ${e.message}`);
+    rows.push({ topic: p.prompt.slice(0, 28), seconds: null, fix: null, pass: false });
     process.stderr.write(`  -> ERROR ${e.message}\n`);
   }
 }
@@ -63,6 +66,10 @@ appendFileSync(path.join(ROOT, "logs", "iterations.jsonl"),
     failures, seconds, fix: "bench run" }) + "\n");
 console.log(`BENCH: ${pass}/${total} in ${seconds}s`);
 for (const f of failures) console.log(`  ✗ ${f}`);
+// per-prompt timing table
+console.log("\n" + "topic".padEnd(30) + " " + "sec".padStart(5) + " " + "fix".padStart(3) + " " + "pass");
+for (const r of rows)
+  console.log(r.topic.slice(0, 30).padEnd(30) + " " + String(r.seconds ?? "-").padStart(5) + " " + String(r.fix ?? "-").padStart(3) + " " + (r.pass ? "ok" : "FAIL"));
 process.exit(pass === total ? 0 : 1);
 }
 

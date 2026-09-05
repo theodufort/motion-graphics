@@ -97,6 +97,7 @@ Loop length: <N>s.
 <!DOCTYPE html> ... complete file ...`;
 
 async function llmOnce(messages) {
+  const start = Date.now();
   const ctl = new AbortController();
   const to = setTimeout(() => ctl.abort(), TIMEOUT);
   try {
@@ -107,7 +108,8 @@ async function llmOnce(messages) {
     });
     if (!res.ok) throw new Error(`LLM HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
     const d = await res.json();
-    return d.choices?.[0]?.message?.content ?? "";
+    const ms = Date.now() - start;
+    return { content: d.choices?.[0]?.message?.content ?? "", usage: d.usage || null, ms };
   } finally { clearTimeout(to); }
 }
 
@@ -169,14 +171,15 @@ export async function generate(prompt, { force = false, allowExisting = process.
     { role: "system", content: SYSTEM },
     { role: "user", content: `Make a motion graphic: ${prompt}` },
   ];
-  let out = await llm(messages);
+  const first = await llm(messages);
+  let out = first.content;
   let { topic, html, readme } = parse(out, slugify(prompt));
 
   if (!/<!DOCTYPE html>/i.test(html) || !html.includes("requestAnimationFrame")) {
     // one retry with the failure called out
     messages.push({ role: "assistant", content: out.slice(0, 2000) },
       { role: "user", content: "That output was malformed. Reply again with the exact TOPIC/===README===/===HTML=== format and a complete, valid HTML file." });
-    out = await llm(messages);
+    out = (await llm(messages)).content;
     ({ topic, html, readme } = parse(out, slugify(prompt)));
   }
 
@@ -201,7 +204,7 @@ export async function generate(prompt, { force = false, allowExisting = process.
 Fix the HTML so it passes: zero JS errors, window.__time and window.__loop defined,
 no overlapping full-opacity text, no dark frame at the loop seam, all elements animate.
 Reply with the COMPLETE corrected file between ===HTML=== markers (keep TOPIC and ===README=== too).` });
-    const fix = await llm(messages);
+    const fix = (await llm(messages)).content;
     const p2 = parse(fix, topic);
     html = p2.html;
     rememberSlug(prompt, topic);
@@ -210,7 +213,8 @@ Reply with the COMPLETE corrected file between ===HTML=== markers (keep TOPIC an
     report = await validateFolder(folder);
     pass = report.clean && report.seek && report.collisions && report.seam && report.readme;
   }
-  return { folder, topic, pass, report, seconds: (Date.now() - t0) / 1000, fixPasses };
+  const tps = first.usage?.completion_tokens && first.ms ? Math.round(first.usage.completion_tokens / (first.ms / 1000)) : null;
+  return { folder, topic, pass, report, seconds: (Date.now() - t0) / 1000, fixPasses, tps };
 }
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
@@ -231,7 +235,7 @@ if (isMain) {
     const html = readFileSync(path.join(g.folder, "index.html"), "utf8");
     appendFileSync(
       path.join(ROOT, "logs", "generations.jsonl"),
-      JSON.stringify({ ts: new Date().toISOString(), prompt, topic: g.topic, model: MODEL, seconds: Math.round(g.seconds), lines: html.split("\n").length, fixPasses: g.fixPasses, pass: g.pass }) + "\n"
+      JSON.stringify({ ts: new Date().toISOString(), prompt, topic: g.topic, model: MODEL, seconds: Math.round(g.seconds), lines: html.split("\n").length, fixPasses: g.fixPasses, pass: g.pass, tps: g.tps ?? null }) + "\n"
     );
   } catch {}
   console.log(g.folder);

@@ -75,12 +75,10 @@
   (3 fresh gens: HTTP/2 multiplexing 191s, Kafka partitioner 190s,
   SQLite WAL 216s — all first-pass pass, 0 fix passes).- [x] README.md: "Negative fixtures" section lists all five fixtures
   (dark-seam, text-overlap, blank-canvas, static-canvas, invisible-label)
-  with the check each targets and the one-liner to run.- [ ] tool/bench.mjs: report per-prompt timing table (prompt, seconds,
-  fixPasses, pass) at the end; acceptance: bench output ends with a 20-row
-  table and BENCH line.
-- [ ] tool/generate.mjs: log the model's reasoning tokens/sec estimate in
-  generations.jsonl (elapsed vs completion_tokens); acceptance: entries
-  carry "tps" when llama.cpp returns usage stats.
-- [ ] validate.mjs: shot manifest JSON (tool/shots/<topic>/manifest.json
+  with the check each targets and the one-liner to run.- [x] tool/bench.mjs: per-prompt timing table (topic, sec, fix, pass)
+  printed after the BENCH line; acceptance met: 20-row table + BENCH line
+  (20/20 in 76s reuse).- [x] tool/generate.mjs: generations.jsonl entries carry "tps" (usage.
+  completion_tokens / llm ms); acceptance met: fresh WebSocket generate
+  logged tps=39 (202s, first-pass pass -> websocket-protocol-flow/).- [ ] validate.mjs: shot manifest JSON (tool/shots/<topic>/manifest.json
   with per-shot t, content px, seam flag) for vision-review tooling;
   acceptance: 7 manifest entries for a 6-shot + seam layout.

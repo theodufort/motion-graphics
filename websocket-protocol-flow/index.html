@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+html,body{margin:0;padding:0;overflow:hidden;background:var(--bg)}
+canvas{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+const LOOP=20000;
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+let W,H,dpr,client,server,mid;
+function resize(){dpr=devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0);buildLayout()}
+function buildLayout(){client={x:W*.2,y:H*.5,r:Math.min(W,H)*.06};server={x:W*.8,y:H*.5,r:Math.min(W,H)*.06};mid={x:W*.5,y:H*.32}}
+addEventListener('resize',resize);resize();
+const lerp=(a,b,t)=>a+(b-a)*t,clamp01=v=>Math.max(0,Math.min(1,v)),ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
+const quad=(a,c,b,t)=>({x:(1-t)*(1-t)*a.x+2*(1-t)*t*c.x+t*t*b.x,y:(1-t)*(1-t)*a.y+2*(1-t)*t*c.y+t*t*b.y});
+const bA=(t,a,b,f=.03)=>{if(t<a||t>=b)return 0;return Math.min(clamp01((t-a)/f),clamp01((b-t)/f))};
+let __seek=null;window.__time=v=>{__seek=v};window.__loop=LOOP;
+function drawBg(){ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;for(let x=0;x<W;x+=60){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=60){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}}
+function drawConn(t){const p=.3+.15*Math.sin(t/400);ctx.strokeStyle=rgba(PAL.accent,p*.4);ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(client.x,client.y);ctx.quadraticCurveTo(mid.x,mid.y,server.x,server.y);ctx.stroke()}
+function drawNode(n,label,col,t){const r=n.r*(1+.05*Math.sin(t/400));const g=ctx.createRadialGradient(n.x,n.y,r*.3,n.x,n.y,r*2);g.addColorStop(0,rgba(col,.15));g.addColorStop(1,rgba(col,0));ctx.fillStyle=g;ctx.beginPath();ctx.arc(n.x,n.y,r*2,0,Math.PI*2);ctx.fill();ctx.fillStyle=rgba(col,.9);ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);ctx.fill();let fs=Math.round(r*.45);ctx.font=`bold ${fs}px monospace`;while(ctx.measureText(label).width>r*1.8){fs-=2;ctx.font=`bold ${fs}px monospace`}ctx.fillStyle=rgba(PAL.bg,.9);ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,n.x,n.y)}
+function drawPkt(pos,label,col,a){if(a<=0)return;ctx.fillStyle=rgba(col,a*.3);ctx.beginPath();ctx.arc(pos.x,pos.y,12,0,Math.PI*2);ctx.fill();ctx.fillStyle=rgba(col,a);ctx.beginPath();ctx.arc(pos.x,pos.y,7,0,Math.PI*2);ctx.fill();let fs=13;ctx.font=`bold ${fs}px monospace`;if(ctx.measureText(label).width>80){fs=11;ctx.font=`bold ${fs}px monospace`}ctx.fillStyle=rgba(PAL.text,a*.9);ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(label,pos.x,pos.y-14)}
+function drawFrame(t,a){const cx=W*.5,cy=H*.55,bw=W*.28,bh=H*.08;const segs=[{l:'FIN',w:.12,c:PAL.muted},{l:'OPC',w:.15,c:PAL.muted},{l:'MASK',w:.15,c:PAL.accent},{l:'LEN',w:.15,c:PAL.muted},{l:'PAYLOAD',w:.43,c:PAL.accent}];let x=cx-bw/2;const pu=.8+.2*Math.sin(t/300);segs.forEach(s=>{const sw=bw*s.w;ctx.fillStyle=rgba(s.c,a*.25*pu);ctx.fillRect(x,cy-bh/2,sw-2,bh);ctx.strokeStyle=rgba(s.c,a*.6);ctx.strokeRect(x,cy-bh/2,sw-2,bh);let fs=Math.round(bh*.35);ctx.font=`bold ${fs}px monospace`;while(ctx.measureText(s.l).width>sw*.85){fs-=1;ctx.font=`bold ${fs}px monospace`}ctx.fillStyle=rgba(PAL.text,a*.9);ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(s.l,x+sw/2-1,cy);x+=sw});const xp=cx-bw/2+bw*.57;ctx.font=`bold ${Math.round(bh*.3)}px monospace`;ctx.fillStyle=rgba(PAL.accent,a*(.5+.5*Math.sin((t%1500)/1500*Math.PI*2)));ctx.textAlign='center';ctx.fillText('\u2295 key',xp+bw*.21,cy+bh*.7)}
+function drawMeter(t,a){const mx=W*.5,my=H*.78,mw=W*.2,mh=8;const f=.7+.3*Math.sin(t/800);ctx.fillStyle=rgba(PAL.muted,a*.3);ctx.fillRect(mx-mw/2,my,mw,mh);ctx.fillStyle=rgba(PAL.accent,a*.8);ctx.fillRect(mx-mw/2,my,mw*f,mh);ctx.font=`bold 12px monospace`;ctx.fillStyle=rgba(PAL.text,a*.7);ctx.textAlign='center';ctx.fillText('ALIVE',mx,my-10)}
+function frame(now){if(__seek!=null)now=__seek;const t=now%LOOP,beat=t/LOOP;ctx.clearRect(0,0,W,H);drawBg();drawConn(t);drawNode(client,'Client Node',PAL.accent,t);drawNode(server,'Server Node',PAL.text,t);
+const b1=bA(beat,0,.25);if(b1>0){const p1=clamp01((t-500)/2000);if(p1>0&&p1<1)drawPkt(quad(client,mid,server,ease(p1)),'GET /ws',PAL.accent,b1);const p2=clamp01((t-3000)/2000);if(p2>0&&p2<1)drawPkt(quad(server,mid,client,ease(p2)),'101 Switch',PAL.text,b1);if(t>4500){const ua=clamp01((t-4500)/500)*b1;ctx.font=`bold ${Math.round(W*.018)}px monospace`;ctx.fillStyle=rgba(PAL.accent,ua);ctx.textAlign='center';ctx.fillText('ws:// connected',W*.5,H*.72)}}
+const b2=bA(beat,.25,.6);if(b2>0){drawFrame(t,b2);const p3=clamp01((t-6000)/2500);if(p3>0&&p3<1)drawPkt(quad(client,mid,server,ease(p3)),'MASKED',PAL.accent,b2);const p4=clamp01((t-9500)/2500);if(p4>0&&p4<1)drawPkt(quad(server,mid,client,ease(p4)),'RAW',PAL.muted,b2);ctx.font=`12px monospace`;ctx.fillStyle=rgba(PAL.muted,b2*.7);ctx.textAlign='center';ctx.fillText('client\u2192server: masked | server\u2192client: raw',W*.5,H*.65)}
+const b3=bA(beat,.6,1);if(b3>0){for(let i=0;i<3;i++){const s=12500+i*2200;const pt=clamp01((t-s)/1200);if(pt>0&&pt<1)drawPkt(quad(client,mid,server,ease(pt)),'PING',PAL.accent,b3);const rt=clamp01((t-s-1200)/1200);if(rt>0&&rt<1)drawPkt(quad(server,mid,client,ease(rt)),'PONG',PAL.text,b3)}drawMeter(t,b3)}
+ctx.font=`bold ${Math.round(W*.022)}px monospace`;ctx.fillStyle=rgba(PAL.text,.9);ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText('WebSocket Protocol Flow',W*.5,H*.06);
+const labels=['Handshake Upgrade','Frame Masking','Ping-Pong Keepalive'];const bi=beat<.25?0:beat<.6?1:2;const la=bA(beat,[0,.25,.6][bi],[.25,.6,1][bi],.02);ctx.font=`bold ${Math.round(W*.014)}px monospace`;ctx.fillStyle=rgba(PAL.accent,la);ctx.fillText(labels[bi],W*.5,H*.12);
+ctx.font='12px monospace';ctx.fillStyle=rgba(PAL.muted,.6);ctx.textAlign='right';ctx.textBaseline='bottom';ctx.fillText((t/1000).toFixed(1)+'s',W-20,H-20);
+requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
