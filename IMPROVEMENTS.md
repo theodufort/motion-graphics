@@ -230,7 +230,7 @@
   ⚠ lines (currently graphicsWarnings exists but the top-level warnings
   list is absent); acceptance: --json output parses and the edge-clip
   ⚠ on dns-recursive-resolution appears in it.
-- [ ] validate.mjs: log per-check timings for the clip probe and the
+- [x] validate.mjs: log per-check timings for the clip probe and the
   README check into report.timings (only frames/seam/collisions/frozen/
   resize are timed today); acceptance: timings has clipMs and readmeMs
   keys in a normal run.

@@ -244,6 +244,7 @@ export async function validateWithBrowser(browser, folderPath) {
   });
   // three states so a fading clipped label can't hide at the probe moment
   const [cw, ch] = await page.evaluate(() => { const c = document.querySelector("canvas"); return [c.clientWidth, c.clientHeight]; });
+  const tClip = Date.now();
   let clip = hasSeek ? await clipProbe() : 0;
   if (hasSeek) for (const f of [0.3, 0.6]) {
     await page.evaluate((t) => window.__time(t), Math.round(LOOP * f));
@@ -253,6 +254,7 @@ export async function validateWithBrowser(browser, folderPath) {
   r.edgeClip = 1;
   // 20px ≈ one text row; full-bleed backgrounds/bars span >25% of the edge
   const longest = Math.max(cw, ch);
+  timings.clipMs = Date.now() - tClip;
   if (clip * 4 >= 32 && clip * 4 < 0.25 * longest) {
     // warning, not error: legit designs also hug the edge (progress bars,
     // corner tags, edge nodes) — a clipped LABEL is the case a human should check
@@ -286,6 +288,7 @@ export async function validateWithBrowser(browser, folderPath) {
   if (r.seamContinuity === 0)
     errors.push(`seam: labels never reappear after wrap: ${goneAtSeam.slice(0, 3).map((s) => `"${s}"`).join(", ")}`);
 
+  const tReadme = Date.now();
   r.readme = (() => {
     const p = path.join(folderPath, "README.md");
     if (!existsSync(p) || readFileSync(p, "utf8").length <= 200) return 0;
@@ -302,6 +305,7 @@ export async function validateWithBrowser(browser, folderPath) {
     return words.some((w) => { const x = w.toLowerCase(); return hl.includes(x) || hl.includes(x.replace(/s$/, "")); }) ? 1 : 0;
   })();
   if (!r.readme) errors.push("README.md missing, trivial, or H1 doesn't match the topic words");
+  timings.readmeMs = Date.now() - tReadme;
 
   // label visibility: a label present in EVERY parked frame yet never
   // reaching alpha 0.15 is a bug (ghost/placeholder text). Beat labels
