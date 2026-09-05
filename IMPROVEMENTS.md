@@ -178,7 +178,7 @@
 - [x] check.mjs: --json should embed the warnings (graphicsWarnings)
   inside the main JSON object, not as a second JSON line; acceptance:
   single-line parse yields graphicsWarnings key.
-- [ ] generate.mjs: surface the new checks in the fix loop (the re-send
+- [x] generate.mjs: surface the new checks in the fix loop (the re-send
   instruction should mention px-churn motion, seam fades, label fits, and
   H1/topic match so the model's first fix pass addresses the actual
   failure); acceptance: a fix-pass failure message names the failing
