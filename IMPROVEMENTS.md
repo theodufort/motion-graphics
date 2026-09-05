@@ -183,9 +183,9 @@
   H1/topic match so the model's first fix pass addresses the actual
   failure); acceptance: a fix-pass failure message names the failing
   check class.
-- [ ] bench: add a "first-pass rate" trend line to bench-runs.jsonl
+- [x] bench: add a "first-pass rate" trend line to bench-runs.jsonl
   consumers — print per-run fix-pass distribution (0/1/2/3) in the
-  --compare footer; acceptance: two runs with different fix-pass mixes
+  --compare footer (the 0/1/2/3 per-run distribution); acceptance: two runs with different fix-pass mixes
   show the distribution rows.
 - [ ] README: add the seam-pop-in row to the negative fixtures table
   section that lists fixtures near "dark-band-post" (it currently lives

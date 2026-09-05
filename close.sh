@@ -32,9 +32,11 @@ if not item.endswith("\n") and nxt != -1:
     item = s[start:end]
 if not item.endswith("\n"):
     item = item + "\n"
-# verify exactly one OPEN item matches the substring
-if len(re.findall(r"^- \[ \][^\n]*" + re.escape(sub), s, re.M)) != 1:
-    print(f"close.sh: substring not unique among OPEN items (found {s.count(sub)} in file)", file=sys.stderr); sys.exit(1)
+# verify exactly one OPEN item has the substring on its FIRST line (the close
+# target); the same text in closed items or continuation lines is fine
+first_lines = [m.group(0) for m in re.finditer(r"^- \[ \][^\n]*", s, re.M)]
+if sum(1 for f in first_lines if sub in f) != 1:
+    print(f"close.sh: substring not unique among OPEN items (first line of {sum(1 for f in first_lines if sub in f)} open items)", file=sys.stderr); sys.exit(1)
 # fused items contain two markers; close every marker in the item
 closed = item.replace("- [ ] ", "- [x] ")
 if "done" != note and "acceptance" not in note.lower():

@@ -97,10 +97,10 @@ function parseTable(file) {
   const lines = readFileSync(file, "utf8").split("\n");
   const out = new Map();
   for (const l of lines) {
-    const m = l.match(/^\S.{4,29}\s+([0-9]+|-)\s+([0-9]+|-)\s+(ok|FAIL)\s+([0-9.]+|-)\s*$/);
+    const m = l.match(/^\S.{4,29}\s+([0-9]+|-)\s+([0-9]+|-)\s+(ok|FAIL)\s+(?:([0-9.]+|-)\s*)?$/);
     if (!m) continue;
     const topic = l.slice(0, 30).trimEnd();
-    out.set(topic, { sec: m[1] === "-" ? null : +m[1], pass: m[3] === "ok", tps: m[4] === "-" ? null : +m[4] });
+    out.set(topic, { sec: m[1] === "-" ? null : +m[1], fix: m[2] === "-" ? null : +m[2], pass: m[3] === "ok", tps: m[4] === undefined || m[4] === "-" ? null : +m[4] });
   }
   return out;
 }
@@ -124,6 +124,15 @@ function compare(beforePath, afterPath) {
       changed++;
     }
   }
+  // first-pass trend: fix-pass distribution per run (0 = clean on the first try)
+  const dist = (m) => {
+    const d = { 0: 0, 1: 0, 2: 0, 3: 0 };
+    for (const v of m.values()) d[v.fix ?? 0] = (d[v.fix ?? 0] || 0) + 1;
+    return d;
+  };
+  const db = dist(a), da = dist(b);
+  console.log("first-pass (fix=0): " + db[0] + " -> " + da[0] + (db[0] < da[0] ? " (improved)" : db[0] > da[0] ? " (regressed)" : ""));
+  console.log("fix-pass mix      : " + ["0", "1", "2", "3"].map((k) => `${k}x:${db[k] || 0}`).join(" ") + "  ->  " + ["0", "1", "2", "3"].map((k) => `${k}x:${da[k] || 0}`).join(" "));
   console.log(`\n${changed} row(s) changed >10% or flipped status (of ${topics.length})`);
   process.exit(0);
 }
