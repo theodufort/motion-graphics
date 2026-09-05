@@ -52,7 +52,8 @@ export async function validateWithBrowser(browser, folderPath) {
         let a = this.globalAlpha;
         const fstr = String(this.fillStyle);
         const rm = fstr.match(/rgba\(([^)]+)\)/);
-        if (rm) a *= parseFloat(rm[1].split(",")[3]) ?? 1; // || would map alpha 0 → 1
+        if (rm) a *= parseFloat(rm[1].split(",")[3]) ?? 1;
+        else { const hx = fstr.match(/^#([0-9a-f]{3,8})$/i); if (hx) a *= parseInt(hx[1].slice(-2), 16) / 255; } // #rrggbbAA // || would map alpha 0 → 1
         window.__ft.push({ s: String(s).slice(0, 40), x: left, y: top, w: m.width, asc, desc, a });
       } catch {}
       return orig.call(this, s, x, y);
@@ -130,6 +131,22 @@ export async function validateWithBrowser(browser, folderPath) {
     }
   }
   timings.frames = Date.now() - tFrames;
+  // quick mode parks only 2 frames — top up so the all-frames rule has 4 samples
+  if (Object.keys(rectsByTime).length < 4 && hasSeek) {
+    for (const f of [0.15, 0.65]) { // exactly the frames full mode parks
+      const t = Math.round(LOOP * f);
+      if (rectsByTime[t]) continue;
+      const p = await park(t);
+      if (p) {
+        rectsByTime[t] = p.ft; contentsByTime[t] = p.content;
+        for (const f2 of p.ft) if (f2 && f2.s) {
+          const o2 = labelMaxA.get(f2.s) || { a: 0, n: 0 };
+          labelMaxA.set(f2.s, { a: Math.max(o2.a, f2.a), n: o2.n + 1 });
+        }
+      }
+    }
+  }
+
   // loop-wide px churn (sampled before the seam check, which may reference it)
   let maxChurn = 0;
   if (hasSeek) {

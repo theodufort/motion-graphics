@@ -203,7 +203,7 @@
 - [x] check.mjs: --watch should also re-run when the README.md of a
   watched folder changes (H1 check depends on it); acceptance: editing
   a watched README triggers a diff line without touching index.html.
-- [ ] check.sh: add a --fast flag that runs the full suite in quick
+- [x] check.sh: add a --fast flag that runs the full suite in quick
   mode (MG_QUICK=1) and labels the score line "(quick)"; acceptance:
   ./check.sh --skip-gen --fast prints a quick score line and matches a
   plain quick run.

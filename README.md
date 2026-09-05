@@ -73,7 +73,7 @@ regressed):
 | `MG_CONCURRENCY` | `4` | parallel validators in `check.mjs` |
 | `MG_ALLOW_EXISTING` | unset | `1` lets `generate`/`bench`/`check` refresh existing generated folders (set automatically by bench/check; manual `generate.sh` stays protected) |
 
-| `MG_QUICK` | unset | `1` = fast validation (2 frames, 5 churn samples, no resize, 2 shots) — for `--only`/`--watch` loops. All check TYPES still run: the 5-probe seam window (dark-frame + pop-in + label-continuity probes), collisions (at 2 frames instead of 4), visibility, content, frozen (5 churn samples), README/H1 — only reduced: frame count 4→2, churn samples 25→5, the resize step, and the 2 seam PNGs. So a `⚠`/`✗` in quick mode is trustworthy; a clean quick pass still deserves one full pass before merge |
+| `MG_QUICK` | unset | `1` = fast validation (2 frames, 5 churn samples, no resize, 2 shots) — for `--only`/`--watch` loops. All check TYPES still run: the 5-probe seam window (dark-frame + pop-in + label-continuity probes), collisions (at 2 frames instead of 4), visibility, content, frozen (5 churn samples), README/H1 — only reduced: frame count 4→2, churn samples 25→5, the resize step, and the 2 seam PNGs. So a `⚠`/`✗` in quick mode is trustworthy; a clean quick pass still deserves one full pass before merge; `./check.sh --fast` runs the whole suite this way and labels the score line "(quick)" |
 | `MG_DEBUG` | unset | `1` makes `validate.mjs` dump every parked frame's `fillText` rects to stderr (collision/containment debugging) |
 
 ### Helper scripts
