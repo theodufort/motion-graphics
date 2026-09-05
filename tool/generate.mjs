@@ -206,7 +206,14 @@ export async function generate(prompt, { force = false, allowExisting = process.
     throw new Error(`refusing to overwrite existing folder "${known}" — pass --force to regenerate`);
   const messages = [
     { role: "system", content: SYSTEM },
-    { role: "user", content: `Make a motion graphic: ${prompt}` },
+    { role: "user", content: `Make a motion graphic: ${prompt}
+
+Pitfalls (from the 19 rules — avoid these up front):
+- seam: the last beat must fade INTO the first beat; a label that starts at t=0 or ends at t=LOOP pops (use beatA with a small offset, e.g. 800ms, for the first beat's start)
+- collision: never draw two different strings at the same x,y at full opacity — crossfade old OUT before new IN
+- frozen: between any two consecutive beats at least one element must visibly change (position, size, alpha, or text)
+- visibility: never draw text at alpha 0; a label that exists in the code must become visible in its beat
+- label fit: ctx.measureText(label).width < 0.9 * the shape's width; drop the font size if too wide` },
   ];
   const first = await llm(messages);
   let out = first.content;

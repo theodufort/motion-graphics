@@ -404,7 +404,7 @@
   but look wrong at the larger viewport; acceptance: a fixture that
   draws at hardcoded (200,150) instead of (W*.2, H*.3) triggers a
   "non-proportional" warning after the resize step.
-- [ ] generate.mjs: the first-pass prompt should include a one-line
+- [x] generate.mjs: the first-pass prompt should include a one-line
   "known pitfalls" recap (from the 19 terser rules) so the model
   avoids the top 5 failure classes up front instead of learning them
   via the fix loop; acceptance: a mock LLM receives "pitfalls:" in
