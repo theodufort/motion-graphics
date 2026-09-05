@@ -59,7 +59,7 @@ export async function validateWithBrowser(browser, folderPath) {
     };
   });
 
-  const r = { clean: 0, seek: 0, collisions: 0, seam: 0, readme: 0, content: 0, frozen: 0, visibility: 0, errors: [...pageErrors, ...errors], shots: [], shotsPath: shotDir, LOOP };
+  const r = { clean: 0, seek: 0, collisions: 0, seam: 0, readme: 0, content: 0, frozen: 0, visibility: 0, seamContinuity: 1, errors: [...pageErrors, ...errors], shots: [], shotsPath: shotDir, LOOP };
   await page.goto("file://" + htmlPath, { waitUntil: "load", timeout: 15000 });
   await page.waitForTimeout(300);
 
@@ -185,6 +185,17 @@ export async function validateWithBrowser(browser, folderPath) {
   if (darkSeam) errors.push(`seam: dark frame at loop wrap (content px ${seamPx} vs mid ${midPx})`);
   else if (emptySeam) errors.push("seam: near-empty frames at loop wrap");
   else if (collapsed) errors.push("seam: label density collapses at loop wrap");
+
+  // seam label continuity: labels shown at seam-a must reappear by the
+  // first frame after seam-b (a label that vanishes at the wrap is a bug)
+  const seamAlabels = new Set((seamA?.ft || []).map((f) => f.s));
+  const afterSeam = [...Object.values(rectsByTime)].flat().map((f) => f.s);
+  // labels with digits are usually live counters (value changes each
+  // frame) — only stable text labels are checked
+  const goneAtSeam = [...seamAlabels].filter((s) => s.trim() && !/[0-9]/.test(s) && !afterSeam.includes(s));
+  r.seamContinuity = goneAtSeam.length === 0 ? 1 : 0;
+  if (r.seamContinuity === 0)
+    errors.push(`seam: labels never reappear after wrap: ${goneAtSeam.slice(0, 3).map((s) => `"${s}"`).join(", ")}`);
 
   r.readme = (() => {
     const p = path.join(folderPath, "README.md");
