@@ -443,7 +443,7 @@
   regressed (e.g. edge-clip 1->3 vs pop-out 5->5); acceptance:
   comparing two check --json payloads with the same total warns but
   different class breakdown prints a "warnsByClass A->B" line.
-- [ ] generate.mjs: the first-pass prompt should mention the
+- [x] generate.mjs: the first-pass prompt should mention the
   sparsest.png / densest.png pair so the model keeps BOTH the densest
   beat and the sparsest beat visually intentional (not an accident of
   a half-faded beat); acceptance: a mock LLM receives "densest" and

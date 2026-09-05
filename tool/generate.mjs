@@ -213,7 +213,8 @@ Pitfalls (from the 19 rules — avoid these up front):
 - collision: never draw two different strings at the same x,y at full opacity — crossfade old OUT before new IN
 - frozen: between any two consecutive beats at least one element must visibly change (position, size, alpha, or text)
 - visibility: never draw text at alpha 0; a label that exists in the code must become visible in its beat
-- label fit: ctx.measureText(label).width < 0.9 * the shape's width; drop the font size if too wide` },
+- label fit: ctx.measureText(label).width < 0.9 * the shape's width; drop the font size if too wide
+- density: keep BOTH the densest beat (most content on screen) and the sparsest beat (least) visually intentional — the validator captures a densest.png and a sparsest.png pair; a sparsest frame that is an accident of a half-faded beat (not a deliberate "breath") reads as a bug` },
   ];
   const first = await llm(messages);
   let out = first.content;
