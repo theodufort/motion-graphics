@@ -387,3 +387,13 @@
   about which beat is most visually important when fixing layout;
   acceptance: a mock LLM receives "densest: t=9600px=35852" in the
   fix-pass prompt.
+- [ ] validate.mjs: the collision check should ignore collisions between
+  a label and the SEAM PROBE region (the top/bottom 8px bands used for
+  edge-clip) — a label that legitimately sits at y=5 (hugging the top
+  edge) currently triggers both an edge-clip warning AND a collision
+  with the probe's own pixel samples; acceptance: a fixture with a
+  label at y=5 triggers only the edge-clip warning, not a collision.
+- [ ] bench.mjs: --trend should also print the median "wallMs" from the
+  check --json summary (not just bench tps) so harness speed drift is
+  visible alongside model speed; acceptance: --trend lines carry a
+  "wall: <median>" field sourced from bench-runs.jsonl.
