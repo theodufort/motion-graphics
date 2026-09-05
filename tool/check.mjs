@@ -55,7 +55,7 @@ if (process.argv.includes("--watch")) {
   const bitsOf = (r) => [r.clean, r.seek, r.collisions, r.seam, r.readme, r.content, r.visibility, !r.frozen].map((x) => (x ? 1 : 0)).join("");
   const prev = new Map();
   const timers = new Map();
-  console.log(`watching ${only ? path.join(root, only) + ' (single folder)' : root} (debounce 1s; Ctrl-C to stop)`);
+  console.log(`watching ${only ? path.join(root, only) + ' (single folder)' : root} (debounce 250ms; Ctrl-C to stop)`);
   watch(root, { recursive: true }, (_evt, fname) => {
     if (!fname) return;
     // single-folder watch emits bare filenames (no dir/ prefix) — accept both
@@ -63,6 +63,8 @@ if (process.argv.includes("--watch")) {
     if (!m) return;
     const topic = m[1] || only;
     if (!dirs.has(topic) || (only && topic !== only)) return; // --only filters the watch set
+    // debounce ~250ms per topic: a save touching index.html + README.md
+    // coalesces into one validation, not two
     if (timers.get(topic)) clearTimeout(timers.get(topic));
     timers.set(topic, setTimeout(async () => {
       timers.delete(topic);
@@ -72,11 +74,11 @@ if (process.argv.includes("--watch")) {
         const was = prev.get(topic);
         prev.set(topic, bits);
         const t = new Date().toISOString().slice(11, 19);
-        console.log(`${t} ${topic.padEnd(28)} ${bits}${was === undefined ? "" : was === bits ? "  (no change)" : `  (was ${was})`}  ${r.errors.length ? "| " + r.errors[0] : ""}`);
+        console.log(`${t} revalidating ${topic.padEnd(25)} ${bits}${was === undefined ? "" : was === bits ? "  (no change)" : `  (was ${was})`}  ${r.errors.length ? "| " + r.errors[0] : ""}`);
       } catch (e) {
         console.log(`${topic}: ${e.message}`);
       }
-    }, 1000));
+    }, 250));
   });
   process.on("SIGINT", () => process.exit(0));
   // block the linear main flow; watch handle + interval keep the loop alive

@@ -260,7 +260,7 @@
 - [x] docs: skill README "Validation loop" section should list the
   warning-tier checks (edge-clip, near-frozen) and where warnings print;
   acceptance: SKILL.md names both warning classes.
-- [ ] check.mjs --watch: debounce file events (~200ms coalescing per path)
+- [x] check.mjs --watch: debounce file events (~200ms coalescing per path)
   so a save that touches index.html + README.md triggers one validation,
   not two; acceptance: editing both files in quick succession produces a
   single "revalidating" line.
