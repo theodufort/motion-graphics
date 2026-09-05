@@ -298,6 +298,6 @@
   (t of max contentPx) as densest.png in the shots dir so a vision pass
   starts from the most informative image; acceptance: manifest.json
   lists densest.png with a t value.
-- [ ] check.sh: support --since <rev> passthrough to check.mjs (the flag
+- [x] check.sh: support --since <rev> passthrough to check.mjs (the flag
   exists in check.mjs but check.sh has no documented mention); acceptance:
   check.sh --since HEAD~2 validates only changed folders and docs updated.
