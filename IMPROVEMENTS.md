@@ -275,7 +275,7 @@
   validateFolder's report.timings) so a JSON consumer can see where the
   wall time goes without running --timings separately; acceptance:
   --json output has a timings object per graphic with a frames key.
-- [ ] generate.mjs: when the LLM response has no TOPIC line, log a
+- [x] generate.mjs: when the LLM response has no TOPIC line, log a
   warning (not just silently use the slug) so slug drift is visible;
   acceptance: mock LLM without TOPIC prints a 'no TOPIC line' warning.
 - [ ] tool/fixtures: add a 13th fixture, label-collision-at-seam (two
@@ -286,3 +286,11 @@
   labels that only overlap in the t near-LOOP seam window), to keep the
   collision detector honest across the wrap; acceptance: the fixture
   fails the collisions or seam check and a clean variant passes.
+- [ ] check.mjs: --json output should also include a `graphicsLabels`
+  map (topic -> label count from the report) so consumers can see text
+  density per graphic; acceptance: --json has a graphicsLabels object
+  with numeric values.
+- [ ] generate.mjs: log a generations.jsonl entry even when the LLM call
+  fails entirely (pass:0, error:<msg>) so failed attempts are countable
+  in the trend; acceptance: a mock LLM that returns HTTP 500 leaves a
+  line with an error field.
