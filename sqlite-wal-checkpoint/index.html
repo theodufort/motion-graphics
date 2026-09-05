@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+*{margin:0;box-sizing:border-box}
+body{background:var(--bg);overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+const LOOP=30000;
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+let W,H,dpr;
+function resize(){dpr=devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
+addEventListener('resize',resize);
+const lerp=(a,b,t)=>a+(b-a)*t,clamp01=v=>Math.max(0,Math.min(1,v));
+const ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
+const fade=(t,a,b,f=.03)=>{if(t<a||t>=b)return 0;return Math.min(clamp01((t-a)/f),clamp01((b-t)/f))};
+const quad=(a,c,b,t)=>{const u=1-t;return{x:u*u*a.x+2*u*t*c.x+t*t*b.x,y:u*u*a.y+2*u*t*c.y+t*t*b.y}};
+let L={};
+function buildLayout(){
+const cy=H*.42,bw=W*.17,bh=H*.34;
+L.db={x:W*.15,y:cy,w:bw,h:bh,label:'Main DB'};
+L.wal={x:W*.5,y:cy,w:bw,h:bh,label:'WAL File'};
+L.idx={x:W*.84,y:cy,w:bw*.75,h:bh*.65,label:'WAL-Index'};
+L.writer={x:W*.32,y:H*.78,r:W*.022,label:'Writer'};
+L.readers=[{x:W*.62,y:H*.78,r:W*.018,label:'Reader A'},{x:W*.78,y:H*.78,r:W*.018,label:'Reader B'}];
+}
+let __seek=null;
+window.__time=v=>{__seek=v};
+window.__loop=LOOP;
+function fitLabel(txt,maxW,base){let s=base;ctx.font=`600 ${s}px system-ui`;while(ctx.measureText(txt).width>maxW*.9&&s>8){s-=2;ctx.font=`600 ${s}px system-ui`}return s}
+function drawBg(){
+ctx.fillStyle=rgba(PAL.bg,1);ctx.fillRect(0,0,W,H);
+ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;
+const gs=W*.06;
+for(let x=0;x<W;x+=gs){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+for(let y=0;y<H;y+=gs){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+}
+function drawBoxes(t,b){
+[L.db,L.wal,L.idx].forEach((box,i)=>{
+const a=fade(b,0,1,.05);if(a<=0)return;
+const p=1+.006*Math.sin(t/400+i),w=box.w*p,h=box.h*p;
+ctx.fillStyle=rgba(PAL.bg,.92*a);ctx.strokeStyle=rgba(PAL.accent,.25*a);ctx.lineWidth=1.5;
+ctx.beginPath();ctx.roundRect(box.x-w/2,box.y-h/2,w,h,W*.01);ctx.fill();ctx.stroke();
+const fs=fitLabel(box.label,w,W*.017);
+ctx.fillStyle=rgba(PAL.text,a);ctx.font=`600 ${fs}px system-ui`;ctx.textAlign='center';ctx.textBaseline='top';
+ctx.fillText(box.label,box.x,box.y-h/2+h*.04);
+});
+// DB pages
+const dbA=fade(b,.02,1,.04);
+if(dbA>0){const pw=L.db.w*.7,ph=L.db.h*.13;
+for(let i=0;i<4;i++){const py=L.db.y-L.db.h*.28+i*ph*1.35;
+const filled=b>.667?clamp01((b-.667)/.15*(4-i)):0;
+ctx.fillStyle=filled>.5?rgba(PAL.accent,.22*dbA):rgba(PAL.muted,.08*dbA);
+ctx.strokeStyle=rgba(PAL.muted,.25*dbA);ctx.beginPath();ctx.roundRect(L.db.x-pw/2,py,pw,ph,4);ctx.fill();ctx.stroke();
+const fs=fitLabel('Page '+(i+1),pw,W*.011);
+ctx.fillStyle=rgba(PAL.text,.65*dbA);ctx.font=`500 ${fs}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';
+ctx.fillText('Page '+(i+1),L.db.x,py+ph/2)}}
+// WAL frames
+const walA=fade(b,.02,1,.04);
+if(walA>0){const fw=L.wal.w*.7,fh=L.wal.h*.11;
+for(let i=0;i<5;i++){const fy=L.wal.y-L.wal.h*.3+i*fh*1.4;
+let fa=0;
+if(b>.167&&b<.5)fa=clamp01((b-.167-i*.035)/.025);
+else if(b>=.5&&b<.667)fa=i<3?1:clamp01((b-.5-(i-3)*.04)/.03);
+else if(b>=.667)fa=clamp01(1-(b-.667)/.12);
+if(fa<=0)continue;
+const snap=i<3&&b>=.333&&b<.667;
+ctx.fillStyle=snap?rgba(PAL.accent,.18*walA*fa):rgba(PAL.muted,.1*walA*fa);
+ctx.strokeStyle=snap?rgba(PAL.accent,.5*walA*fa):rgba(PAL.muted,.25*walA*fa);
+ctx.beginPath();ctx.roundRect(L.wal.x-fw/2,fy,fw,fh,4);ctx.fill();ctx.stroke();
+const fs=fitLabel('Frame '+(i+1),fw,W*.01);
+ctx.fillStyle=rgba(PAL.text,.75*walA*fa);ctx.font=`500 ${fs}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';
+ctx.fillText('Frame '+(i+1),L.wal.x,fy+fh/2)}}
+// WAL-Index
+const idxA=fade(b,.05,1,.04);
+if(idxA>0){
+let mx=0,sn=0;
+if(b>.167&&b<.5)mx=Math.min(3,Math.floor((b-.167)/.035)+1);
+else if(b>=.5&&b<.667)mx=5;
+else if(b>=.667)mx=Math.max(0,5-Math.floor((b-.667)/.025));
+if(b>=.333&&b<.667)sn=3;
+['max: '+mx,'snap: '+sn].forEach((ln,i)=>{
+const ly=L.idx.y-L.idx.h*.12+i*L.idx.h*.28;
+const fs=fitLabel(ln,L.idx.w,W*.013);
+ctx.fillStyle=i===1&&sn>0?rgba(PAL.accent,idxA):rgba(PAL.text,.65*idxA);
+ctx.font=`500 ${fs}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';
+ctx.fillText(ln,L.idx.x,ly)})}
+}
+function drawConns(t,b){
+// writer→wal
+if(b>.15&&b<.65){const a=fade(b,.15,.65,.03);
+const cp={x:(L.writer.x+L.wal.x)/2,y:(L.writer.y+L.wal.y)/2-H*.04};
+ctx.strokeStyle=rgba(PAL.accent,.35*a);ctx.lineWidth=1.5;ctx.setLineDash([4,6]);
+ctx.beginPath();ctx.moveTo(L.writer.x,L.writer.y);ctx.quadraticCurveTo(cp.x,cp.y,L.wal.x,L.wal.y);ctx.stroke();ctx.setLineDash([]);
+const p=quad(L.writer,cp,L.wal,ease(clamp01((t%1800)/1100)));
+ctx.fillStyle=rgba(PAL.accent,a);ctx.beginPath();ctx.arc(p.x,p.y,W*.005,0,Math.PI*2);ctx.fill()}
+// wal→db checkpoint
+if(b>.667&&b<.85){const a=fade(b,.667,.85,.03);
+const cp={x:(L.wal.x+L.db.x)/2,y:(L.wal.y+L.db.y)/2+H*.03};
+ctx.strokeStyle=rgba(PAL.accent,.5*a);ctx.lineWidth=2;ctx.setLineDash([4,6]);
+ctx.beginPath();ctx.moveTo(L.wal.x,L.wal.y);ctx.quadraticCurveTo(cp.x,cp.y,L.db.x,L.db.y);ctx.stroke();ctx.setLineDash([]);
+const p=quad(L.wal,cp,L.db,ease(clamp01((t%1400)/900)));
+ctx.fillStyle=rgba(PAL.accent,a);ctx.beginPath();ctx.arc(p.x,p.y,W*.007,0,Math.PI*2);ctx.fill()}
+// readers→wal
+if(b>.333&&b<.667){const a=fade(b,.333,.667,.03);
+L.readers.forEach(r=>{ctx.strokeStyle=rgba(PAL.muted,.25*a);ctx.lineWidth=1;ctx.setLineDash([3,5]);
+ctx.beginPath();ctx.moveTo(r.x,r.y);ctx.lineTo(L.wal.x,L.wal.y+L.wal.h*.2);ctx.stroke();ctx.setLineDash([])})}
+}
+function drawNodes(t,b){
+const wA=fade(b,0,1,.04);
+if(wA>0){const p=1+.1*Math.sin(t/400),r=L.writer.r*p;
+const g=ctx.createRadialGradient(L.writer.x,L.writer.y,0,L.writer.x,L.writer.y,r*2.5);
+g.addColorStop(0,rgba(PAL.accent,.25*wA));g.addColorStop(1,rgba(PAL.accent,0));
+ctx.fillStyle=g;ctx.beginPath();ctx.arc(L.writer.x,L.writer.y,r*2.5,0,Math.PI*2);ctx.fill();
+ctx.fillStyle=rgba(PAL.accent,wA);ctx.beginPath();ctx.arc(L.writer.x,L.writer.y,r,0,Math.PI*2);ctx.fill();
+const fs=fitLabel(L.writer.label,r*5,W*.012);
+ctx.fillStyle=rgba(PAL.text,wA);ctx.font=`600 ${fs}px system-ui`;ctx.textAlign='center';ctx.textBaseline='top';
+ctx.fillText(L.writer.label,L.writer.x,L.writer.y+r+5)}
+const rA=fade(b,.3,.7,.04);
+if(rA>0)L.readers.forEach((r,i)=>{const p=1+.08*Math.sin(t/400+i*2),rad=r.r*p;
+ctx.fillStyle=rgba(PAL.muted,.55*rA);ctx.beginPath();ctx.arc(r.x,r.y,rad,0,Math.PI*2);ctx.fill();
+const fs=fitLabel(r.label,rad*5,W*.01);
+ctx.fillStyle=rgba(PAL.text,rA);ctx.font=`500 ${fs}px system-ui`;ctx.textAlign='center';ctx.textBaseline='top';
+ctx.fillText(r.label,r.x,r.y+rad+4)});
+}
+function drawHud(t,b){
+const a=fade(b,0,.08,.02);
+if(a>0){const fs=fitLabel('SQLite WAL Mode',W*.3,W*.03);
+ctx.fillStyle=rgba(PAL.text,a);ctx.font=`700 ${fs}px system-ui`;ctx.textAlign='center';ctx.textBaseline='top';
+ctx.fillText('SQLite WAL Mode',W*.5,H*.03)}
+const rule=fade(b,.02,.98,.03);
+if(rule>0){const fs=fitLabel('readers pin snapshot · writer appends · checkpoint flushes',W*.5,W*.011);
+ctx.fillStyle=rgba(PAL.muted,rule*.7);ctx.font=`400 ${fs}px system-ui`;ctx.textAlign='center';ctx.textBaseline='bottom';
+ctx.fillText('readers pin snapshot · writer appends · checkpoint flushes',W*.5,H*.97)}
+}
+function frame(now){
+if(__seek!=null)now=__seek;
+const t=now%LOOP,b=t/LOOP;
+ctx.clearRect(0,0,W,H);
+drawBg();drawBoxes(t,b);drawConns(t,b);drawNodes(t,b);drawHud(t,b);
+requestAnimationFrame(frame)}
+resize();buildLayout();
+addEventListener('resize',buildLayout);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

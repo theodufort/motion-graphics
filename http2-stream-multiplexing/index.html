@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+*{margin:0;box-sizing:border-box}
+body{background:var(--bg);overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+const LOOP=30000;
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9],s2:[96,165,250],s3:[167,139,250]};
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+let W,H,dpr,L={};
+function buildLayout(){L.cx=W*.15;L.cy=H*.5;L.sx=W*.85;L.sy=H*.5;L.nw=W*.1;L.nh=H*.12;L.ty=H*.12}
+const lerp=(a,b,t)=>a+(b-a)*t,clamp01=v=>Math.max(0,Math.min(1,v));
+const ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
+const fade=(t,a,b,f)=>{if(t<a||t>=b)return 0;if(t<a+f)return ease((t-a)/f);if(t>b-f)return ease((b-t)/f);return 1};
+const beatA=(t,s,e)=>fade(t,s,e,1000);
+const streams=[{c:PAL.accent,l:'Stream 1',d:1,o:0},{c:PAL.s2,l:'Stream 2',d:-1,o:.33},{c:PAL.s3,l:'Stream 3',d:1,o:.66}];
+let __seek=null;
+window.__time=v=>{__seek=v};
+window.__loop=LOOP;
+function drawBg(t){ctx.fillStyle=rgba(PAL.bg,1);ctx.fillRect(0,0,W,H);ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;const s=W/20;for(let x=0;x<W;x+=s){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=s){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}}
+function drawConn(t){const a=.3+.1*Math.sin(t/400);ctx.strokeStyle=rgba(PAL.muted,a);ctx.lineWidth=2;ctx.setLineDash([8,6]);ctx.lineDashOffset=-t/20;ctx.beginPath();ctx.moveTo(L.cx+L.nw/2,L.cy);ctx.lineTo(L.sx-L.nw/2,L.sy);ctx.stroke();ctx.setLineDash([])}
+function drawNode(x,y,w,h,lb,col){const p=1+.03*Math.sin(performance.now()/400);const pw=w*p,ph=h*p;ctx.fillStyle=rgba(PAL.bg,.9);ctx.strokeStyle=rgba(col,.6);ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(x-pw/2,y-ph/2,pw,ph,8);ctx.fill();ctx.stroke();let fs=Math.min(pw*.12,18);ctx.font=`600 ${fs}px system-ui`;while(ctx.measureText(lb).width>pw*.85){fs-=2;ctx.font=`600 ${fs}px system-ui`}ctx.fillStyle=rgba(PAL.text,.9);ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(lb,x,y)}
+function drawNodes(t){drawNode(L.cx,L.cy,L.nw,L.nh,'Client',PAL.accent);drawNode(L.sx,L.sy,L.nw,L.nh,'Server',PAL.s2)}
+function drawMulti(t,a){const x1=L.cx+L.nw/2+10,x2=L.sx-L.nw/2-10;streams.forEach((s,i)=>{const cyc=3000,pr=((t+s.o*cyc)%cyc)/cyc,px=s.d>0?lerp(x1,x2,ease(pr)):lerp(x2,x1,ease(pr)),py=L.cy+(i-1)*H*.06;for(let k=1;k<=4;k++){const tp=clamp01(pr-k*.04),tx=s.d>0?lerp(x1,x2,ease(tp)):lerp(x2,x1,ease(tp));ctx.fillStyle=rgba(s.c,a*.15*(1-k/5));ctx.beginPath();ctx.arc(tx,py,4-k*.5,0,Math.PI*2);ctx.fill()}ctx.fillStyle=rgba(s.c,a);ctx.beginPath();ctx.arc(px,py,7,0,Math.PI*2);ctx.fill();if(a>.3){ctx.font='500 11px system-ui';ctx.fillStyle=rgba(s.c,a*.8);ctx.textAlign='center';ctx.fillText(s.l,px,py-16)}})}
+function drawComp(t,a){const x1=L.cx+L.nw/2+10,x2=L.sx-L.nw/2-10,pr=(t%4000)/4000,px=lerp(x1,x2,ease(pr)),py=L.cy,fw=W*.12,cw=fw*(1-.7*ease(clamp01(pr*1.5))),bh=H*.06;ctx.fillStyle=rgba(PAL.accent,a*.15);ctx.strokeStyle=rgba(PAL.accent,a*.6);ctx.lineWidth=1.5;ctx.beginPath();ctx.roundRect(px-cw/2,py-bh/2,cw,bh,4);ctx.fill();ctx.stroke();const sz=Math.round(100*(1-.7*ease(clamp01(pr*1.5))));ctx.font='600 12px system-ui';ctx.fillStyle=rgba(PAL.text,a);ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(sz+' B',px,py);ctx.font='500 11px system-ui';ctx.fillStyle=rgba(PAL.muted,a*.7);ctx.fillText('HPACK',px,py+bh/2+14)}
+function drawFlow(t,a){const x1=L.cx+L.nw/2+10,py=L.cy,mw=W*.25,mh=H*.04,mx=W*.5,my=L.cy+H*.18,pr=(t%5000)/5000,fill=ease(clamp01(pr*2))*(1-ease(clamp01((pr-.5)*2)));ctx.fillStyle=rgba(PAL.bg,a*.8);ctx.strokeStyle=rgba(PAL.muted,a*.4);ctx.lineWidth=1;ctx.beginPath();ctx.roundRect(mx-mw/2,my-mh/2,mw,mh,4);ctx.fill();ctx.stroke();ctx.fillStyle=rgba(PAL.accent,a*.5);ctx.beginPath();ctx.roundRect(mx-mw/2,my-mh/2,mw*fill,mh,4);ctx.fill();ctx.font='500 11px system-ui';ctx.fillStyle=rgba(PAL.text,a*.8);ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('Window',mx,my-mh/2-12);const wait=fill>.8;for(let i=0;i<3;i++){const wx=x1+20+i*18,wy=py-H*.08,bob=Math.sin(t/300+i)*3;ctx.fillStyle=rgba(PAL.accent,a*(wait?.7:.2));ctx.beginPath();ctx.arc(wx,wy+bob,5,0,Math.PI*2);ctx.fill()}}
+function drawHud(t){const b=[beatA(t,0,10000),beatA(t,10000,20000),beatA(t,20000,30000)],idx=t<10000?0:t<20000?1:2,a=b[idx];if(a<.01)return;const titles=['Stream Multiplexing','Header Compression','Flow Control'],subs=['One connection, many streams','HPACK: 70% smaller headers','Window-based backpressure'];let fs=Math.min(W*.025,28);ctx.font=`700 ${fs}px system-ui`;ctx.fillStyle=rgba(PAL.text,a);ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(titles[idx],W*.5,L.ty);ctx.font=`400 ${Math.min(W*.012,14)}px system-ui`;ctx.fillStyle=rgba(PAL.muted,a*.8);ctx.fillText(subs[idx],W*.5,L.ty+fs*.9)}
+function frame(now){if(__seek!=null)now=__seek;const t=now%LOOP;ctx.clearRect(0,0,W,H);drawBg(t);drawConn(t);drawNodes(t);const b1=beatA(t,0,10000),b2=beatA(t,10000,20000),b3=beatA(t,20000,30000);if(b1>0)drawMulti(t,b1);if(b2>0)drawComp(t,b2);if(b3>0)drawFlow(t,b3);drawHud(t);requestAnimationFrame(frame)}
+function resize(){dpr=window.devicePixelRatio||1;W=window.innerWidth;H=window.innerHeight;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0);buildLayout()}
+window.addEventListener('resize',resize);resize();requestAnimationFrame(frame);
+</script>
+</body>
+</html>

@@ -40,7 +40,21 @@ forces fresh generation, `./check.sh --skip-gen` skips it entirely.
 `--force` is passed. `./check.sh --only <topic>` validates a single
 folder in ~5s (fix-loop speed; unknown topic exits 2).
 
-### Environment knobs
+### Negative fixtures
+
+`tool/fixtures/` — minimal HTML that must FAIL specific checks (run
+`node tool/validate.mjs tool/fixtures/<name>`; a pass means the check
+regressed):
+
+| fixture | check targeted |
+|---|---|
+| `dark-seam/` | seam (dark frame at loop wrap) |
+| `text-overlap/` | collisions (overlapping fillText rects) |
+| `blank-canvas/` | content (densest frame < 500 px) |
+| `static-canvas/` | frozen (near-zero content-px delta across the loop) |
+| `invisible-label/` | visibility (all-frames label at alpha 0) |
+
+## Environment knobs
 
 | Variable | Default | Effect |
 | --- | --- | --- |

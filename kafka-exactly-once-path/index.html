@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+*{margin:0;box-sizing:border-box}
+body{background:var(--bg);overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+const LOOP=24000;
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+let W,H,dpr,L={};
+function buildLayout(){L={producer:{x:W*.1,y:H*.5,r:36},partitioner:{x:W*.28,y:H*.5,r:32},parts:[{x:W*.48,y:H*.26,r:28},{x:W*.48,y:H*.5,r:28},{x:W*.48,y:H*.74,r:28}],consumer:{x:W*.72,y:H*.5,r:36},offset:{x:W*.72,y:H*.84,r:26}}}
+const lerp=(a,b,t)=>a+(b-a)*t,clamp01=v=>Math.max(0,Math.min(1,v));
+const ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
+const quad=(a,c,b,t)=>({x:lerp(lerp(a.x,c.x,t),lerp(c.x,b.x,t),t),y:lerp(lerp(a.y,c.y,t),lerp(c.y,b.y,t),t)});
+function bA(t,s,e,f=.04){const b=t/LOOP;if(b<s||b>=e)return 0;return Math.min(clamp01((b-s)/f),clamp01((e-b)/f))}
+let __seek=null;window.__time=v=>{__seek=v};window.__loop=LOOP;
+function pkt(t,from,to,ctrl,dur,delay){const el=(t-delay)%LOOP;if(el<0||el>dur)return null;return quad(from,ctrl,to,ease(clamp01(el/dur)))}
+function drawBg(){ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;const s=W/22;for(let x=0;x<W;x+=s){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=s){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}}
+function drawConn(t){const a1=bA(t,0,.42,.03),a2=bA(t,.28,.72,.03),a3=bA(t,.6,1,.03),m=Math.max(a1,a2,a3);ctx.lineWidth=1.5;ctx.strokeStyle=rgba(PAL.accent,.3*m);ctx.beginPath();ctx.moveTo(L.producer.x,L.producer.y);ctx.lineTo(L.partitioner.x,L.partitioner.y);ctx.stroke();L.parts.forEach(p=>{ctx.strokeStyle=rgba(PAL.accent,.25*m);ctx.beginPath();ctx.moveTo(L.partitioner.x,L.partitioner.y);ctx.lineTo(p.x,p.y);ctx.stroke()});L.parts.forEach(p=>{ctx.strokeStyle=rgba(PAL.accent,.25*a2);ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(L.consumer.x,L.consumer.y);ctx.stroke()});ctx.strokeStyle=rgba(PAL.accent,.3*a3);ctx.beginPath();ctx.moveTo(L.consumer.x,L.consumer.y);ctx.lineTo(L.offset.x,L.offset.y);ctx.stroke()}
+function drawNode(n,alpha,label,t){if(alpha<=0)return;const r=n.r+Math.sin(t/400)*2.5;const g=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,r*2.2);g.addColorStop(0,rgba(PAL.accent,.12*alpha));g.addColorStop(1,rgba(PAL.accent,0));ctx.fillStyle=g;ctx.beginPath();ctx.arc(n.x,n.y,r*2.2,0,Math.PI*2);ctx.fill();ctx.fillStyle=rgba(PAL.bg,.92*alpha);ctx.strokeStyle=rgba(PAL.accent,.7*alpha);ctx.lineWidth=2;ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);ctx.fill();ctx.stroke();let fs=13;ctx.font=`600 ${fs}px system-ui`;while(ctx.measureText(label).width>r*1.7&&fs>9){fs--;ctx.font=`600 ${fs}px system-ui`}ctx.fillStyle=rgba(PAL.text,alpha);ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,n.x,n.y)}
+function drawPkt(pos,alpha,col){if(!pos||alpha<=0)return;ctx.fillStyle=rgba(col,alpha*.3);ctx.beginPath();ctx.arc(pos.x,pos.y,9,0,Math.PI*2);ctx.fill();ctx.fillStyle=rgba(col,alpha);ctx.beginPath();ctx.arc(pos.x,pos.y,5,0,Math.PI*2);ctx.fill()}
+function drawHud(t){const a1=bA(t,0,.42,.03),a2=bA(t,.28,.72,.03),a3=bA(t,.6,1,.03);ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='700 22px system-ui';ctx.fillStyle=rgba(PAL.text,Math.max(a1,a2,a3));ctx.fillText('Kafka Exactly-Once Path',W*.5,H*.07);if(a1>0){ctx.font='500 13px system-ui';ctx.fillStyle=rgba(PAL.muted,a1);ctx.fillText('key → partition',W*.38,H*.5+52)}if(a2>0){const off=Math.floor((t-6720)/180)%999;ctx.font='600 14px system-ui';ctx.fillStyle=rgba(PAL.accent,a2);ctx.fillText(`offset: ${off}`,W*.6,H*.5+52)}if(a3>0){ctx.font='600 15px system-ui';ctx.fillStyle=rgba(PAL.accent,a3);ctx.fillText('commit ✓',W*.72,H*.69)}}
+function frame(now){if(__seek!=null)now=__seek;const t=now%LOOP;ctx.clearRect(0,0,W,H);drawBg();drawConn(t);const a1=bA(t,0,.42,.03),a2=bA(t,.28,.72,.03),a3=bA(t,.6,1,.03);drawNode(L.producer,a1,'Producer',t);drawNode(L.partitioner,a1,'Partitioner',t);L.parts.forEach((p,i)=>drawNode(p,a1,`P-${i}`,t));drawNode(L.consumer,Math.max(a2,a3),'Consumer Grp',t);drawNode(L.offset,a3,'Offset Store',t);if(a1>0){const d=1200;for(let i=0;i<3;i++){const dl=i*400;drawPkt(pkt(t,L.producer,L.partitioner,{x:(L.producer.x+L.partitioner.x)/2,y:L.producer.y-20},d,dl),a1,PAL.accent);drawPkt(pkt(t,L.partitioner,L.parts[i],{x:(L.partitioner.x+L.parts[i].x)/2,y:(L.partitioner.y+L.parts[i].y)/2-30},d,dl+d*.5),a1,PAL.accent)}}if(a2>0){const d=1000;for(let i=0;i<3;i++){drawPkt(pkt(t,L.parts[i],L.consumer,{x:(L.parts[i].x+L.consumer.x)/2,y:(L.parts[i].y+L.consumer.y)/2+20},d,i*350),a2,PAL.accent)}}if(a3>0){const d=1400,c1={x:(L.consumer.x+L.offset.x)/2,y:(L.consumer.y+L.offset.y)/2+30},c2={x:(L.consumer.x+L.offset.x)/2,y:(L.consumer.y+L.offset.y)/2-30};drawPkt(pkt(t,L.consumer,L.offset,c1,d,0),a3,PAL.accent);drawPkt(pkt(t,L.offset,L.consumer,c2,d,d*.5),a3,PAL.accent)}drawHud(t);requestAnimationFrame(frame)}
+function resize(){dpr=window.devicePixelRatio||1;W=window.innerWidth;H=window.innerHeight;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0);buildLayout()}
+window.addEventListener('resize',resize);resize();requestAnimationFrame(frame);
+</script>
+</body>
+</html>

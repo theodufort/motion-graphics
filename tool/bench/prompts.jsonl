@@ -15,3 +15,6 @@
 {"prompt":"circuit breaker half-open probing: trial requests, success threshold, recovery","smoke":false}
 {"prompt":"DNS resolution: recursive query chain, caching, TTL expiry","smoke":false}
 {"prompt":"how a BGP router chooses the best path: local pref, AS path length, MED","smoke":false}
+{"prompt":"HTTP/2: stream multiplexing over one connection, header compression, flow control windows","smoke":false}
+{"prompt":"Kafka: producer partitioner, consumer group offsets, exactly-once commit path","smoke":false}
+{"prompt":"SQLite WAL mode: writer checkpoint, readers on snapshot, wal-index frames","smoke":false}

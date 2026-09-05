@@ -71,9 +71,8 @@
   fixtures/invisible-label flagged, all 28 graphics unflagged (980/980).- [x] tool/generate.mjs: llm() retry (1x, 5s backoff) for AbortError/
   network errors only; acceptance met: hung mock → timeout → retry
   succeeds ("RETRY-OK"), HTTP 500 → no retry, HTTP 400 → no retry
-  (verified against mock servers + real proxy 400).- [ ] tool/bench/prompts.jsonl: expand to 20 prompts (3 new: HTTP/2
-  stream multiplexing, Kafka partitioner + offset commit, SQLite WAL
-  readers/writers); acceptance: BENCH: 20/20.
-- [ ] README.md: list the four negative fixtures (dark-seam, text-
-  overlap, blank-canvas, static-canvas, invisible-label) and which
-  check each targets; acceptance: README section names all five.
+  (verified against mock servers + real proxy 400).- [x] tool/bench/prompts.jsonl: 20 prompts; acceptance met: BENCH: 20/20
+  (3 fresh gens: HTTP/2 multiplexing 191s, Kafka partitioner 190s,
+  SQLite WAL 216s — all first-pass pass, 0 fix passes).- [x] README.md: "Negative fixtures" section lists all five fixtures
+  (dark-seam, text-overlap, blank-canvas, static-canvas, invisible-label)
+  with the check each targets and the one-liner to run.
