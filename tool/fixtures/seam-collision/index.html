@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>seam collision fixture</title>
+<style>body{margin:0;background:#090909;display:flex;align-items:center;justify-content:center;min-height:100vh}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+const LOOP = 8000;
+window.__loop = LOOP;
+let W, H;
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  W = 960; H = 540;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + "px"; canvas.style.height = H + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener("resize", resize);
+let __seek = null;
+window.__time = (v) => { __seek = v; };
+function frame(now) {
+  if (__seek != null) now = __seek;
+  const t = now % LOOP;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(62,207,142,0.9)";
+  ctx.fillRect(W * 0.3 + Math.sin(t / 300) * 30, H * 0.5, 220, 100);
+  ctx.font = "700 24px monospace";
+  ctx.textAlign = "center";
+  // label A slides in from the left; label B is static. They overlap ONLY
+  // near the wrap: at t near LOOP, A's x converges on B's x; at mid-loop
+  // they are 200px apart. Collision sampling at parked frames must catch it.
+  // A converges on B only as t -> LOOP (both x and y); mid-loop A sits
+  // 150px to the left and 15px higher, so no frame but the seam overlaps.
+  const p = t / LOOP;
+  const bx = W * 0.62, by = H * 0.3;
+  const ax = bx - 150 * Math.sin(p * Math.PI);
+  const ay = by - 15 * Math.sin(p * Math.PI);
+  ctx.fillStyle = "rgba(237,237,237,0.95)";
+  ctx.fillText("seam alpha", ax, ay);
+  ctx.fillStyle = "rgba(239,68,68,0.95)";
+  ctx.fillText("seam beta", bx, by);
+  requestAnimationFrame(frame);
+}
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
