@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg)}
+canvas{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+const LOOP=30000;
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+const lerp=(a,b,t)=>a+(b-a)*t;
+const clamp01=v=>Math.max(0,Math.min(1,v));
+const ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
+const quad=(a,c,b,t)=>({x:lerp(lerp(a.x,c.x,t),lerp(c.x,b.x,t),t),y:lerp(lerp(a.y,c.y,t),lerp(c.y,b.y,t),t)});
+let W,H,dpr,nodes;
+function buildLayout(){
+  dpr=window.devicePixelRatio||1;W=window.innerWidth;H=window.innerHeight;
+  cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
+  const cx=W*.5,cy=H*.5,r=Math.min(W,H)*.28;
+  nodes=Array.from({length:5},(_,i)=>{const a=-Math.PI/2+i*2*Math.PI/5;return{x:cx+r*Math.cos(a),y:cy+r*Math.sin(a),label:'Node '+i}});
+}
+const beat=(t,s,e)=>{const b=t/LOOP;if(b<s||b>=e)return 0;return Math.min(clamp01((b-s)/.02),clamp01((e-b)/.02))};
+const rounds=[{s:.15,e:.30,p:[[0,1],[2,3]]},{s:.35,e:.50,p:[[1,2],[3,4]]},{s:.55,e:.70,p:[[0,4],[1,3]]}];
+function nodeState(i,t){
+  const b=t/LOOP;let s=.2;
+  for(const r of rounds){
+    if(b>=r.e){for(const[a,c]of r.p)if(i===a||i===c)s=Math.min(1,s+.25)}
+    else if(b>=r.s){const p=ease(clamp01((b-r.s)/(r.e-r.s)));for(const[a,c]of r.p)if(i===a||i===c)s=Math.min(1,.2+.25*p)}
+  }
+  if(b>=.70)s=1;
+  if(b>=.90)s=lerp(1,.2,ease(clamp01((b-.90)/.10)));
+  return s;
+}
+let __seek=null;
+window.__time=v=>{__seek=v};
+window.__loop=LOOP;
+function frame(now){
+  if(__seek!=null)now=__seek;
+  const t=now%LOOP,b=t/LOOP;
+  ctx.clearRect(0,0,W,H);
+  // grid
+  ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;
+  for(let x=0;x<W;x+=60){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+  for(let y=0;y<H;y+=60){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+  // title
+  const tA=beat(t,0,.12)+beat(t,.88,1);
+  if(tA>0){ctx.font=`600 ${Math.min(W*.035,42)}px system-ui`;ctx.fillStyle=rgba(PAL.text,tA);ctx.textAlign='center';ctx.fillText('Gossip Anti-Entropy',W*.5,H*.08)}
+  // round labels
+  const rL=['Round 1','Round 2','Round 3','Converged'],rR=[[.13,.32],[.33,.52],[.53,.72],[.73,.88]];
+  for(let i=0;i<4;i++){const a=beat(t,rR[i][0],rR[i][1]);if(a>0){ctx.font=`500 ${Math.min(W*.02,24)}px system-ui`;ctx.fillStyle=rgba(i===3?PAL.accent:PAL.muted,a);ctx.textAlign='center';ctx.fillText(rL[i],W*.5,H*.14)}}
+  // packets
+  for(const rd of rounds){
+    if(b<rd.s||b>=rd.e)continue;
+    const p=ease(clamp01((b-rd.s)/(rd.e-rd.s)));
+    for(const[ai,bi]of rd.p){
+      const a=nodes[ai],c=nodes[bi],mid={x:(a.x+c.x)/2+(a.y-c.y)*.15,y:(a.y+c.y)/2+(c.x-a.x)*.15};
+      ctx.strokeStyle=rgba(PAL.accent,.15);ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.quadraticCurveTo(mid.x,mid.y,c.x,c.y);ctx.stroke();
+      const pos=quad(a,mid,c,p),trail=quad(a,mid,c,Math.max(0,p-.08));
+      ctx.strokeStyle=rgba(PAL.accent,.4);ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(trail.x,trail.y);ctx.lineTo(pos.x,pos.y);ctx.stroke();
+      const g=ctx.createRadialGradient(pos.x,pos.y,0,pos.x,pos.y,20);g.addColorStop(0,rgba(PAL.accent,.3));g.addColorStop(1,rgba(PAL.accent,0));ctx.fillStyle=g;ctx.beginPath();ctx.arc(pos.x,pos.y,20,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(pos.x,pos.y,5,0,Math.PI*2);ctx.fillStyle=rgba(PAL.accent,.9);ctx.fill();
+    }
+  }
+  // nodes
+  const pulse=Math.sin(t/400)*.08;
+  for(let i=0;i<5;i++){
+    const n=nodes[i],s=nodeState(i,t),r=Math.min(W,H)*.045*(1+pulse);
+    const g=ctx.createRadialGradient(n.x,n.y,r*.5,n.x,n.y,r*2.5);g.addColorStop(0,rgba(s>=1?PAL.accent:PAL.muted,.15));g.addColorStop(1,rgba(PAL.bg,0));ctx.fillStyle=g;ctx.beginPath();ctx.arc(n.x,n.y,r*2.5,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);ctx.fillStyle=rgba(PAL.bg,.9);ctx.fill();ctx.strokeStyle=rgba(s>=1?PAL.accent:PAL.muted,.6);ctx.lineWidth=2;ctx.stroke();
+    ctx.beginPath();ctx.arc(n.x,n.y,r*.7,-Math.PI/2,-Math.PI/2+s*Math.PI*2);ctx.strokeStyle=rgba(s>=1?PAL.accent:PAL.muted,.8);ctx.lineWidth=3;ctx.stroke();
+    let fs=Math.min(W*.014,14);ctx.font=`500 ${fs}px system-ui`;let lbl=n.label;
+    while(ctx.measureText(lbl).width>r*1.8&&fs>8){fs-=2;ctx.font=`500 ${fs}px system-ui`}
+    ctx.fillStyle=rgba(PAL.text,.9);ctx.textAlign='center';ctx.fillText(lbl,n.x,n.y+r+fs+6);
+    ctx.font=`600 ${fs}px system-ui`;ctx.fillStyle=rgba(s>=1?PAL.accent:PAL.muted,.9);ctx.fillText(Math.round(s*100)+'%',n.x,n.y+4);
+  }
+  // convergence counter
+  const cA=beat(t,.73,.88);
+  if(cA>0){const cnt=Math.round(lerp(3,5,ease(clamp01((b-.73)/.08))));ctx.font=`700 ${Math.min(W*.04,48)}px system-ui`;ctx.fillStyle=rgba(PAL.accent,cA);ctx.textAlign='center';ctx.fillText(cnt+'/5 synced',W*.5,H*.88)}
+  // rule line
+  const rA=beat(t,.13,.88);
+  if(rA>0){ctx.font=`400 ${Math.min(W*.013,16)}px system-ui`;ctx.fillStyle=rgba(PAL.muted,rA*.7);ctx.textAlign='center';ctx.fillText('periodic pairwise sync → union merge → convergence',W*.5,H*.94)}
+  requestAnimationFrame(frame);
+}
+window.addEventListener('resize',buildLayout);
+buildLayout();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

@@ -221,8 +221,17 @@ const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv
 if (isMain) {
   const args = process.argv.slice(2);
   const force = args.includes("--force");
-  const prompt = args.filter((a) => a !== "--force").join(" ");
-  if (!prompt) { console.error("usage: node tool/generate.mjs \"<prompt>\""); process.exit(2); }
+  const pfIdx = args.indexOf("--prompt-file");
+  let prompt;
+  if (pfIdx !== -1) {
+    // multi-line prompts from a file (newlines preserved)
+    const pf = args[pfIdx + 1];
+    if (!pf) { console.error("usage: --prompt-file <path>"); process.exit(2); }
+    prompt = readFileSync(pf, "utf8").trim();
+  } else {
+    prompt = args.filter((a) => a !== "--force").join(" ");
+  }
+  if (!prompt) { console.error("usage: node tool/generate.mjs \"<prompt>\" [--force | --prompt-file <path>]"); process.exit(2); }
   let g;
   try {
     g = await generate(prompt, { force });
