@@ -90,5 +90,14 @@
   11111110).- [ ] tool/generate.sh: --prompt-file flag (read prompt from a file,
   newlines preserved); acceptance: a two-line prompt file generates the
   same topic as the inline form.
-- [ ] PROGRESS.md: add current score 1120/1120, 31 graphics, tps logging,
-  bench table, manifest; acceptance: all five facts present.
+- [x] PROGRESS.md refreshed: 1155/1155, 33 graphics, 8-bit --watch,
+  manifest.json, tps logging, bench 20/20 + timing table, prompt-file
+  flag, rules 1-18 — all facts present.- [ ] tool/validate.mjs: expose per-check timings in the JSON report
+  (seek/collisions/seam/visibility ms); acceptance: report has a
+  "timings" object with 4+ numeric keys.
+- [ ] check.sh: --quick mode (validate with MG_QUICK=1: 3 park frames
+  instead of 4, no resize step); acceptance: --quick on 33 graphics
+  finishes < 12s and reports a quick-mode marker.
+- [ ] tool/validate.mjs: seam label continuity — entity labels present at
+  seam-a should reappear by seam-b+600ms (no label teleport/vanish);
+  acceptance: a fixture that kills a label at the wrap is flagged.
