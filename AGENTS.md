@@ -81,6 +81,24 @@ imported by `tool/check.mjs`). `./check.sh` is the repo-wide goal check
 graphics count as first-class citizens: same rules, same validation as
 hand-written ones.
 
+Frequently used tooling (full list in README.md → "Helper scripts"):
+
+- `./check.sh --only <topic>` / `--watch --only <topic>` — validate one
+  folder, or re-validate it live on every `index.html` edit (debounced).
+- `./check.sh --since <git-rev>` — validate only folders changed since a
+  commit (pairs well with `--skip-gen`).
+- `MG_DEBUG=1 node tool/validate.mjs <folder>` — dump every parked
+  frame's `fillText` label rects to stderr (collision/containment
+  debugging).
+- `MG_QUICK=1` — fast validation pass (2 frames, fewer frozen samples,
+  no resize) for watch/fix loops.
+- Frozen probe bands: `<0.5%` content-delta = hard fail, `0.5–2%` =
+  soft `near-frozen` warning (printed as `⚠` in the check verdict, score
+  unchanged), `>2%` healthy.
+- `./close.sh <unique-substring> [note]` — close exactly one open
+  `IMPROVEMENTS.md` item with verification; always use it instead of
+  hand-editing checkboxes.
+
 ## Self-validation loop (mandatory — never skip)
 
 Every graphic you create **or edit** must pass the validation loop before you

@@ -163,6 +163,6 @@
 - [x] bench.mjs: reuse-path rows should carry validate timings (median of
   the last N runs from bench-runs.jsonl) for --compare; acceptance:
   --compare shows a timings column when both logs have it.
-- [ ] AGENTS.md: document the new tools (close.sh, MG_DEBUG, --since,
+- [x] AGENTS.md: document the new tools (close.sh, MG_DEBUG, --since,
   --watch --only, near-frozen band) in the tooling section; acceptance:
   AGENTS.md mentions all five.
