@@ -158,6 +158,16 @@ export async function validateWithBrowser(browser, folderPath) {
     if (!NO_SHOTS) await page.screenshot({ path: path.join(shotDir, "densest.png") });
     r.shots.push(path.join(shotDir, "densest.png"));
     r.densest = { t: denseT, contentPx: contentsByTime[denseT] };
+    // sparsest-frame capture: the min-contentPx frame — a vision pass can
+    // compare the densest vs sparsest beats side-by-side
+    const sparseT = Object.entries(contentsByTime).sort((a, b) => a[1] - b[1])[0][0];
+    if (sparseT !== denseT) {
+      await page.evaluate((t) => window.__time(t), sparseT);
+      await page.evaluate(() => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)))).catch(() => {});
+      if (!NO_SHOTS) await page.screenshot({ path: path.join(shotDir, "sparsest.png") });
+      r.shots.push(path.join(shotDir, "sparsest.png"));
+      r.sparsest = { t: sparseT, contentPx: contentsByTime[sparseT] };
+    }
   }
 
   // loop-wide px churn (sampled before the seam check, which may reference it)
@@ -447,12 +457,12 @@ export async function validateWithBrowser(browser, folderPath) {
     const manifest = r.shots.map((s) => {
       const base = path.basename(s);
       const isSeam = base.startsWith("seam-");
-      const isDensest = base === "densest.png";
-      const t = isDensest ? Object.entries(contentsByTime).sort((a, b) => b[1] - a[1])[0][0] : isSeam ? (base === "seam-a.png" ? LOOP - 300 : 300) : parseInt(base.slice(1, -4), 10);
+      const isDensest = base === "densest.png", isSparsest = base === "sparsest.png";
+      const t = isDensest ? Object.entries(contentsByTime).sort((a, b) => b[1] - a[1])[0][0] : isSparsest ? Object.entries(contentsByTime).sort((a, b) => a[1] - b[1])[0][0] : isSeam ? (base === "seam-a.png" ? LOOP - 300 : 300) : parseInt(base.slice(1, -4), 10);
       const content = isSeam
         ? (base === "seam-a.png" ? seamPts[1]?.content ?? null : seamPts[2]?.content ?? null)
         : contentsByTime[t] ?? null;
-      return { file: base, t, contentPx: isDensest ? contentsByTime[t] : content, seam: isSeam, densest: isDensest };
+      return { file: base, t, contentPx: isDensest || isSparsest ? contentsByTime[t] : content, seam: isSeam, densest: isDensest, sparsest: isSparsest };
     });
     writeFileSync(path.join(shotDir, "manifest.json"), JSON.stringify({ topic: name, LOOP, labels: r.labels, size: r.size, shots: manifest }, null, 1) + "\n");
   }
