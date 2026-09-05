@@ -112,4 +112,13 @@
   not host load).- [x] tool/validate.mjs: seam label continuity (seamContinuity bit;
   seam-a labels without digits must reappear in some post-seam frame;
   digit labels skipped as live counters); acceptance met:
-  fixtures/lost-label-seam flagged, all 33 graphics clean, 1155/1155.
+  fixtures/lost-label-seam flagged, all 33 graphics clean, 1155/1155.- [ ] tool/close.sh helper: a small script that closes an
+  IMPROVEMENTS.md item by unique substring and VERIFIES the "[x]" line
+  exists afterwards (exit 1 otherwise), always preserving the trailing
+  newline; acceptance: closing a deliberately fused item succeeds and
+  grep -c "^- \[x\]" increases by 1.
+- [ ] validate.mjs: cut PNG output in --quick (skip t-seam PNGs, keep 2
+  frames + manifest); acceptance: tool/shots/<topic> has 2 PNGs after a
+  quick run and manifest lists exactly 2.
+- [ ] bench: --compare <before.log> <after.log> diffing per-prompt
+  timing tables; acceptance: prints rows where seconds changed by >10%.
