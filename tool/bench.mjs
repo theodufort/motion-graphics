@@ -156,12 +156,23 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     compare(before, after);
   }
   if (process.argv.includes("--trend")) {
-    // first-pass (fix=0) rate over the last 5 bench runs
+    // first-pass (fix=0) rate + failed attempts over the last 5 bench runs
     const lines = readFileSync(path.join(ROOT, "logs", "bench-runs.jsonl"), "utf8").trim().split("\n").filter(Boolean);
     const runs = lines.slice(-5).map((l) => JSON.parse(l));
+    // failed generation attempts (topic:null lines) from generations.jsonl
+    let failed = [];
+    try {
+      failed = readFileSync(path.join(ROOT, "logs", "generations.jsonl"), "utf8").trim().split("\n").filter(Boolean)
+        .map((l) => JSON.parse(l)).filter((g) => g.topic === null && g.error);
+    } catch { /* no log yet */ }
     for (const r of runs) {
       const f0 = r.rows.filter((x) => (x.fix ?? 0) === 0).length;
-      console.log(r.ts.slice(0, 16).replace("T", " ") + "  " + r.pass + "/" + r.total + " pass  fix=0: " + f0 + "/" + r.rows.length + "  warn: " + (r.warnings ?? "-"));
+      const since = r.ts;
+      // failures after the previous run (or the run window for the first)
+      const idx = lines.filter((l) => JSON.parse(l).ts <= since).length - 1;
+      const prev = idx > 0 ? JSON.parse(lines[idx - 1]).ts : "1970";
+      const f = failed.filter((g) => g.ts > prev && g.ts <= since).length;
+      console.log(r.ts.slice(0, 16).replace("T", " ") + "  " + r.pass + "/" + r.total + " pass  fix=0: " + f0 + "/" + r.rows.length + "  warn: " + (r.warnings ?? "-") + "  failed: " + f);
     }
     process.exit(0);
   }

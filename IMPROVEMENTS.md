@@ -290,7 +290,7 @@
   fails entirely (pass:0, error:<msg>) so failed attempts are countable
   in the trend; acceptance: a mock LLM that returns HTTP 500 leaves a
   line with an error field.
-- [ ] bench --trend: also print the failed-attempt count (generations.jsonl
+- [x] bench --trend: also print the failed-attempt count (generations.jsonl
   lines with topic:null) for the same window so pass-rate and failure-rate
   sit side by side; acceptance: --trend output gains a "failed:" column
   sourced from generations.jsonl.
