@@ -240,7 +240,7 @@
 - [x] bench --compare: also diff the warnings count per topic between two
   runs (currently only sec/fix/tps/status); acceptance: two bench logs
   where one has an edge-clip ⚠ on a topic print a warning-count delta.
-- [ ] generate.mjs: include the graphic's current per-check timings in the
+- [x] generate.mjs: include the graphic's current per-check timings in the
   fix-pass context so the model knows which check is expensive (a hint
   that e.g. a huge seam window means its LOOP is long); acceptance: the
   second fix-pass prompt contains a "timings:" line.

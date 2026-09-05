@@ -260,6 +260,7 @@ export async function generate(prompt, { force = false, allowExisting = process.
         `The generated graphic failed validation with: ${errs || "unknown"}.
 Fix the HTML so it passes every check. Target these failing check classes:
 ${hints.length ? hints.join("\n") : "- (no named class; re-read the error text above)"}
+Timings (ms per check; a big number means that check is sampling heavily — don't make it worse): ${JSON.stringify(report.timings || {})}.
 General: zero JS errors, window.__time + window.__loop defined, no overlapping full-opacity
 text, no dark frame at the loop seam, all elements animate.
 Reply with the COMPLETE corrected file (every line, even parts not shown above) between ===HTML=== markers (keep TOPIC and ===README=== too).` });
