@@ -62,7 +62,7 @@
         }
         addEventListener('resize', resize); resize();
 
-        const LOOP = 24000;
+        const LOOP = 24000; // --since test
         function fw(t, s, d, f = 1200) { const x = ((t - s) % LOOP + LOOP) % LOOP; if (x > d) return 0; return Math.min(1, x / f, (d - x) / f) }
         const fA = t => fw(t, 23000, 11200);   /* problem: 0 → ~10.2s      */
         const fC = t => fw(t, 9000, 14400);    /* solution: ~9s → 23.4s    */
