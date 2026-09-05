@@ -94,7 +94,8 @@
   manifest.json, tps logging, bench 20/20 + timing table, prompt-file
   flag, rules 1-18 — all facts present.- [x] validate.mjs: report.timings (frames/seam/collisions/frozen/resize
   ms); acceptance met: 5 numeric keys (1nf: frames 1158, seam 651,
-  collisions 3, frozen 1244, resize 309); 1155/1155 after patch.- [x] check.mjs --quick (MG_QUICK=1: 2 park frames, 5 frozen samples,
+  collisions 3, frozen 1244, resize 309); 1155/1155 after patch.
+- [x] check.mjs --quick (MG_QUICK=1: 2 park frames, 5 frozen samples,
   resize skipped, "[quick]" marker); NOTE: on a loaded host (load 6,
   43GB/62GB used) quick measured no faster than full (37.8s vs 38.3s,
   33 graphics) — wall time is launch/screenshot-I/O bound, not check
@@ -102,7 +103,11 @@
   check phases). Also: browser-pool worker refactor was REVERTED (34s
   vs 20s baseline) but the validateWithBrowser/validateFolder split in
   validate.mjs is kept as the API for future pool work.
-  Re-test on an idle host; if still slow, target screenshot count.- [x] tool/validate.mjs: seam label continuity (seamContinuity bit;
+  Re-test on idle host (iter 38): quick 38.2s vs full 39.2s (0.97) —
+  wall time is per-graphic fixed-cost bound (launch/goto/6 PNGs); quick
+  is a per-folder (watch/--only) accelerator, not a bulk-run one.
+  ASSUMPTIONS.md corrected (22->33 graphics explained the 20->38s drift,
+  not host load).- [x] tool/validate.mjs: seam label continuity (seamContinuity bit;
   seam-a labels without digits must reappear in some post-seam frame;
   digit labels skipped as live counters); acceptance met:
   fixtures/lost-label-seam flagged, all 33 graphics clean, 1155/1155.

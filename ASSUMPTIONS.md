@@ -55,9 +55,11 @@ validate.mjs parks FRAMES = [0.15, 0.40, 0.65, 0.90] plus seam-a
 (LOOP-300) and seam-b (300) => 6 PNGs and a 6-entry manifest.json per
 graphic. (An earlier backlog item assumed 6 frames + 1 seam = 7.)
 
-## Host load swings validation wall time (2026-09-05)
+## Wall time is per-graphic fixed-cost bound (2026-09-05)
 
-Same check.sh run measured 16-20s (early iterations) and 34-38s
-(iteration 36) on the same box — /proc/loadavg and free -g show heavy
-neighbor load on the 56-core/62GB host. Never compare wall times
-across turns; use relative (quick vs full) or per-check report.timings.
+check.sh --skip-gen went 16-20s (22 graphics) -> 34-39s (33 graphics):
+mostly the graphic count, not host load. Per graphic ~3.5-5s; check
+phases ~2s (report.timings), the rest is chromium launch, goto and 6
+PNG screenshots. --quick saves ~1.9s per graphic (useful for --only /
+--watch; bulk-run ratio 0.97). Future levers: fewer PNGs, browser
+reuse, higher concurrency on an idle host.
