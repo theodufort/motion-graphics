@@ -429,3 +429,12 @@
   SHOT of the sparsest frame (min contentPx) so a vision pass can
   compare the densest vs sparsest beats side-by-side; acceptance: the
   shot manifest gains a "sparsest.png" entry with t + contentPx.
+- [ ] validate.mjs: the label-fit check (rule 16) should be automated —
+  a label whose measured width exceeds 90% of its enclosing shape's
+  width currently passes silently (the rule is prompt-only); acceptance:
+  a fixture with a 200px-wide label in a 200px-wide box triggers a
+  "label overflow" warning.
+- [ ] check.mjs: --json summary should include a "fixtures" count (how
+  many fixture folders were validated) so a regression run can verify
+  the fixture suite is intact; acceptance: summary has a "fixtures"
+  field.
