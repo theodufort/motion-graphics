@@ -283,7 +283,7 @@ Reply with the COMPLETE corrected file (every line, even parts not shown above) 
     pass = report.clean && report.seek && report.collisions && report.seam && report.readme;
   }
   const tps = first.usage?.completion_tokens && first.ms ? Math.round(first.usage.completion_tokens / (first.ms / 1000)) : null;
-  return { folder, topic, pass, report, seconds: (Date.now() - t0) / 1000, fixPasses, tps, novelty: noveltyOf(html, topic) };
+  return { folder, topic, pass, report, seconds: (Date.now() - t0) / 1000, fixPasses, tps, novelty: noveltyOf(html, topic), retemp: stuckRetryUsed };
 }
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
@@ -318,7 +318,7 @@ if (isMain) {
     const html = readFileSync(path.join(g.folder, "index.html"), "utf8");
     appendFileSync(
       path.join(ROOT, "logs", "generations.jsonl"),
-      JSON.stringify({ ts: new Date().toISOString(), prompt, topic: g.topic, model: MODEL, seconds: Math.round(g.seconds), lines: html.split("\n").length, fixPasses: g.fixPasses, pass: g.pass, tps: g.tps ?? null, novelty: g.novelty }) + "\n"
+      JSON.stringify({ ts: new Date().toISOString(), prompt, topic: g.topic, model: MODEL, seconds: Math.round(g.seconds), lines: html.split("\n").length, fixPasses: g.fixPasses, pass: g.pass, tps: g.tps ?? null, novelty: g.novelty, retemp: g.retemp ?? false }) + "\n"
     );
   } catch {}
   console.log(g.folder);
