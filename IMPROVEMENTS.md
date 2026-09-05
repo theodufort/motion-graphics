@@ -175,6 +175,6 @@
   alpha >0.6 are fine — but labels REAPPEARING at seam-b with a pop-in
   of >50% alpha in <100ms are flagged); acceptance: fixture with a
   hard-pop reappearing label is flagged.
-- [ ] check.mjs: --json should embed the warnings (graphicsWarnings)
+- [x] check.mjs: --json should embed the warnings (graphicsWarnings)
   inside the main JSON object, not as a second JSON line; acceptance:
   single-line parse yields graphicsWarnings key.
