@@ -376,3 +376,14 @@
   both files were produced by check --json (not bench tables) — detect
   by the presence of a "summary" key and print "wall A->B"; acceptance:
   comparing two check --json payloads prints a wallMs delta line.
+- [ ] validate.mjs: the frozen probe should also catch a canvas that is
+  STATIC but with a moving clock/counter — a frame whose only churn is a
+  1-digit number changing (e.g. "TTL: 299s" → "TTL: 298s") currently
+  reads as "not frozen" because the px churn exceeds the threshold;
+  acceptance: a fixture whose only animation is a single-digit counter
+  decrement triggers a "nearly-frozen" warning.
+- [ ] generate.mjs: the fix-pass prompt should include the densest.png
+  timestamp + contentPx (from the shot manifest) so the model can reason
+  about which beat is most visually important when fixing layout;
+  acceptance: a mock LLM receives "densest: t=9600px=35852" in the
+  fix-pass prompt.
