@@ -377,6 +377,9 @@ export async function validateWithBrowser(browser, folderPath) {
   }
 
   
+  // content curve: where the graphic is densest over time, as [t, px] pairs —
+  // a vision pass can target the densest beat without re-running the probe
+  r.contentCurve = Object.entries(contentsByTime).map(([t, px]) => [t, px]).sort((a, b) => a[0] - b[0]);
   r.quick = QUICK ? 1 : 0;
   r.resize = 0;
   const tRes = Date.now();

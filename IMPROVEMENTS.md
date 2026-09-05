@@ -340,7 +340,7 @@
 - [ ] tool/bench/prompts.jsonl: add a 24th prompt (a lock-free queue
   / Treiber stack push-pop with ABA problem) to keep the bench diverse;
   acceptance: prompt added, graphic generates and passes 9/9.
-- [ ] validate.mjs: expose the per-frame content series in the report
+- [x] validate.mjs: expose the per-frame content series in the report
   (contentsByTime as a small array) so a vision pass can see where the
   graphic is densest without re-running; acceptance: report.gain a
   contentCurve key with 4-6 [t, px] pairs.
