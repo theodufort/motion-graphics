@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+*{margin:0;box-sizing:border-box}
+body{background:var(--bg);overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+const LOOP=30000;
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+let W,H,dpr,center,nodes;
+function buildLayout(){
+  center={x:W*0.5,y:W*0.5,r:Math.min(W,H)*0.045};
+  nodes=[];
+  for(let i=0;i<5;i++){
+    const a=-Math.PI/2+i*2*Math.PI/5;
+    nodes.push({x:W*0.5+Math.cos(a)*W*0.28,y:W*0.5+Math.sin(a)*W*0.28,r:Math.min(W,H)*0.035,label:'Share '+(i+1)});
+  }
+}
+const clamp01=v=>Math.max(0,Math.min(1,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const ease=t=>t<0.5?2*t*t:-1+(4-2*t)*t;
+const fade=(t,a,b,f)=>Math.min(clamp01((t-a)/f),clamp01((b-t)/f));
+let __seek=null;
+window.__time=v=>{__seek=v};
+window.__loop=LOOP;
+function resize(){
+  dpr=window.devicePixelRatio||1;
+  W=window.innerWidth;H=window.innerHeight;
+  cv.width=W*dpr;cv.height=H*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  buildLayout();
+}
+window.addEventListener('resize',resize);
+function drawGrid(){
+  ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;
+  const s=60;
+  for(let x=0;x<W;x+=s){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=s){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+function drawNode(x,y,r,col,alpha,label,t){
+  if(alpha<=0)return;
+  const pulse=1+0.06*Math.sin(t/400),rr=r*pulse;
+  const g=ctx.createRadialGradient(x,y,rr*0.3,x,y,rr*2.2);
+  g.addColorStop(0,rgba(col,alpha*0.25));g.addColorStop(1,rgba(col,0));
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,rr*2.2,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=rgba(col,alpha*0.9);ctx.beginPath();ctx.arc(x,y,rr,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle=rgba(col,alpha);ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,rr,0,Math.PI*2);ctx.stroke();
+  if(label){
+    let fs=Math.round(r*0.5);
+    ctx.font=`600 ${fs}px system-ui`;
+    while(ctx.measureText(label).width>rr*1.8&&fs>8){fs-=2;ctx.font=`600 ${fs}px system-ui`;}
+    ctx.fillStyle=rgba(PAL.text,alpha);ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(label,x,y+rr+18);
+  }
+}
+function quad(a,c,b,t){const u=1-t;return{x:u*u*a.x+2*u*t*c.x+t*t*b.x,y:u*u*a.y+2*u*t*c.y+t*t*b.y};}
+function drawPacket(a,b,t,col,alpha){
+  if(alpha<=0||t<=0||t>=1)return;
+  const c={x:(a.x+b.x)/2+(b.y-a.y)*0.2,y:(a.y+b.y)/2-(b.x-a.x)*0.2};
+  for(let i=4;i>=1;i--){
+    const tt=Math.max(0,t-i*0.04);
+    if(tt<=0)continue;
+    const p=quad(a,c,b,ease(tt));
+    ctx.fillStyle=rgba(col,alpha*(1-i*0.22));
+    ctx.beginPath();ctx.arc(p.x,p.y,4-i*0.6,0,Math.PI*2);ctx.fill();
+  }
+  const pos=quad(a,c,b,ease(t));
+  ctx.fillStyle=rgba(col,alpha);ctx.beginPath();ctx.arc(pos.x,pos.y,5,0,Math.PI*2);ctx.fill();
+}
+function frame(now){
+  if(__seek!=null)now=__seek;
+  const t=now%LOOP,beat=t/LOOP;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle=rgba(PAL.bg,1);ctx.fillRect(0,0,W,H);
+  drawGrid();
+  const b1=fade(beat,0,0.167,0.03);
+  const b2=fade(beat,0.167,0.4,0.04);
+  const b3=fade(beat,0.4,0.6,0.04);
+  const b4=fade(beat,0.6,0.833,0.04);
+  const b5=fade(beat,0.833,1.0,0.03);
+  if(b1>0){
+    ctx.font=`700 ${Math.round(W*0.028)}px system-ui`;
+    ctx.fillStyle=rgba(PAL.text,b1);ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('Shamir Secret Sharing',W*0.5,H*0.1);
+  }
+  drawNode(center.x,center.y,center.r,PAL.accent,Math.max(b1,b5),'Secret Key',t);
+  const shareA=Math.max(b2,b3,b4);
+  nodes.forEach((n,i)=>{
+    const sel=i<3;
+    const col=(b4>0&&sel)?PAL.accent:PAL.muted;
+    const a=shareA*(b4>0&&!sel?0.35:1);
+    drawNode(n.x,n.y,n.r,col,a,n.label,t+i*120);
+  });
+  if(b2>0){
+    const pt=clamp01((beat-0.167)/0.233);
+    nodes.forEach((n,i)=>{
+      const d=i*0.08;
+      drawPacket(center,n,clamp01((pt-d)/(1-d*0.8)),PAL.accent,b2*0.9);
+    });
+  }
+  if(b4>0){
+    const pt=clamp01((beat-0.6)/0.233);
+    for(let i=0;i<3;i++){
+      const d=i*0.1;
+      drawPacket(nodes[i],center,clamp01((pt-d)/(1-d*0.7)),PAL.accent,b4*0.9);
+    }
+  }
+  if(b3>0||b4>0){
+    const a=Math.max(b3,b4),k=b4>0?3:5;
+    ctx.font=`600 ${Math.round(W*0.016)}px system-ui`;
+    ctx.fillStyle=rgba(PAL.accent,a);ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(`k = ${k} of n = 5`,W*0.5,H*0.88);
+  }
+  if(b5>0){
+    ctx.font=`400 ${Math.round(W*0.013)}px system-ui`;
+    ctx.fillStyle=rgba(PAL.muted,b5);ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('Any k shares reconstruct the secret',W*0.5,H*0.88);
+  }
+  requestAnimationFrame(frame);
+}
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

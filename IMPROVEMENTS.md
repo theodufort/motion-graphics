@@ -313,7 +313,7 @@
   a stderr hint listing the closest topics (slug-map + prompt prefixes) so
   "matched nothing" stops being a silent 1-of-2 surprise; acceptance:
   --topics "nonexistent-topic" prints a hint naming the available topics.
-- [ ] tool/bench/prompts.jsonl: add 2 more prompts (a CRDT merge
+- [x] tool/bench/prompts.jsonl: add 2 more prompts (a CRDT merge
   resolution and a consensus-based secret sharing / Shamir split) to keep
   the bench set diverse; acceptance: 23 prompts, both topics slug-map and
   generate cleanly on first pass.

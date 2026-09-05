@@ -19,3 +19,5 @@
 {"prompt":"Kafka: producer partitioner, consumer group offsets, exactly-once commit path","smoke":false}
 {"prompt":"SQLite WAL mode: writer checkpoint, readers on snapshot, wal-index frames","smoke":false}
 {"prompt": "a bloom filter: k hashes, bit set, false-positive probability as size grows", "smoke": false}
+{"prompt": "CRDTs: two replicas editing the same set merge with last-writer-wins and OR-set semantics", "smoke": false}
+{"prompt": "Shamir secret sharing: split a secret into k-of-n shares, reconstruct it from any k", "smoke": false}

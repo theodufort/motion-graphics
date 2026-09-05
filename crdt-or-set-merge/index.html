@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+const LOOP=30000;
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+let W,H,dpr,LA,LB;
+function resize(){dpr=devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);LA={x:W*.22,y:H*.45,r:Math.min(W,H)*.12};LB={x:W*.78,y:H*.45,r:Math.min(W,H)*.12}}
+addEventListener('resize',resize);resize();
+const lerp=(a,b,t)=>a+(b-a)*t,clamp01=v=>Math.max(0,Math.min(1,v)),ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
+const quad=(a,c,b,t)=>({x:(1-t)*(1-t)*a.x+2*(1-t)*t*c.x+t*t*b.x,y:(1-t)*(1-t)*a.y+2*(1-t)*t*c.y+t*t*b.y});
+function bA(t,s,e,f){const b=t/LOOP,ss=s/LOOP,ee=e/LOOP,ff=f/LOOP;if(b<ss||b>=ee)return 0;if(b<ss+ff)return ease(clamp01((b-ss)/ff));if(b>ee-ff)return ease(clamp01((ee-b)/ff));return 1}
+const eA=[{l:'x'},{l:'y'},{l:'z'}],eB=[{l:'m'},{l:'n'},{l:'p'}];
+let __seek=null;window.__time=v=>{__seek=v};window.__loop=LOOP;
+function fitLabel(txt,x,y,fs,maxW,col,alpha){ctx.fillStyle=rgba(col,alpha);ctx.font=`500 ${fs}px system-ui`;while(ctx.measureText(txt).width>maxW&&fs>8){fs-=2;ctx.font=`500 ${fs}px system-ui`}ctx.textAlign='center';ctx.fillText(txt,x,y)}
+function drawNode(n,label,alpha){if(alpha<=0)return;const r=n.r*(1+.03*Math.sin(performance.now()/400));const g=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,r);g.addColorStop(0,rgba(PAL.accent,.12*alpha));g.addColorStop(1,rgba(PAL.accent,0));ctx.fillStyle=g;ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);ctx.fill();ctx.strokeStyle=rgba(PAL.accent,.5*alpha);ctx.lineWidth=2;ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);ctx.stroke();fitLabel(label,n.x,n.y+r+20,Math.min(W*.022,24),r*1.8,PAL.text,alpha)}
+function drawElems(n,els,alpha){if(alpha<=0)return;els.forEach((el,i)=>{const a=(i/els.length)*Math.PI*2-Math.PI/2+Math.sin(performance.now()/600+i)*.1;const ex=n.x+Math.cos(a)*n.r*.5,ey=n.y+Math.sin(a)*n.r*.5,er=n.r*.18;ctx.fillStyle=rgba(PAL.accent,.7*alpha);ctx.beginPath();ctx.arc(ex,ey,er,0,Math.PI*2);ctx.fill();ctx.fillStyle=rgba(PAL.bg,alpha);ctx.font=`600 ${er*1.1}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(el.l,ex,ey);ctx.textBaseline='alphabetic'})}
+function frame(now){if(__seek!=null)now=__seek;const t=now%LOOP,beat=t/LOOP;ctx.clearRect(0,0,W,H);
+ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;for(let x=0;x<W;x+=60){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=60){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+const a0=bA(t,0,5000,1200),a1=bA(t,5000,10000,1000),a2=bA(t,10000,15000,1000),a3=bA(t,15000,20000,1000),a4=bA(t,20000,25000,1000),a5=bA(t,25000,30000,1500);
+const nA=Math.max(a0,a1,a2,a3,a4,a5*.3);
+const tA=bA(t,0,LOOP,1500);if(tA>0)fitLabel('CRDT OR-Set Merge',W*.5,H*.1,Math.min(W*.035,42),W*.5,PAL.text,tA);
+const mid={x:(LA.x+LB.x)/2,y:LA.y-H*.15};
+if(nA>0){ctx.strokeStyle=rgba(PAL.accent,.15*nA);ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(LA.x,LA.y);ctx.quadraticCurveTo(mid.x,mid.y,LB.x,LB.y);ctx.stroke()}
+drawNode(LA,'Replica A',nA);drawNode(LB,'Replica B',nA);
+if(a0>0){drawElems(LA,eA.slice(0,2),a0);drawElems(LB,eB.slice(0,2),a0)}
+if(a1>0){drawElems(LA,eA,a1);drawElems(LB,eB,a1);fitLabel('Divergent Sets',W*.5,H*.72,Math.min(W*.018,20),W*.3,PAL.fail,a1)}
+if(a2>0){drawElems(LA,eA,a2);drawElems(LB,eB,a2);const pt=clamp01((t-10000)/3000);for(let i=0;i<3;i++){const p=clamp01(pt-i*.15);if(p>0&&p<1){const pos=quad(LA,mid,LB,ease(p));ctx.fillStyle=rgba(PAL.accent,(1-p)*a2);ctx.beginPath();ctx.arc(pos.x,pos.y,5,0,Math.PI*2);ctx.fill();for(let tr=1;tr<=4;tr++){const tt=clamp01(p-tr*.04);if(tt>0){const tp=quad(LA,mid,LB,ease(tt));ctx.fillStyle=rgba(PAL.accent,(1-tr*.2)*a2*.5);ctx.beginPath();ctx.arc(tp.x,tp.y,3-tr*.5,0,Math.PI*2);ctx.fill()}}}}fitLabel('OR-Set Union',W*.5,H*.72,Math.min(W*.018,20),W*.3,PAL.accent,a2)}
+if(a3>0){drawElems(LA,eA,a3);drawElems(LB,eB,a3);const cx=W*.5,cy=H*.45,pl=1+.1*Math.sin(performance.now()/200);ctx.strokeStyle=rgba(PAL.fail,a3);ctx.lineWidth=2;ctx.beginPath();ctx.arc(cx,cy,20*pl,0,Math.PI*2);ctx.stroke();fitLabel('LWW',cx,cy+5,Math.min(W*.016,18),60,PAL.fail,a3);fitLabel('t=3',cx-50,cy+35,Math.min(W*.014,16),50,PAL.muted,a3);fitLabel('t=5',cx+50,cy+35,Math.min(W*.014,16),50,PAL.muted,a3);fitLabel('winner: B',cx,cy+55,Math.min(W*.014,16),80,PAL.accent,a3)}
+if(a4>0){const merged=[...eA,...eB],mr=Math.min(W,H)*.15;const g=ctx.createRadialGradient(W*.5,H*.45,0,W*.5,H*.45,mr);g.addColorStop(0,rgba(PAL.accent,.08*a4));g.addColorStop(1,rgba(PAL.accent,0));ctx.fillStyle=g;ctx.beginPath();ctx.arc(W*.5,H*.45,mr,0,Math.PI*2);ctx.fill();ctx.strokeStyle=rgba(PAL.accent,.6*a4);ctx.lineWidth=2;ctx.beginPath();ctx.arc(W*.5,H*.45,mr,0,Math.PI*2);ctx.stroke();merged.forEach((el,i)=>{const a=(i/merged.length)*Math.PI*2-Math.PI/2,ex=W*.5+Math.cos(a)*mr*.6,ey=H*.45+Math.sin(a)*mr*.6,er=mr*.15;ctx.fillStyle=rgba(PAL.accent,.8*a4);ctx.beginPath();ctx.arc(ex,ey,er,0,Math.PI*2);ctx.fill();ctx.fillStyle=rgba(PAL.bg,a4);ctx.font=`600 ${er*1.1}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(el.l,ex,ey);ctx.textBaseline='alphabetic'});const cnt=Math.floor(merged.length*ease(clamp01((t-20000)/2000)));fitLabel(cnt+' elements',W*.5,H*.72,Math.min(W*.02,22),W*.3,PAL.text,a4);fitLabel('\u2713 Converged',W*.5,H*.8,Math.min(W*.025,28),W*.3,PAL.accent,a4)}
+const bNames=['Init','Diverge','Merge','LWW','Converge','Reset'],bi=Math.min(5,Math.floor(beat*6));ctx.fillStyle=rgba(PAL.muted,.6);ctx.font=`400 ${Math.min(W*.012,14)}px system-ui`;ctx.textAlign='left';ctx.fillText(bNames[bi],W*.03,H*.95);
+requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
