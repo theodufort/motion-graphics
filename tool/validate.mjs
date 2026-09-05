@@ -407,6 +407,21 @@ export async function validateWithBrowser(browser, folderPath) {
     const n = pageErrors.length - before;
     if (n > 0) errors.push(`resize: ${n} error(s) after viewport change to 1366x768`);
     else r.resize = 1;
+    // proportionality: the canvas should scale to fill the new viewport (16:9).
+    // A graphic with hardcoded pixel coords and no resize handler keeps its
+    // original CSS size — the content stays in the top-left corner.
+    const [rw, rh] = await page.evaluate(() => { const c = document.querySelector("canvas"); return c ? [c.clientWidth, c.clientHeight] : [0, 0]; });
+    const vw = 1366, vh = 768;
+    if (rw > 0 && rh > 0) {
+      const cRatio = rw / rh, vRatio = vw / vh;
+      const scale = Math.min(vw / rw, vh / rh);
+      // if the canvas is less than 50% of the viewport in either dimension,
+      // it is NOT scaling proportionally
+      if (scale < 2.0 && Math.abs(cRatio - vRatio) > 0.15)
+        r.warnings.push(`non-proportional: canvas ${rw}x${rh} (ratio ${cRatio.toFixed(2)}) does not match viewport ${vw}x${vh} (ratio ${vRatio.toFixed(2)}) after resize`);
+      else if (rw < vw * 0.75 || rh < vh * 0.75)
+        r.warnings.push(`non-proportional: canvas ${rw}x${rh} is less than 75% of viewport ${vw}x${vh} after resize (hardcoded pixels?)`);
+    }
   } catch (e) {
     errors.push(`resize: ${e.message}`);
   }

@@ -397,7 +397,7 @@
   check --json summary (not just bench tps) so harness speed drift is
   visible alongside model speed; acceptance: --trend lines carry a
   "wall: <median>" field sourced from bench-runs.jsonl.
-- [ ] validate.mjs: the resize check should verify the canvas scales
+- [x] validate.mjs: the resize check should verify the canvas scales
   proportionally (W/H ratio preserved) — currently it only checks for
   page errors after a viewport change, so a graphic that hardcodes
   pixel coordinates (instead of fractions of W/H) would pass resize

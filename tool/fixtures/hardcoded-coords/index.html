@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>hardcoded coords fixture</title>
+<style>body{margin:0;background:#090909}canvas{display:block}</style></head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+const LOOP = 6000;
+window.__loop = LOOP;
+let W = 960, H = 540, __seek = null;
+canvas.width = W; canvas.height = H;
+window.__time = (v) => { __seek = v; };
+// NO resize handler — the canvas stays at 960x540 even when the viewport changes.
+// All coordinates are HARDCODED pixels (not fractions of W/H), so at a larger
+// viewport the content stays in the top-left corner instead of scaling.
+function frame(now) {
+  if (__seek != null) now = __seek;
+  const t = now % LOOP;
+  const beat = t / LOOP;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "#0b0d12"; ctx.fillRect(0, 0, W, H);
+  // hardcoded pixel coords (not W*.5 etc.)
+  const px = 100 + beat * 400;
+  ctx.fillStyle = "#f00"; ctx.beginPath(); ctx.arc(px, 200, 20, 0, 7); ctx.fill();
+  ctx.fillStyle = "#fff"; ctx.font = "18px monospace";
+  ctx.fillText("hardcoded test", 300, 300);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
