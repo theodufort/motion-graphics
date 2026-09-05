@@ -301,7 +301,7 @@
 - [x] check.sh: support --since <rev> passthrough to check.mjs (the flag
   exists in check.mjs but check.sh has no documented mention); acceptance:
   check.sh --since HEAD~2 validates only changed folders and docs updated.
-- [ ] check.mjs --json: include a per-topic `size` map (from the report's
+- [x] check.mjs --json: include a per-topic `size` map (from the report's
   r.size) so consumers know the rendered canvas resolution per graphic;
   acceptance: --json has a graphicsSize object with values like "1280x720".
 - [x] tool/validate.mjs: add a `--no-shots` env (MG_NO_SHOTS=1) that skips
