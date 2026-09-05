@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>crossfade minor fixture</title>
+<style>body{margin:0;background:#090909}canvas{display:block}</style></head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+const LOOP = 4000;
+window.__loop = LOOP;
+let W = 960, H = 540, __seek = null;
+canvas.width = W; canvas.height = H;
+window.__time = (v) => { __seek = v; };
+function frame(now) {
+  if (__seek != null) now = __seek;
+  const t = now % LOOP;
+  const beat = t / LOOP;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "#0b0d12"; ctx.fillRect(0, 0, W, H);
+  // two labels at the same position, crossfading:
+  // alpha fades 0->1 over the first half, beta fades 1->0
+  const aAlpha = beat < 0.5 ? beat * 2 : 0;
+  const bAlpha = beat < 0.5 ? 1 - beat * 2 : 0;
+  ctx.font = "18px monospace";
+  if (aAlpha > 0) { ctx.fillStyle = `rgba(255,255,255,${aAlpha})`; ctx.fillText("alpha", 100, 200); }
+  if (bAlpha > 0) { ctx.fillStyle = `rgba(255,255,255,${bAlpha})`; ctx.fillText("beta", 149, 208); }
+  // moving element
+  const px = 100 + beat * 400;
+  ctx.fillStyle = "#f00"; ctx.beginPath(); ctx.arc(px, 400, 15, 0, 7); ctx.fill();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

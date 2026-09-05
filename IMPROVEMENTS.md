@@ -457,7 +457,7 @@
   the LATEST run (not just the total warn count) so a single --trend
   call shows the current warning mix; acceptance: the last trend line
   carries a "warns:" breakdown.
-- [ ] validate.mjs: the minor-overlap warning should be SUPPRESSED when
+- [x] validate.mjs: the minor-overlap warning should be SUPPRESSED when
   the two labels are crossfading (one fading out, one fading in) — a
   crossfade pair that passes through a 10px overlap mid-transition is
   intentional; acceptance: a fixture with two crossfading labels that
