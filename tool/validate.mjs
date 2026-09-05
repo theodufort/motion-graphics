@@ -55,8 +55,8 @@ export async function validateWithBrowser(browser, folderPath) {
         const fstr = String(this.fillStyle);
         const rm = fstr.match(/rgba\(([^)]+)\)/);
         if (rm) a *= parseFloat(rm[1].split(",")[3]) ?? 1;
-        else { const hx = fstr.match(/^#([0-9a-f]{3,8})$/i); if (hx) a *= parseInt(hx[1].slice(-2), 16) / 255; } // #rrggbbAA // || would map alpha 0 → 1
-        window.__ft.push({ s: String(s).slice(0, 40), x: left, y: top, w: m.width, asc, desc, a });
+        else { const hx = fstr.match(/^#([0-9a-f]{8})$/i); if (hx) a *= parseInt(hx[1].slice(6), 16) / 255; } // #rrggbbAA only — 3/6-digit hex is opaque (slice(-2) on 6-digit read the BLUE channel as alpha)
+        window.__ft.push({ s: String(s).slice(0, 40), x: left, y: top, w: m.width, asc, desc, a, id: (window.__ftId = (window.__ftId || 0) + 1) });
       } catch {}
       return orig.call(this, s, x, y);
     };
@@ -109,7 +109,7 @@ export async function validateWithBrowser(browser, folderPath) {
       if (P && P.length === buf.length) for (let i = 0; i < buf.length; i += 3)
         if (P[i] !== buf[i] || P[i + 1] !== buf[i + 1] || P[i + 2] !== buf[i + 2]) churn++;
       window.__prevBuf = buf; // stays in-page, never transferred
-      return { content, lum: content ? mid / content : 0, ft, churn };
+      return { content, lum: content ? mid / content : 0, ft, churn, ftCount: (window.__ft || []).length };
     });
   }
 
@@ -175,6 +175,7 @@ export async function validateWithBrowser(browser, folderPath) {
   const seamPts = [];
   for (const sp of seamProbes) seamPts.push(await park(sp));
   const seamA = seamPts[1], seamB = seamPts[2];
+
   if (!QUICK) {
     const shotA = path.join(shotDir, "seam-a.png"), shotB = path.join(shotDir, "seam-b.png");
     if (!NO_SHOTS) {
@@ -324,8 +325,14 @@ export async function validateWithBrowser(browser, folderPath) {
   // pops in during the <300ms wrap window (no fade-in possible that fast)
   const aAt = (p, s) => (p?.ft || []).find((f) => f.s === s)?.a ?? 0;
   const bAt = (p, s) => (p?.ft || []).find((f) => f.s === s)?.a ?? 0;
+
   const pops = [...new Set((seamB?.ft || []).map((f) => f.s))].filter((s) => s.trim() && !/[0-9]/.test(s) && aAt(seamA, s) < 0.2 && bAt(seamB, s) > 0.6);
   if (pops.length) errors.push(`seam: labels pop in at the wrap (no fade): ${pops.slice(0, 3).map((x) => `"${x}"`).join(", ")}`);
+  // seam pop-out: the mirror case — fully visible just before the wrap,
+  // gone just after. A WARNING (not an error): fading a label out in the
+  // last beat before the loop restarts is a legitimate story beat
+  const popsOut = [...new Set((seamA?.ft || []).map((f) => f.s))].filter((s) => s.trim() && !/[0-9]/.test(s) && aAt(seamA, s) > 0.6 && bAt(seamB, s) < 0.2);
+  if (popsOut.length) r.warnings.push(`seam: labels pop out at the wrap (no fade): ${popsOut.slice(0, 3).map((x) => `"${x}"`).join(", ")}`);
   r.seamContinuity = goneAtSeam.length === 0 ? 1 : 0;
   if (r.seamContinuity === 0)
     errors.push(`seam: labels never reappear after wrap: ${goneAtSeam.slice(0, 3).map((s) => `"${s}"`).join(", ")}`);

@@ -351,7 +351,7 @@
 - [x] bench.mjs: --trend should print the median tps across the run's
   rows (not just pass counts) so model regressions show up; acceptance:
   --trend lines gain a "tps: <median>" field.
-- [ ] validate.mjs: the seam-pop-in check should also catch labels that
+- [x] validate.mjs: the seam-pop-in check should also catch labels that
   pop out (visible before the wrap, gone after) — currently it only
   flags pop-in; a label that vanishes at the seam is equally jarring;
   acceptance: a fixture with a label present at t=LOOP-300 but absent at
