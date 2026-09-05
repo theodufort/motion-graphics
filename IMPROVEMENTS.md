@@ -309,3 +309,15 @@
   MG_NO_SHOTS=1 writes no new PNGs and the manifest's shots list is empty.
 - [x] bench.mjs: --topics should accept a comma-separated list (currently
   one topic per run); acceptance: --topics a,b validates both in one run.
+- [ ] bench --topics: when a wanted keyword matches no bench prompt, print
+  a stderr hint listing the closest topics (slug-map + prompt prefixes) so
+  "matched nothing" stops being a silent 1-of-2 surprise; acceptance:
+  --topics "nonexistent-topic" prints a hint naming the available topics.
+- [ ] tool/bench/prompts.jsonl: add 2 more prompts (a CRDT merge
+  resolution and a consensus-based secret sharing / Shamir split) to keep
+  the bench set diverse; acceptance: 23 prompts, both topics slug-map and
+  generate cleanly on first pass.
+- [ ] validate.mjs: add a `--strict-warnings` env (MG_STRICT=1) that
+  promotes ⚠ warnings to errors for CI gate runs; acceptance:
+  dns-recursive-resolution fails under MG_STRICT=1 (edge-clip) and
+  passes under the default.
