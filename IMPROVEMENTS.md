@@ -187,7 +187,7 @@
   consumers — print per-run fix-pass distribution (0/1/2/3) in the
   --compare footer (the 0/1/2/3 per-run distribution); acceptance: two runs with different fix-pass mixes
   show the distribution rows.
-- [ ] README: add the seam-pop-in row to the negative fixtures table
+- [x] README: add the seam-pop-in row to the negative fixtures table
   section that lists fixtures near "dark-band-post" (it currently lives
   at the file bottom — move the row into the main table); acceptance:
   exactly one fixtures table contains seam-pop-in.

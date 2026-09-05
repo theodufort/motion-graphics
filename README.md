@@ -60,6 +60,7 @@ regressed):
 | `lost-label-seam/` | seamContinuity (label vanishes at wrap, never reappears) |
 | `dark-band-post/` | seam (dark band 300-900ms *after* the wrap) |
 | `contained-label/` | collisions (small label fully inside a much bigger one) |
+| `seam-pop-in/` | seam (label pops in at the wrap with no fade) |
 
 ## Environment knobs
 
@@ -209,4 +210,4 @@ variables from `brand.css` instead.
 When **modifying** an existing graphic, update its `README.md` in the same
 change so the description always matches the visual (create it first if the
 folder doesn't have one yet).
-| `seam-pop-in/` | seam label pop-in (no fade at the wrap) |
+
