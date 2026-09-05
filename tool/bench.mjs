@@ -193,7 +193,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       const f = failed.filter((g) => g.ts > prev && g.ts <= since).length;
       const tps = r.rows.map((x) => x.tps).filter((v) => v != null).sort((a, b) => a - b);
       const med = tps.length ? (tps.length % 2 ? tps[(tps.length - 1) / 2] : (tps[tps.length / 2 - 1] + tps[tps.length / 2]) / 2) : null;
-      console.log(r.ts.slice(0, 16).replace("T", " ") + "  " + r.pass + "/" + r.total + " pass  fix=0: " + f0 + "/" + r.rows.length + "  warn: " + (r.warnings ?? "-") + "  failed: " + f + "  tps: " + (med == null ? "-" : Math.round(med)));
+      console.log(r.ts.slice(0, 16).replace("T", " ") + "  " + r.pass + "/" + r.total + " pass  fix=0: " + f0 + "/" + r.rows.length + "  warn: " + (r.warnings ?? "-") + "  failed: " + f + "  tps: " + (med == null ? "-" : Math.round(med)) + "  wall: " + (r.seconds != null ? Math.round(r.seconds) + "s" : "-"));
     }
     process.exit(0);
   }
