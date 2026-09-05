@@ -434,7 +434,7 @@
   width currently passes silently (the rule is prompt-only); acceptance:
   a fixture with a 200px-wide label in a 200px-wide box triggers a
   "label overflow" warning.
-- [ ] check.mjs: --json summary should include a "fixtures" count (how
+- [x] check.mjs: --json summary should include a "fixtures" count (how
   many fixture folders were validated) so a regression run can verify
   the fixture suite is intact; acceptance: summary has a "fixtures"
   field.

@@ -234,7 +234,7 @@ if (asJson) {
   const medFrames = framesMs.length ? (framesMs.length % 2 ? framesMs[(framesMs.length - 1) / 2] : (framesMs[framesMs.length / 2 - 1] + framesMs[framesMs.length / 2]) / 2) : null;
   const warningsByClass = {};
   for (const ws of Object.values(graphicsWarnings)) for (const w of ws) { const c = w.split(":")[0].trim(); warningsByClass[c] = (warningsByClass[c] || 0) + 1; }
-  console.log(JSON.stringify({ ts: new Date().toISOString(), score, max: existingMax + smokeMax, graphics: graphics.length, summary: { graphics: graphics.length, wallMs, medianFramesMs: medFrames }, graphicsScores, graphicsTimings, graphicsLabels, graphicsSize, contentCurves, graphicsWarnings, warningsByClass, warnings: Object.entries(graphicsWarnings).flatMap(([n, ws]) => ws.map((w) => n + ": " + w)), problems }));
+  console.log(JSON.stringify({ ts: new Date().toISOString(), score, max: existingMax + smokeMax, graphics: graphics.length, summary: { graphics: graphics.length, wallMs, medianFramesMs: medFrames, fixtures: (() => { try { return readdirSync(path.join(root, "tool", "fixtures"), { withFileTypes: true }).filter((d) => d.isDirectory() && existsSync(path.join(root, "tool", "fixtures", d.name, "index.html"))).length; } catch { return 0; } })() }, graphicsScores, graphicsTimings, graphicsLabels, graphicsSize, contentCurves, graphicsWarnings, warningsByClass, warnings: Object.entries(graphicsWarnings).flatMap(([n, ws]) => ws.map((w) => n + ": " + w)), problems }));
 } else {
   console.log(`graphics: ${graphics.length}${skipGen ? "  [skip-gen]" : ""}${regen ? "  [regen]" : ""}${fast ? "  (quick)" : ""}  score: ${score}/${existingMax + smokeMax}`);
   for (const p of problems) console.log(`  ✗ ${p}`);
