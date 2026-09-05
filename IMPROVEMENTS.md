@@ -329,7 +329,7 @@
   so --compare can diff text density between runs, catching "got shorter"
   regressions that timing alone misses; acceptance: --compare prints a
   label-delta line when two runs disagree.
-- [ ] generate.mjs: when the fix loop early-stops on identical errors,
+- [x] generate.mjs: when the fix loop early-stops on identical errors,
   retry ONCE with a fresh temperature (MG_LLM_TEMPERATURE=0.8 default)
   before giving up; acceptance: a mock LLM that fails identically twice
   then passes shows pass=1 with 3 fix passes.

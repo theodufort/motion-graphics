@@ -12,6 +12,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const BASE = process.env.MG_LLM_BASE || "http://127.0.0.1:8123";
 const MODEL = process.env.MG_LLM_MODEL || "Qwen3.8-27b-coding";
 const FIX_PASSES = +(process.env.MG_FIX_PASSES || 3);
+const RETRY_TEMPERATURE = +(process.env.MG_LLM_TEMPERATURE || 0.8); // stuck-fix escape: one fresh-temperature retry
 const TIMEOUT = +(process.env.MG_TIMEOUT_MS || 900000);
 
 const SYSTEM = `You write motion graphics for the motion-graphics repo. Output EXACTLY one
@@ -103,7 +104,7 @@ async function llmOnce(messages) {
   try {
     const res = await fetch(`${BASE}/v1/chat/completions`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: MODEL, messages, temperature: 0.2, max_tokens: 16000 }),
+      body: JSON.stringify({ model: MODEL, messages, temperature: process.env.MG_FIX_TEMP ? RETRY_TEMPERATURE : 0.2, max_tokens: 16000 }),
       signal: ctl.signal,
     });
     if (!res.ok) throw new Error(`LLM HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
@@ -233,12 +234,18 @@ export async function generate(prompt, { force = false, allowExisting = process.
 
   // self-improvement fix loop
   let lastErrs = null; // early stop: same error set twice in a row = model stuck
+  let stuckRetryUsed = false;
   for (let i = 0; !pass && i < FIX_PASSES; i++) {
     fixPasses = i + 1;
     const errs = report.errors.slice(0, 8).join("; ");
     if (fixPasses > 1 && errs === lastErrs) {
-      console.error(`fix loop: identical errors on ${fixPasses} passes - stopping early (model stuck)`);
-      break;
+      console.error(`fix loop: identical errors on ${fixPasses} passes - model stuck at temp 0.2`);
+      // escape once: a fresh temperature often un-sticks a deterministic loop
+      if (!stuckRetryUsed) {
+        stuckRetryUsed = true;
+        process.env.MG_FIX_TEMP = "1";
+        console.error(`fix loop: retrying stuck pass with temperature ${RETRY_TEMPERATURE}`);
+      } else break;
     }
     lastErrs = errs;
     // name the failing CHECK CLASS so the first fix pass targets it
