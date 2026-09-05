@@ -321,3 +321,15 @@
   promotes ⚠ warnings to errors for CI gate runs; acceptance:
   dns-recursive-resolution fails under MG_STRICT=1 (edge-clip) and
   passes under the default.
+- [ ] validate.mjs: run the label-fit check at the seam window too (t =
+  LOOP-300 and t = 300), since labels that fit mid-loop can overflow when
+  they grow/shrink near the wrap; acceptance: a fixture whose label width
+  grows toward the seam triggers a label-fit warning only at seam times.
+- [ ] bench.mjs: persist per-row shot counts (labels seen in the manifest)
+  so --compare can diff text density between runs, catching "got shorter"
+  regressions that timing alone misses; acceptance: --compare prints a
+  label-delta line when two runs disagree.
+- [ ] generate.mjs: when the fix loop early-stops on identical errors,
+  retry ONCE with a fresh temperature (MG_LLM_TEMPERATURE=0.8 default)
+  before giving up; acceptance: a mock LLM that fails identically twice
+  then passes shows pass=1 with 3 fix passes.
