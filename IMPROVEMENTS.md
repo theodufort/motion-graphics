@@ -223,6 +223,6 @@
   (if the same error string appears on 2 consecutive fix passes, stop and
   report); acceptance: a mock-LLM loop that returns the same broken HTML
   exits after 2 passes instead of 3.
-- [ ] bench: add a per-prompt tps (tokens/sec) column to the timing table
+- [x] bench: add a per-prompt tps (tokens/sec) column to the timing table
   from the logged generation timings; acceptance: bench --smoke-only
   prints a tps column alongside seconds.

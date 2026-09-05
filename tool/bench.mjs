@@ -61,7 +61,17 @@ for (let i = 0; i < prompts.length; i++) {
     if (knownFolder && !regen) {
       const t = Date.now();
       const report = await validateFolder(knownFolder);
-      g = { topic: known, pass: report.clean && report.seek && report.collisions && report.seam && report.readme, report, seconds: (Date.now() - t) / 1000, reused: true };
+      // carry the original generation's tps from the log (reuse itself has no LLM)
+      let origTps = null;
+      try {
+        const lines = readFileSync(path.join(ROOT, "logs", "generations.jsonl"), "utf8").trim().split("\n").filter(Boolean);
+        for (let i = lines.length - 1; i >= 0; i--) {
+          let e;
+          try { e = JSON.parse(lines[i]); } catch { continue; }
+          if (e.topic === known && e.tps) { origTps = e.tps; break; }
+        }
+      } catch { /* no log */ }
+      g = { topic: known, pass: report.clean && report.seek && report.collisions && report.seam && report.readme, report, seconds: (Date.now() - t) / 1000, reused: true, tps: origTps };
     } else {
       g = await generate(p.prompt, { force: regen, allowExisting: true });
     }

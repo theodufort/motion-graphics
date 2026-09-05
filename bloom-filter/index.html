@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+*{margin:0;box-sizing:border-box}
+body{background:var(--bg);overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+const LOOP=30000;
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+let W,H,dpr,L={};
+function resize(){dpr=devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);buildLayout()}
+function buildLayout(){const cx=W*.5;L.hashY=H*.16;L.hashX=[W*.35,W*.5,W*.65];L.bitY=H*.48;L.bitW=W*.032;L.bitH=H*.055;L.bitSX=cx-8*L.bitW;L.itemX=W*.1;L.itemY=[H*.32,H*.44,H*.56,H*.68];L.meterY=H*.82;L.meterW=W*.38;L.meterX=cx-L.meterW/2}
+addEventListener('resize',resize);resize();
+const lerp=(a,b,t)=>a+(b-a)*t,clamp01=v=>Math.max(0,Math.min(1,v)),ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
+const fade=(t,a,b,f)=>{if(t<a||t>b)return 0;if(t<a+f)return ease((t-a)/f);if(t>b-f)return ease((b-t)/f);return 1};
+const ITEMS=[{bits:[2,7,13]},{bits:[4,9,11]},{bits:[1,6,14]},{bits:[3,8,15]}];
+const N=16,K=3,fpProb=n=>Math.pow(1-Math.exp(-K*n/N),K);
+let __seek=null;window.__time=v=>{__seek=v};window.__loop=LOOP;
+function itemAlpha(t,i){const fi=500+i*3500;return fade(t,fi,LOOP,1000)}
+function frame(now){if(__seek!=null)now=__seek;const t=now%LOOP;ctx.clearRect(0,0,W,H);drawBg(t);drawConn(t);drawNodes(t);drawPackets(t);drawHud(t);requestAnimationFrame(frame)}
+function drawBg(t){ctx.fillStyle=rgba(PAL.bg,1);ctx.fillRect(0,0,W,H);ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;const g=W/20;for(let x=0;x<W;x+=g){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=g){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}}
+function drawConn(t){for(let i=0;i<ITEMS.length;i++){const a=itemAlpha(t,i);if(a<=0)continue;const iy=L.itemY[i];for(let h=0;h<K;h++){const sx=L.itemX,sy=iy,hx=L.hashX[h],hy=L.hashY,bx=L.bitSX+ITEMS[i].bits[h]*L.bitW+L.bitW/2,by=L.bitY;ctx.strokeStyle=rgba(PAL.accent,a*.2);ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(sx,sy);ctx.quadraticCurveTo((sx+hx)/2,Math.min(sy,hy)-H*.06,hx,hy);ctx.stroke();ctx.strokeStyle=rgba(PAL.accent,a*.12);ctx.beginPath();ctx.moveTo(hx,hy);ctx.quadraticCurveTo((hx+bx)/2,(hy+by)/2+H*.04,bx,by);ctx.stroke()}}}
+function drawNodes(t){for(let h=0;h<K;h++){const p=.8+.2*Math.sin(t/400+h);ctx.fillStyle=rgba(PAL.accent,p*.15);ctx.beginPath();ctx.arc(L.hashX[h],L.hashY,W*.022*p,0,Math.PI*2);ctx.fill();ctx.strokeStyle=rgba(PAL.accent,p*.6);ctx.lineWidth=1.5;ctx.stroke();ctx.fillStyle=rgba(PAL.text,1);ctx.font=`${Math.max(12,W*.011)}px monospace`;ctx.textAlign='center';ctx.fillText('H'+(h+1),L.hashX[h],L.hashY+5)}for(let i=0;i<ITEMS.length;i++){const ia=itemAlpha(t,i);if(ia<=0)continue;const iy=L.itemY[i],ip=.8+.2*Math.sin(t/350+i*1.3);ctx.fillStyle=rgba(PAL.accent,ia*ip*.1);ctx.beginPath();ctx.arc(L.itemX,iy,W*.018*ip,0,Math.PI*2);ctx.fill();ctx.strokeStyle=rgba(PAL.accent,ia*ip*.5);ctx.stroke();ctx.fillStyle=rgba(PAL.text,ia);ctx.font=`${Math.max(11,W*.01)}px monospace`;ctx.textAlign='center';ctx.fillText('item'+(i+1),L.itemX,iy+4)}for(let b=0;b<N;b++){const bx=L.bitSX+b*L.bitW,by=L.bitY;let set=false;for(let i=0;i<ITEMS.length;i++){if(itemAlpha(t,i)>.5&&ITEMS[i].bits.includes(b))set=true}const sp=set?.7+.3*Math.sin(t/300+b*.5):0;ctx.fillStyle=set?rgba(PAL.accent,.3+sp*.5):rgba(PAL.muted,.1);ctx.fillRect(bx,by,L.bitW*.85,L.bitH);ctx.strokeStyle=set?rgba(PAL.accent,.6):rgba(PAL.muted,.2);ctx.lineWidth=1;ctx.strokeRect(bx,by,L.bitW*.85,L.bitH);ctx.fillStyle=set?rgba(PAL.text,1):rgba(PAL.muted,.5);ctx.font=`${Math.max(10,W*.009)}px monospace`;ctx.textAlign='center';ctx.fillText(set?'1':'0',bx+L.bitW*.425,by+L.bitH*.65)}}
+function drawPackets(t){for(let i=0;i<ITEMS.length;i++){const ia=itemAlpha(t,i);if(ia<=0)continue;const s=800+i*3500,dur=1800;if(t<s||t>s+dur)continue;const pt=ease(clamp01((t-s)/dur));const iy=L.itemY[i];for(let h=0;h<K;h++){const sx=L.itemX,sy=iy,hx=L.hashX[h],hy=L.hashY,cx1=(sx+hx)/2,cy1=Math.min(sy,hy)-H*.06;const px=lerp(lerp(sx,cx1,pt),lerp(cx1,hx,pt),pt),py=lerp(lerp(sy,cy1,pt),lerp(cy1,hy,pt),pt);ctx.fillStyle=rgba(PAL.accent,.9*ia*(1-pt*.3));ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);ctx.fill();for(let tr=1;tr<=3;tr++){const tt=clamp01(pt-tr*.08);const tx=lerp(lerp(sx,cx1,tt),lerp(cx1,hx,tt),tt),ty=lerp(lerp(sy,cy1,tt),lerp(cy1,hy,tt),tt);ctx.fillStyle=rgba(PAL.accent,.4*ia*(1-tr*.25));ctx.beginPath();ctx.arc(tx,ty,3-tr*.5,0,Math.PI*2);ctx.fill()}}}}
+function drawHud(t){ctx.fillStyle=rgba(PAL.text,1);ctx.font=`bold ${Math.max(18,W*.02)}px monospace`;ctx.textAlign='center';ctx.fillText('Bloom Filter',W*.5,H*.07);let n=0;for(let i=0;i<ITEMS.length;i++){if(itemAlpha(t,i)>.5)n++}const fp=fpProb(n);ctx.fillStyle=rgba(PAL.muted,1);ctx.font=`${Math.max(12,W*.011)}px monospace`;ctx.textAlign='left';ctx.fillText('n = '+n,L.meterX,L.meterY-H*.035);const mH=H*.022;ctx.fillStyle=rgba(PAL.muted,.2);ctx.fillRect(L.meterX,L.meterY,L.meterW,mH);const mc=fp>.1?PAL.fail:PAL.accent;ctx.fillStyle=rgba(mc,.7);ctx.fillRect(L.meterX,L.meterY,L.meterW*fp,mH);ctx.strokeStyle=rgba(PAL.muted,.4);ctx.lineWidth=1;ctx.strokeRect(L.meterX,L.meterY,L.meterW,mH);ctx.fillStyle=rgba(mc,1);ctx.font=`${Math.max(13,W*.012)}px monospace`;ctx.textAlign='left';ctx.fillText('FP \u2248 '+(fp*100).toFixed(1)+'%',L.meterX+L.meterW+W*.02,L.meterY+mH*.7);ctx.fillStyle=rgba(PAL.muted,.7);ctx.font=`${Math.max(11,W*.009)}px monospace`;ctx.textAlign='center';ctx.fillText('more bits set \u2192 higher false-positive rate',W*.5,H*.93)}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
