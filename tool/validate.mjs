@@ -10,6 +10,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const QUICK = process.env.MG_QUICK === "1";
 const NO_SHOTS = process.env.MG_NO_SHOTS === "1"; // CI mode: no PNG writes
+const STRICT = process.env.MG_STRICT === "1"; // CI gate: promote ⚠ warnings to errors
 const FRAMES = QUICK ? [0.4, 0.9] : [0.15, 0.4, 0.65, 0.9]; // parked fractions of LOOP
 
 function parseLoop(html) {
@@ -369,6 +370,7 @@ export async function validateWithBrowser(browser, folderPath) {
   r.labels = [...labelMaxA.keys()].filter((x) => x.trim()).length; // distinct non-empty fillText strings captured
   r.size = cw && ch ? `${cw}x${ch}` : null; // rendered CSS resolution (backing store may be d-scaled)
   r.errors = [...pageErrors, ...errors];
+  if (STRICT && r.warnings.length) r.errors.push(...r.warnings.map((w) => `strict: ${w}`));
   r.timings = timings;
   await page.close();
   // shot manifest for vision-review tooling: one entry per saved PNG

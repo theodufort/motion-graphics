@@ -317,7 +317,7 @@
   resolution and a consensus-based secret sharing / Shamir split) to keep
   the bench set diverse; acceptance: 23 prompts, both topics slug-map and
   generate cleanly on first pass.
-- [ ] validate.mjs: add a `--strict-warnings` env (MG_STRICT=1) that
+- [x] validate.mjs: add a `--strict-warnings` env (MG_STRICT=1) that
   promotes ⚠ warnings to errors for CI gate runs; acceptance:
   dns-recursive-resolution fails under MG_STRICT=1 (edge-clip) and
   passes under the default.
