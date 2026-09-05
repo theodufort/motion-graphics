@@ -191,7 +191,7 @@
   section that lists fixtures near "dark-band-post" (it currently lives
   at the file bottom — move the row into the main table); acceptance:
   exactly one fixtures table contains seam-pop-in.
-- [ ] validate.mjs: the seam-pop-in and seamContinuity checks should also
+- [x] validate.mjs: the seam-pop-in and seamContinuity checks should also
   run in MG_QUICK mode today (they do) — but the pop-in check needs a
   matching quick-mode fixture regression run documented; acceptance:
   README notes which checks quick mode skips and which it does not.
