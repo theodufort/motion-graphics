@@ -299,6 +299,11 @@ if (isMain) {
     g = await generate(prompt, { force });
   } catch (e) {
     console.error(`error: ${e.message}`);
+    // count failed attempts in the trend too (no folder written on hard failure)
+    try {
+      appendFileSync(path.join(ROOT, "logs", "generations.jsonl"),
+        JSON.stringify({ ts: new Date().toISOString(), prompt, topic: null, model: MODEL, seconds: null, lines: null, fixPasses: null, pass: 0, tps: null, novelty: null, error: e.message.slice(0, 200) }) + "\n");
+    } catch {}
     process.exit(2);
   }
   console.log(JSON.stringify({ topic: g.topic, pass: g.pass, seconds: Math.round(g.seconds), errors: g.report.errors, novelty: g.novelty, checks: { clean: g.report.clean, seek: g.report.seek, collisions: g.report.collisions, seam: g.report.seam, readme: g.report.readme } }, null, 1));

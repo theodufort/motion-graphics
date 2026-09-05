@@ -286,7 +286,7 @@
   map (topic -> label count from the report) so consumers can see text
   density per graphic; acceptance: --json has a graphicsLabels object
   with numeric values.
-- [ ] generate.mjs: log a generations.jsonl entry even when the LLM call
+- [x] generate.mjs: log a generations.jsonl entry even when the LLM call
   fails entirely (pass:0, error:<msg>) so failed attempts are countable
   in the trend; acceptance: a mock LLM that returns HTTP 500 leaves a
   line with an error field.
