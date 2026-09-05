@@ -118,7 +118,7 @@
   exists afterwards (exit 1 otherwise), always preserving the trailing
   newline; acceptance: closing a deliberately fused item succeeds and
   grep -c "^- \[x\]" increases by 1.
-- [ ] validate.mjs: cut PNG output in --quick (skip t-seam PNGs, keep 2
+- [x] validate.mjs: cut PNG output in --quick (skip t-seam PNGs, keep 2
   frames + manifest); acceptance: tool/shots/<topic> has 2 PNGs after a
   quick run and manifest lists exactly 2.
 - [ ] bench: --compare <before.log> <after.log> diffing per-prompt

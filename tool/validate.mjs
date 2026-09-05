@@ -3,7 +3,7 @@
 // CLI: node validate.mjs <folder> [--json]
 // Exports validateFolder(folderPath) -> { clean, seek, collisions, seam, readme, errors, shots }
 import { chromium } from "playwright";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -130,10 +130,15 @@ export async function validateWithBrowser(browser, folderPath) {
   const seamPts = [];
   for (const sp of seamProbes) seamPts.push(await park(sp));
   const seamA = seamPts[1], seamB = seamPts[2];
-  const shotA = path.join(shotDir, "seam-a.png"), shotB = path.join(shotDir, "seam-b.png");
-  await page.screenshot({ path: shotA });
-  await page.screenshot({ path: shotB });
-  r.shots.push(shotA, shotB);
+  if (!QUICK) {
+    const shotA = path.join(shotDir, "seam-a.png"), shotB = path.join(shotDir, "seam-b.png");
+    await page.screenshot({ path: shotA });
+    await page.screenshot({ path: shotB });
+    r.shots.push(shotA, shotB);
+  } else for (const st of ["seam-a.png", "seam-b.png"]) {
+    const p = path.join(shotDir, st); // drop stale seam PNGs from prior full runs
+    if (existsSync(p)) unlinkSync(p);
+  }
 
   timings.seam = Date.now() - tSeam;
   const tCol = Date.now();
