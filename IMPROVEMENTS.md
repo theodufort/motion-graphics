@@ -178,3 +178,16 @@
 - [x] check.mjs: --json should embed the warnings (graphicsWarnings)
   inside the main JSON object, not as a second JSON line; acceptance:
   single-line parse yields graphicsWarnings key.
+- [ ] generate.mjs: surface the new checks in the fix loop (the re-send
+  instruction should mention px-churn motion, seam fades, label fits, and
+  H1/topic match so the model's first fix pass addresses the actual
+  failure); acceptance: a fix-pass failure message names the failing
+  check class.
+- [ ] bench: add a "first-pass rate" trend line to bench-runs.jsonl
+  consumers — print per-run fix-pass distribution (0/1/2/3) in the
+  --compare footer; acceptance: two runs with different fix-pass mixes
+  show the distribution rows.
+- [ ] README: add the seam-pop-in row to the negative fixtures table
+  section that lists fixtures near "dark-band-post" (it currently lives
+  at the file bottom — move the row into the main table); acceptance:
+  exactly one fixtures table contains seam-pop-in.
