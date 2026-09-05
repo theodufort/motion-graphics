@@ -131,6 +131,15 @@ function compare(beforePath, afterPath) {
   if (ja && jb) {
     const dw = Math.round(((jb.summary.wallMs - ja.summary.wallMs) / ja.summary.wallMs) * 100);
     console.log(`wall ${ja.summary.wallMs}ms -> ${jb.summary.wallMs}ms (${dw > 0 ? "+" : ""}${dw}%)  medianFrames ${ja.summary.medianFramesMs ?? "?"} -> ${jb.summary.medianFramesMs ?? "?"}`);
+    // warnsByClass diff: WHICH warning category regressed (same total can hide a class shift)
+    const wa = ja.warningsByClass || {}, wb = jb.warningsByClass || {};
+    const classes = [...new Set([...Object.keys(wa), ...Object.keys(wb)])];
+    const diffs = classes.filter((c) => (wa[c] || 0) !== (wb[c] || 0));
+    if (diffs.length) {
+      console.log("warnsByClass " + diffs.map((c) => `${c} ${wa[c] || 0}->${wb[c] || 0}`).join(", "));
+    } else {
+      console.log("warnsByClass unchanged");
+    }
     process.exit(0);
   }
   const topics = [...new Set([...a.keys(), ...b.keys()])];
