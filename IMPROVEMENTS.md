@@ -112,7 +112,8 @@
   not host load).- [x] tool/validate.mjs: seam label continuity (seamContinuity bit;
   seam-a labels without digits must reappear in some post-seam frame;
   digit labels skipped as live counters); acceptance met:
-  fixtures/lost-label-seam flagged, all 33 graphics clean, 1155/1155.- [ ] tool/close.sh helper: a small script that closes an
+  fixtures/lost-label-seam flagged, all 33 graphics clean, 1155/1155.
+- [x] tool/close.sh helper: a small script that closes an
   IMPROVEMENTS.md item by unique substring and VERIFIES the "[x]" line
   exists afterwards (exit 1 otherwise), always preserving the trailing
   newline; acceptance: closing a deliberately fused item succeeds and
