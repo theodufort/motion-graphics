@@ -227,6 +227,12 @@ export async function validateWithBrowser(browser, folderPath) {
   // labels with digits are usually live counters (value changes each
   // frame) — only stable text labels are checked
   const goneAtSeam = [...seamAlabels].filter((s) => s.trim() && !/[0-9]/.test(s) && !afterSeam.includes(s));
+  // seam pop-in: a label invisible at seam-a but fully visible at seam-b
+  // pops in during the <300ms wrap window (no fade-in possible that fast)
+  const aAt = (p, s) => (p?.ft || []).find((f) => f.s === s)?.a ?? 0;
+  const bAt = (p, s) => (p?.ft || []).find((f) => f.s === s)?.a ?? 0;
+  const pops = [...new Set((seamB?.ft || []).map((f) => f.s))].filter((s) => s.trim() && !/[0-9]/.test(s) && aAt(seamA, s) < 0.2 && bAt(seamB, s) > 0.6);
+  if (pops.length) errors.push(`seam: labels pop in at the wrap (no fade): ${pops.slice(0, 3).map((x) => `"${x}"`).join(", ")}`);
   r.seamContinuity = goneAtSeam.length === 0 ? 1 : 0;
   if (r.seamContinuity === 0)
     errors.push(`seam: labels never reappear after wrap: ${goneAtSeam.slice(0, 3).map((s) => `"${s}"`).join(", ")}`);

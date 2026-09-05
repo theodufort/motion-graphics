@@ -170,7 +170,7 @@
   lsm-tree-compaction 2%): add a per-beat state change (counter tick,
   pulse, position drift) so each clears >2%; acceptance: full check
   prints zero ⚠ lines and 1265/1265.
-- [ ] validate.mjs: seamContinuity should also check the reverse
+- [x] validate.mjs: seamContinuity should also check the reverse
   direction (labels absent at seam-a but present at seam-b+600ms with
   alpha >0.6 are fine — but labels REAPPEARING at seam-b with a pop-in
   of >50% alpha in <100ms are flagged); acceptance: fixture with a

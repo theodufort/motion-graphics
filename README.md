@@ -209,3 +209,4 @@ variables from `brand.css` instead.
 When **modifying** an existing graphic, update its `README.md` in the same
 change so the description always matches the visual (create it first if the
 folder doesn't have one yet).
+| `seam-pop-in/` | seam label pop-in (no fade at the wrap) |
