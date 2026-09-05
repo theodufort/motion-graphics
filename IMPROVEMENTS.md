@@ -226,3 +226,14 @@
 - [x] bench: add a per-prompt tps (tokens/sec) column to the timing table
   from the logged generation timings; acceptance: bench --smoke-only
   prints a tps column alongside seconds.
+- [ ] check.sh --json: include a `warnings` array with the per-graphic
+  ⚠ lines (currently graphicsWarnings exists but the top-level warnings
+  list is absent); acceptance: --json output parses and the edge-clip
+  ⚠ on dns-recursive-resolution appears in it.
+- [ ] validate.mjs: log per-check timings for the clip probe and the
+  README check into report.timings (only frames/seam/collisions/frozen/
+  resize are timed today); acceptance: timings has clipMs and readmeMs
+  keys in a normal run.
+- [ ] docs: GOAL.md "measurable criteria" should mention the warning-tier
+  checks (edge-clip, near-frozen) so the criteria match the current
+  validator; acceptance: GOAL.md lists both warning classes.
