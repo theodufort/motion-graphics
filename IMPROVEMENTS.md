@@ -438,3 +438,13 @@
   many fixture folders were validated) so a regression run can verify
   the fixture suite is intact; acceptance: summary has a "fixtures"
   field.
+- [ ] bench.mjs: --compare should also diff warningsByClass (not just
+  the total warns count) so a CI gate can see WHICH warning category
+  regressed (e.g. edge-clip 1->3 vs pop-out 5->5); acceptance:
+  comparing two check --json payloads with the same total warns but
+  different class breakdown prints a "warnsByClass A->B" line.
+- [ ] generate.mjs: the first-pass prompt should mention the
+  sparsest.png / densest.png pair so the model keeps BOTH the densest
+  beat and the sparsest beat visually intentional (not an accident of
+  a half-faded beat); acceptance: a mock LLM receives "densest" and
+  "sparsest" in the first-pass prompt.
