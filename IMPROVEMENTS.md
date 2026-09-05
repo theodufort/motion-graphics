@@ -129,6 +129,6 @@
   at 300-900ms after wrap is flagged.
 - [x] check.mjs: --json should include per-graphic score map (topic -> pts)
   for downstream tooling; acceptance: JSON has "graphicsScores" object.
-- [ ] generate.mjs: cap the fix loop's HTML at 260 lines before re-send
+- [x] generate.mjs: cap the fix loop's HTML at 260 lines before re-send
   (rule 15 target); acceptance: a 400-line generated file is trimmed in
   the fix prompt, not re-sent whole.

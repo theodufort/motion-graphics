@@ -198,12 +198,15 @@ export async function generate(prompt, { force = false, allowExisting = process.
   for (let i = 0; !pass && i < FIX_PASSES; i++) {
     fixPasses = i + 1;
     const errs = report.errors.slice(0, 8).join("; ");
-    messages.push({ role: "assistant", content: html.slice(0, 20000) },
+    const FIX_MAX_LINES = 260; // rule 15 target: don't resend a bloated file whole
+    const htmlLines = html.split("\n");
+    const trimmed = htmlLines.length > FIX_MAX_LINES ? htmlLines.slice(0, FIX_MAX_LINES - 1).join("\n") + `\n<!-- truncated for fix context: keep the file structure, complete every part -->` : html;
+    messages.push({ role: "assistant", content: trimmed },
       { role: "user", content:
         `The generated graphic failed validation with: ${errs || "unknown"}.
 Fix the HTML so it passes: zero JS errors, window.__time and window.__loop defined,
 no overlapping full-opacity text, no dark frame at the loop seam, all elements animate.
-Reply with the COMPLETE corrected file between ===HTML=== markers (keep TOPIC and ===README=== too).` });
+Reply with the COMPLETE corrected file (every line, even parts not shown above) between ===HTML=== markers (keep TOPIC and ===README=== too).` });
     const fix = (await llm(messages)).content;
     const p2 = parse(fix, topic);
     html = p2.html;
