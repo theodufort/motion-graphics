@@ -102,6 +102,7 @@
   check phases). Also: browser-pool worker refactor was REVERTED (34s
   vs 20s baseline) but the validateWithBrowser/validateFolder split in
   validate.mjs is kept as the API for future pool work.
-  Re-test on an idle host; if still slow, target screenshot count.- [ ] tool/validate.mjs: seam label continuity — entity labels present at
-  seam-a should reappear by seam-b+600ms (no label teleport/vanish);
-  acceptance: a fixture that kills a label at the wrap is flagged.
+  Re-test on an idle host; if still slow, target screenshot count.- [x] tool/validate.mjs: seam label continuity (seamContinuity bit;
+  seam-a labels without digits must reappear in some post-seam frame;
+  digit labels skipped as live counters); acceptance met:
+  fixtures/lost-label-seam flagged, all 33 graphics clean, 1155/1155.
