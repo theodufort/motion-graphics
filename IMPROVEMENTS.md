@@ -397,3 +397,15 @@
   check --json summary (not just bench tps) so harness speed drift is
   visible alongside model speed; acceptance: --trend lines carry a
   "wall: <median>" field sourced from bench-runs.jsonl.
+- [ ] validate.mjs: the resize check should verify the canvas scales
+  proportionally (W/H ratio preserved) — currently it only checks for
+  page errors after a viewport change, so a graphic that hardcodes
+  pixel coordinates (instead of fractions of W/H) would pass resize
+  but look wrong at the larger viewport; acceptance: a fixture that
+  draws at hardcoded (200,150) instead of (W*.2, H*.3) triggers a
+  "non-proportional" warning after the resize step.
+- [ ] generate.mjs: the first-pass prompt should include a one-line
+  "known pitfalls" recap (from the 19 terser rules) so the model
+  avoids the top 5 failure classes up front instead of learning them
+  via the fix loop; acceptance: a mock LLM receives "pitfalls:" in
+  the first-pass prompt.
