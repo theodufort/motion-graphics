@@ -260,3 +260,14 @@
 - [x] docs: skill README "Validation loop" section should list the
   warning-tier checks (edge-clip, near-frozen) and where warnings print;
   acceptance: SKILL.md names both warning classes.
+- [ ] check.mjs --watch: debounce file events (~200ms coalescing per path)
+  so a save that touches index.html + README.md triggers one validation,
+  not two; acceptance: editing both files in quick succession produces a
+  single "revalidating" line.
+- [ ] bench: log a per-run `warnings` total into bench-runs.jsonl so
+  --trend can show the warning trend alongside pass/fix=0; acceptance:
+  --trend prints a warn column for the last 5 runs.
+- [ ] validate.mjs: record canvas CSS size (clientWidth/Height) in the
+  report so the manifest documents the rendered resolution, not just the
+  backing store; acceptance: manifest.json entries gain a size field like
+  "1280x720".
