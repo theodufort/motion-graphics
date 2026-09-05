@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>nearly-frozen fixture</title>
+<style>body{margin:0;background:#090909}canvas{display:block}</style></head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+const LOOP = 8000;
+window.__loop = LOOP;
+let W = 960, H = 540, __seek = null;
+canvas.width = W; canvas.height = H;
+window.__time = (v) => { __seek = v; };
+function frame(now) {
+  if (__seek != null) now = __seek;
+  const t = now % LOOP;
+  const beat = t / LOOP;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "#0b0d12"; ctx.fillRect(96, 96, W - 192, H - 192);
+  // a large static shape (fills most of the canvas)
+  ctx.fillStyle = "#1a2332"; ctx.fillRect(200, 150, 500, 240);
+  // the ONLY animation: a single-digit counter decrementing 9→0
+  const n = Math.floor(beat * 10) % 10;
+  ctx.fillStyle = "#fff"; ctx.font = "bold 48px monospace";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(String(9 - n), 450, 270);
+  // a small static label
+  ctx.font = "16px monospace"; ctx.fillStyle = "#888";
+  ctx.fillText("nearly frozen test", 450, 350);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

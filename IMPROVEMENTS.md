@@ -376,7 +376,7 @@
   both files were produced by check --json (not bench tables) — detect
   by the presence of a "summary" key and print "wall A->B"; acceptance:
   comparing two check --json payloads prints a wallMs delta line.
-- [ ] validate.mjs: the frozen probe should also catch a canvas that is
+- [x] validate.mjs: the frozen probe should also catch a canvas that is
   STATIC but with a moving clock/counter — a frame whose only churn is a
   1-digit number changing (e.g. "TTL: 299s" → "TTL: 298s") currently
   reads as "not frozen" because the px churn exceeds the threshold;
