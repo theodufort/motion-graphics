@@ -58,7 +58,7 @@ if (process.argv.includes("--watch")) {
   console.log(`watching ${only ? path.join(root, only) + ' (single folder)' : root} (debounce 1s; Ctrl-C to stop)`);
   watch(root, { recursive: true }, (_evt, fname) => {
     if (!fname) return;
-    const m = String(fname).match(/^(.+)\/index\.html$/);
+    const m = String(fname).match(/^(.+)\/(index\.html|README\.md)$/); // README too: the H1 check reads it
     if (!m) return;
     const topic = m[1];
     if (!dirs.has(topic) || (only && topic !== only)) return; // --only filters the watch set

@@ -200,6 +200,6 @@
   (fraction of label texts unseen in prior generations) to
   logs/generations.jsonl; acceptance: two different prompts produce
   different novelty values.
-- [ ] check.mjs: --watch should also re-run when the README.md of a
+- [x] check.mjs: --watch should also re-run when the README.md of a
   watched folder changes (H1 check depends on it); acceptance: editing
   a watched README triggers a diff line without touching index.html.
