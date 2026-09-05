@@ -364,3 +364,15 @@
   count, total checks wall-time, median per-graphic framesMs) so callers
   can track harness speed drift over time; acceptance: --json has a
   "summary" key with those three fields.
+- [ ] validate.mjs: the visibility check should distinguish a label that
+  is ALWAYS at low alpha (a permanently dim watermark — fine) from one
+  that NEVER exceeds 0.15 (truly invisible — the current error); the
+  current rule already does this, but a label that dips to 0.05 for >80%
+  of frames while peaking at 0.3 is technically passing — add a
+  "dim-for-most-frames" warning tier; acceptance: a fixture whose label
+  peaks at 0.3 but sits at 0.05 for 80% of frames triggers a new
+  "dim label" warning.
+- [ ] bench.mjs: --compare should also diff the summary (wallMs) when
+  both files were produced by check --json (not bench tables) — detect
+  by the presence of a "summary" key and print "wall A->B"; acceptance:
+  comparing two check --json payloads prints a wallMs delta line.
