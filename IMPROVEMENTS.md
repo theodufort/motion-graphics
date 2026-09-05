@@ -294,7 +294,7 @@
   lines with topic:null) for the same window so pass-rate and failure-rate
   sit side by side; acceptance: --trend output gains a "failed:" column
   sourced from generations.jsonl.
-- [ ] validate.mjs: capture a full-canvas screenshot at the densest frame
+- [x] validate.mjs: capture a full-canvas screenshot at the densest frame
   (t of max contentPx) as densest.png in the shots dir so a vision pass
   starts from the most informative image; acceptance: manifest.json
   lists densest.png with a t value.

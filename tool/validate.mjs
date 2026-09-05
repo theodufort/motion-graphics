@@ -147,6 +147,16 @@ export async function validateWithBrowser(browser, folderPath) {
     }
   }
 
+  // densest-frame capture: park at the frame with max content px and save a
+  // full-canvas screenshot so a vision pass starts from the best single image
+  if (hasSeek && shotDir && Object.keys(contentsByTime).length) {
+    const denseT = Object.entries(contentsByTime).sort((a, b) => b[1] - a[1])[0][0];
+    await page.evaluate((t) => window.__time(t), denseT);
+    await page.evaluate(() => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)))).catch(() => {});
+    await page.screenshot({ path: path.join(shotDir, "densest.png") });
+    r.shots.push(path.join(shotDir, "densest.png"));
+  }
+
   // loop-wide px churn (sampled before the seam check, which may reference it)
   let maxChurn = 0;
   if (hasSeek) {
@@ -363,11 +373,12 @@ export async function validateWithBrowser(browser, folderPath) {
     const manifest = r.shots.map((s) => {
       const base = path.basename(s);
       const isSeam = base.startsWith("seam-");
-      const t = isSeam ? (base === "seam-a.png" ? LOOP - 300 : 300) : parseInt(base.slice(1, -4), 10);
+      const isDensest = base === "densest.png";
+      const t = isDensest ? Object.entries(contentsByTime).sort((a, b) => b[1] - a[1])[0][0] : isSeam ? (base === "seam-a.png" ? LOOP - 300 : 300) : parseInt(base.slice(1, -4), 10);
       const content = isSeam
         ? (base === "seam-a.png" ? seamPts[1]?.content ?? null : seamPts[2]?.content ?? null)
         : contentsByTime[t] ?? null;
-      return { file: base, t, contentPx: content, seam: isSeam };
+      return { file: base, t, contentPx: isDensest ? contentsByTime[t] : content, seam: isSeam, densest: isDensest };
     });
     writeFileSync(path.join(shotDir, "manifest.json"), JSON.stringify({ topic: name, LOOP, labels: r.labels, size: r.size, shots: manifest }, null, 1) + "\n");
   }
