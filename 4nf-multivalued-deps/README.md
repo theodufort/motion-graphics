@@ -1,4 +1,4 @@
-# 4NF — Stop the Row Explosion
+# 4NF — No Multivalued Dependencies (Row Explosion)
 
 Fourth normal form: independent multi-valued facts (skills and certs) must
 not share a table, or their cross product explodes the row count.

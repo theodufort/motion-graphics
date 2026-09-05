@@ -82,7 +82,7 @@ REQUIRED STRUCTURE (adapt content, keep shape):
 OUTPUT FORMAT — exactly three parts, no extra text before or after:
 TOPIC: <2-4-word kebab-case-slug>
 ===README===
-# <Title, 3-6 words>
+# <Title, 3-6 words — must contain at least one word of the topic slug>
 <one sentence: what it explains + takeaway>
 ## Story beats
 | Time (s) | Beat | What's on screen |

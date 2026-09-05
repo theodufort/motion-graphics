@@ -213,9 +213,17 @@ export async function validateWithBrowser(browser, folderPath) {
 
   r.readme = (() => {
     const p = path.join(folderPath, "README.md");
-    return existsSync(p) && readFileSync(p, "utf8").length > 200 ? 1 : 0;
+    if (!existsSync(p) || readFileSync(p, "utf8").length <= 200) return 0;
+    const md = readFileSync(p, "utf8");
+    const h1 = md.split("\n").find((l) => l.startsWith("# ")) || "";
+    // topic-match: at least one distinctive folder word must appear in the H1
+    const STOP = new Set(["the", "a", "an", "and", "or", "of", "for", "to", "in", "on", "how", "with"]);
+    const words = name.split(/[-_]/).filter((w) => w.length >= 4 && !STOP.has(w.toLowerCase()));
+    if (!words.length) return 1;
+    const hl = h1.toLowerCase();
+    return words.some((w) => { const x = w.toLowerCase(); return hl.includes(x) || hl.includes(x.replace(/s$/, "")); }) ? 1 : 0;
   })();
-  if (!r.readme) errors.push("README.md missing or trivial");
+  if (!r.readme) errors.push("README.md missing, trivial, or H1 doesn't match the topic words");
 
   // label visibility: a label present in EVERY parked frame yet never
   // reaching alpha 0.15 is a bug (ghost/placeholder text). Beat labels

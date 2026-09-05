@@ -146,6 +146,6 @@
 - [x] bench.mjs: --topics a,b,c to run a subset of the 20 prompts;
   acceptance: --topics kafka-exactly-once-path,sqlite-wal-checkpoint
   runs exactly those two and prints BENCH: 2/2.
-- [ ] validate.mjs: README H1 must contain the folder name's topic words
+- [x] validate.mjs: README H1 must contain the folder name's topic words
   (catches copied-pasted READMEs from another graphic); acceptance: a
   fixture with the wrong H1 is flagged with "readme".

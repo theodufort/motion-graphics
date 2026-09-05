@@ -1,4 +1,4 @@
-# HTTP/2 Core Mechanics
+# HTTP/2 Stream Multiplexing (Core Mechanics)
 Explains how HTTP/2 multiplexes streams over one connection, compresses headers with HPACK, and applies window-based flow control.
 ## Story beats
 | Time (s) | Beat | What's on screen |

@@ -1,4 +1,4 @@
-# 2NF — Depend on the Whole Key
+# 2NF — Depend on the Whole Key (Full Dependency)
 
 Second normal form: with a composite key, every non-key column must depend
 on the *whole* key. A project name repeated per employee becomes one row in
