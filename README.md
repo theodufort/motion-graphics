@@ -80,6 +80,10 @@ the 6 shots `validate.mjs` saves in `tool/shots/<topic>/`:
 | `t<90%·LOOP>.png` | LOOP × 0.90 | final beat — exits |
 | `seam-a.png` / `seam-b.png` | LOOP−300 / 300 | wrap must crossfade, no dark frame |
 
+A `manifest.json` sits alongside the shots: one entry per file with its
+park time, content-px at that instant, and a `seam` flag — feed it to a
+vision tool instead of guessing filenames.
+
 (Exact filenames use the millisecond values, e.g. `t2700.png` for an
 18s loop.) Judge each shot for: text touching/overflowing boxes, labels
 over labels, elements covering content, anything frozen or clipped, and

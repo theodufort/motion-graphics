@@ -48,3 +48,9 @@
 tests that need a mock LLM must use another port (28123+ used).
 HTTP 500 is treated as non-transient by the llm() retry (only
 AbortError/fetch-failed retry once).
+
+## Shot layout is 4 frames + 2 seam (2026-09-05)
+
+validate.mjs parks FRAMES = [0.15, 0.40, 0.65, 0.90] plus seam-a
+(LOOP-300) and seam-b (300) => 6 PNGs and a 6-entry manifest.json per
+graphic. (An earlier backlog item assumed 6 frames + 1 seam = 7.)

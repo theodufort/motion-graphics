@@ -79,6 +79,7 @@
   printed after the BENCH line; acceptance met: 20-row table + BENCH line
   (20/20 in 76s reuse).- [x] tool/generate.mjs: generations.jsonl entries carry "tps" (usage.
   completion_tokens / llm ms); acceptance met: fresh WebSocket generate
-  logged tps=39 (202s, first-pass pass -> websocket-protocol-flow/).- [ ] validate.mjs: shot manifest JSON (tool/shots/<topic>/manifest.json
-  with per-shot t, content px, seam flag) for vision-review tooling;
-  acceptance: 7 manifest entries for a 6-shot + seam layout.
+  logged tps=39 (202s, first-pass pass -> websocket-protocol-flow/).- [x] validate.mjs: manifest.json written to tool/shots/<topic>/ with
+  per-shot {file, t, contentPx, seam}; acceptance met: 6 entries for the
+  actual 4-frame + 2-seam layout (the item's "7 = 6-shot + seam" assumed
+  a 6-frame layout; corrected in ASSUMPTIONS.md).

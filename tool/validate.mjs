@@ -3,7 +3,7 @@
 // CLI: node validate.mjs <folder> [--json]
 // Exports validateFolder(folderPath) -> { clean, seek, collisions, seam, readme, errors, shots }
 import { chromium } from "playwright";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -228,6 +228,19 @@ async function validateFolder(folderPath) {
 
   r.errors = [...pageErrors, ...errors];
   await browser.close();
+  // shot manifest for vision-review tooling: one entry per saved PNG
+  if (shotDir) {
+    const manifest = r.shots.map((s) => {
+      const base = path.basename(s);
+      const isSeam = base.startsWith("seam-");
+      const t = isSeam ? (base === "seam-a.png" ? LOOP - 300 : 300) : parseInt(base.slice(1, -4), 10);
+      const content = isSeam
+        ? (base === "seam-a.png" ? seamPts[1]?.content ?? null : seamPts[2]?.content ?? null)
+        : contentsByTime[t] ?? null;
+      return { file: base, t, contentPx: content, seam: isSeam };
+    });
+    writeFileSync(path.join(shotDir, "manifest.json"), JSON.stringify({ topic: name, LOOP, shots: manifest }, null, 1) + "\n");
+  }
   return r;
 }
 
