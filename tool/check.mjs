@@ -109,6 +109,7 @@ graphics.forEach((name) => (existingMax += 35));
 const CONCURRENCY = +(process.env.MG_CONCURRENCY || 4);
 let cursor = 0;
 const graphicsScores = {};
+const graphicsWarnings = {};
 async function worker() {
   while (cursor < graphics.length) {
     const name = graphics[cursor++];
@@ -124,6 +125,7 @@ async function worker() {
     const pts = 10 * r.clean + 5 * r.seek + 10 * r.collisions + 5 * r.seam + 5 * r.readme;
     score += pts;
     graphicsScores[name] = pts;
+    if (r.warnings?.length) graphicsWarnings[name] = r.warnings;
     if (pts < 35 || r.resize === 0 || r.content === 0 || r.frozen || r.visibility === 0 || r.seamContinuity === 0) problems.push(`${name}: ${pts}/35 (${(r.errors || []).join("; ") || (r.resize === 0 ? "resize check failed" : r.content === 0 ? "content check failed" : r.frozen ? "frozen animation" : r.visibility === 0 ? "invisible labels" : r.seamContinuity === 0 ? "seam label continuity" : "check bits failed")})`);
   }
 }
@@ -203,6 +205,8 @@ if (asJson) {
 } else {
   console.log(`graphics: ${graphics.length}${skipGen ? "  [skip-gen]" : ""}${regen ? "  [regen]" : ""}  score: ${score}/${existingMax + smokeMax}`);
   for (const p of problems) console.log(`  ✗ ${p}`);
+  for (const [n, ws] of Object.entries(graphicsWarnings)) for (const w of ws) console.log(`  ⚠ ${n}: ${w}`);
+  if (asJson) console.log(JSON.stringify({ graphicsWarnings }));
   console.log(`SCORE: ${score}`);
 }
 process.exit(existingPerfect && smokePerfect ? 0 : 1);
