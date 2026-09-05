@@ -82,10 +82,12 @@
   logged tps=39 (202s, first-pass pass -> websocket-protocol-flow/).- [x] validate.mjs: manifest.json written to tool/shots/<topic>/ with
   per-shot {file, t, contentPx, seam}; acceptance met: 6 entries for the
   actual 4-frame + 2-seam layout (the item's "7 = 6-shot + seam" assumed
-  a 6-frame layout; corrected in ASSUMPTIONS.md).- [ ] check.mjs: --watch mode (re-validate changed graphic folders on
-  fs events, print diff of check bits); acceptance: editing a folder's
-  index.html re-triggers validation within 2s without a full run.
-- [ ] tool/generate.sh: --prompt-file flag (read prompt from a file,
+  a 6-frame layout; corrected in ASSUMPTIONS.md).- [x] check.mjs --watch (recursive fs.watch, 1s debounce, per-topic
+  8-bit line clean/seek/collisions/seam/readme/content/visibility/!frozen
+  with "(was ...)"); acceptance met: edited 1nf index.html -> line in
+  ~6s (1s debounce + full validate); bit diff verified by swapping in the
+  static-canvas fixture (11111110, frozen error) then restoring (was
+  11111110).- [ ] tool/generate.sh: --prompt-file flag (read prompt from a file,
   newlines preserved); acceptance: a two-line prompt file generates the
   same topic as the inline form.
 - [ ] PROGRESS.md: add current score 1120/1120, 31 graphics, tps logging,

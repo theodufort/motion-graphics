@@ -39,6 +39,9 @@ forces fresh generation, `./check.sh --skip-gen` skips it entirely.
 `generate.sh` refuses to overwrite an existing topic folder unless
 `--force` is passed. `./check.sh --only <topic>` validates a single
 folder in ~5s (fix-loop speed; unknown topic exits 2).
+`node tool/check.mjs --watch` re-validates a folder ~1s after its
+`index.html` changes and prints the 8 check bits with the previous run's
+bits (`was …`) for instant diffing while editing.
 
 ### Negative fixtures
 
