@@ -8,7 +8,8 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const FRAMES = [0.15, 0.4, 0.65, 0.9]; // parked fractions of LOOP
+const QUICK = process.env.MG_QUICK === "1";
+const FRAMES = QUICK ? [0.4, 0.9] : [0.15, 0.4, 0.65, 0.9]; // parked fractions of LOOP
 
 function parseLoop(html) {
   const m = html.match(/(?:const|let|var)\s+LOOP\s*=\s*(\d{4,7})|__loop\s*=\s*(\d{4,7})/);
@@ -17,7 +18,7 @@ function parseLoop(html) {
   return m2 ? parseInt(m2[1], 10) : 30000;
 }
 
-async function validateFolder(folderPath) {
+export async function validateWithBrowser(browser, folderPath) {
   const errors = [];
   const r0 = null;
   const htmlPath = path.join(folderPath, "index.html");
@@ -27,7 +28,6 @@ async function validateFolder(folderPath) {
   mkdirSync(shotDir, { recursive: true });
   const LOOP = parseLoop(html);
 
-  const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   const pageErrors = [];
   page.on("pageerror", (e) => pageErrors.push(String(e.message || e)));
@@ -209,7 +209,7 @@ async function validateFolder(folderPath) {
   // shows a big content-px delta at least once (beat transitions), so freeze
   // only when the MAX delta is near zero (beat-hold regions are fine)
   if (hasSeek) {
-    const n = 25;
+    const n = QUICK ? 5 : 25;
     const samples = [];
     for (let k = 0; k < n; k++) samples.push((await park((LOOP * (k + 0.5)) / n))?.content || 0);
     const deltas = samples.slice(1).map((c, i) => Math.abs(c - samples[i]));
@@ -221,9 +221,11 @@ async function validateFolder(folderPath) {
   }
 
   timings.frozen = Date.now() - tFrz;
+  r.quick = QUICK ? 1 : 0;
   r.resize = 0;
   const tRes = Date.now();
-  try {
+  if (QUICK) { r.resize = 1; } // quick mode: skip the resize step
+  else try {
     const before = pageErrors.length;
     await page.setViewportSize({ width: 1366, height: 768 });
     await page.evaluate(() => window.dispatchEvent(new Event("resize")));
@@ -239,7 +241,7 @@ async function validateFolder(folderPath) {
   timings.resize = Date.now() - tRes;
   r.errors = [...pageErrors, ...errors];
   r.timings = timings;
-  await browser.close();
+  await page.close();
   // shot manifest for vision-review tooling: one entry per saved PNG
   if (shotDir) {
     const manifest = r.shots.map((s) => {
@@ -256,7 +258,16 @@ async function validateFolder(folderPath) {
   return r;
 }
 
-export { validateFolder, parseLoop };
+export async function validateFolder(folderPath) {
+  const browser = await chromium.launch();
+  try {
+    return await validateWithBrowser(browser, folderPath);
+  } finally {
+    await browser.close();
+  }
+}
+
+export { parseLoop };
 
 // CLI (only when run directly, not imported)
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
