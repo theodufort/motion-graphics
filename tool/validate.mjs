@@ -59,7 +59,7 @@ export async function validateWithBrowser(browser, folderPath) {
     };
   });
 
-  const r = { clean: 0, seek: 0, collisions: 0, seam: 0, readme: 0, content: 0, frozen: 0, visibility: 0, seamContinuity: 1, errors: [...pageErrors, ...errors], shots: [], shotsPath: shotDir, LOOP };
+  const r = { clean: 0, seek: 0, collisions: 0, seam: 0, readme: 0, content: 0, frozen: 0, visibility: 0, seamContinuity: 1, errors: [...pageErrors, ...errors], warnings: [], shots: [], shotsPath: shotDir, LOOP };
   await page.goto("file://" + htmlPath, { waitUntil: "load", timeout: 15000 });
   await page.waitForTimeout(300);
 
@@ -247,9 +247,12 @@ export async function validateWithBrowser(browser, folderPath) {
     for (let k = 0; k < n; k++) samples.push((await park((LOOP * (k + 0.5)) / n))?.content || 0);
     const deltas = samples.slice(1).map((c, i) => Math.abs(c - samples[i]));
     const base = Math.max(...samples, 1);
-    if (Math.max(...deltas) / base < 0.005) {
+    const maxD = Math.max(...deltas) / base;
+    if (maxD < 0.005) {
       r.frozen = 1;
       errors.push(`frozen: max content-px delta ${Math.max(...deltas)} over ${n} loop-wide samples (static canvas?)`);
+    } else if (maxD < 0.02) {
+      r.warnings.push(`near-frozen: max content-px delta ${Math.round(maxD * 100)}% over ${n} samples (subtle motion?)`); // soft: warn, do not fail
     }
   }
 
@@ -311,6 +314,6 @@ if (isMain) {
     process.exit(2);
   }
   const r = await validateFolder(path.resolve(arg));
-  console.log(JSON.stringify({ folder: path.basename(arg), ...r }, null, 2));
+  console.log(JSON.stringify({ folder: path.basename(arg), ...r, warnings: r.warnings }, null, 2));
   process.exit(r.clean && r.seek && r.collisions && r.seam && r.readme && r.content && !r.frozen && r.visibility ? 0 : 1);
 }

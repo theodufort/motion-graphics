@@ -149,7 +149,7 @@
 - [x] validate.mjs: README H1 must contain the folder name's topic words
   (catches copied-pasted READMEs from another graphic); acceptance: a
   fixture with the wrong H1 is flagged with "readme".
-- [ ] validate.mjs: frozen probe should also detect near-frozen (delta < 2%
+- [x] validate.mjs: frozen probe should also detect near-frozen (delta < 2%
   but > 0.5%) and report it as a soft warning in errors without failing;
   acceptance: a fixture moving one pixel per frame warns but keeps score.
 - [ ] check.sh: --since <git-rev> to validate only folders changed since
