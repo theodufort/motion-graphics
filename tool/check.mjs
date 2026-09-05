@@ -232,7 +232,9 @@ if (asJson) {
   const wallMs = Date.now() - wallStart;
   const framesMs = Object.values(graphicsTimings).map((t) => t.frames).filter((v) => v != null).sort((a, b) => a - b);
   const medFrames = framesMs.length ? (framesMs.length % 2 ? framesMs[(framesMs.length - 1) / 2] : (framesMs[framesMs.length / 2 - 1] + framesMs[framesMs.length / 2]) / 2) : null;
-  console.log(JSON.stringify({ ts: new Date().toISOString(), score, max: existingMax + smokeMax, graphics: graphics.length, summary: { graphics: graphics.length, wallMs, medianFramesMs: medFrames }, graphicsScores, graphicsTimings, graphicsLabels, graphicsSize, contentCurves, graphicsWarnings, warnings: Object.entries(graphicsWarnings).flatMap(([n, ws]) => ws.map((w) => n + ": " + w)), problems }));
+  const warningsByClass = {};
+  for (const ws of Object.values(graphicsWarnings)) for (const w of ws) { const c = w.split(":")[0].trim(); warningsByClass[c] = (warningsByClass[c] || 0) + 1; }
+  console.log(JSON.stringify({ ts: new Date().toISOString(), score, max: existingMax + smokeMax, graphics: graphics.length, summary: { graphics: graphics.length, wallMs, medianFramesMs: medFrames }, graphicsScores, graphicsTimings, graphicsLabels, graphicsSize, contentCurves, graphicsWarnings, warningsByClass, warnings: Object.entries(graphicsWarnings).flatMap(([n, ws]) => ws.map((w) => n + ": " + w)), problems }));
 } else {
   console.log(`graphics: ${graphics.length}${skipGen ? "  [skip-gen]" : ""}${regen ? "  [regen]" : ""}${fast ? "  (quick)" : ""}  score: ${score}/${existingMax + smokeMax}`);
   for (const p of problems) console.log(`  ✗ ${p}`);
