@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const QUICK = process.env.MG_QUICK === "1";
+const NO_SHOTS = process.env.MG_NO_SHOTS === "1"; // CI mode: no PNG writes
 const FRAMES = QUICK ? [0.4, 0.9] : [0.15, 0.4, 0.65, 0.9]; // parked fractions of LOOP
 
 function parseLoop(html) {
@@ -120,7 +121,7 @@ export async function validateWithBrowser(browser, folderPath) {
     const t = Math.round(LOOP * f);
     const p = await park(t);
     const shot = path.join(shotDir, `t${t}.png`);
-    await page.screenshot({ path: shot });
+    if (!NO_SHOTS) await page.screenshot({ path: shot });
     r.shots.push(shot);
     if (p) {
       rectsByTime[t] = p.ft; contentsByTime[t] = p.content;
@@ -153,7 +154,7 @@ export async function validateWithBrowser(browser, folderPath) {
     const denseT = Object.entries(contentsByTime).sort((a, b) => b[1] - a[1])[0][0];
     await page.evaluate((t) => window.__time(t), denseT);
     await page.evaluate(() => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)))).catch(() => {});
-    await page.screenshot({ path: path.join(shotDir, "densest.png") });
+    if (!NO_SHOTS) await page.screenshot({ path: path.join(shotDir, "densest.png") });
     r.shots.push(path.join(shotDir, "densest.png"));
   }
 
@@ -175,8 +176,10 @@ export async function validateWithBrowser(browser, folderPath) {
   const seamA = seamPts[1], seamB = seamPts[2];
   if (!QUICK) {
     const shotA = path.join(shotDir, "seam-a.png"), shotB = path.join(shotDir, "seam-b.png");
-    await page.screenshot({ path: shotA });
-    await page.screenshot({ path: shotB });
+    if (!NO_SHOTS) {
+      await page.screenshot({ path: shotA });
+      await page.screenshot({ path: shotB });
+    }
     r.shots.push(shotA, shotB);
   } else for (const st of ["seam-a.png", "seam-b.png"]) {
     const p = path.join(shotDir, st); // drop stale seam PNGs from prior full runs

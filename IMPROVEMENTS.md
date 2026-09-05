@@ -304,7 +304,7 @@
 - [ ] check.mjs --json: include a per-topic `size` map (from the report's
   r.size) so consumers know the rendered canvas resolution per graphic;
   acceptance: --json has a graphicsSize object with values like "1280x720".
-- [ ] tool/validate.mjs: add a `--no-shots` env (MG_NO_SHOTS=1) that skips
+- [x] tool/validate.mjs: add a `--no-shots` env (MG_NO_SHOTS=1) that skips
   PNG writes entirely for CI-style runs; acceptance: a validation with
   MG_NO_SHOTS=1 writes no new PNGs and the manifest's shots list is empty.
 - [ ] bench.mjs: --topics should accept a comma-separated list (currently
