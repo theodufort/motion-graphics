@@ -99,13 +99,14 @@ function compare(beforePath, afterPath) {
       changed++;
       continue;
     }
-    const d = Math.round(((y.sec - x.sec) / x.sec) * 100);
-    if (Math.abs(d) > 10) {
-      console.log(t.slice(0, 30).padEnd(30) + String(x.sec).padStart(8) + String(y.sec).padStart(8) + `  ${d > 0 ? "+" : ""}${d}% ${d > 0 ? "(slower)" : "(faster)"}`);
+    const d = x.sec == null || y.sec == null ? null : Math.round(((y.sec - x.sec) / x.sec) * 100);
+    const status = x.pass === y.pass ? "" : `  STATUS ${x.pass ? "ok" : "FAIL"}->${y.pass ? "ok" : "FAIL"}`;
+    if (Math.abs(d ?? 999) > 10 || status) {
+      console.log(t.slice(0, 30).padEnd(30) + String(x.sec ?? "-").padStart(8) + String(y.sec ?? "-").padStart(8) + `  ${d == null ? "" : `${d > 0 ? "+" : ""}${d}% ${d > 0 ? "(slower)" : "(faster)"}`}${status}`);
       changed++;
     }
   }
-  console.log(`\n${changed} row(s) changed >10% (of ${topics.length})`);
+  console.log(`\n${changed} row(s) changed >10% or flipped status (of ${topics.length})`);
   process.exit(0);
 }
 
