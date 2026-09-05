@@ -226,7 +226,7 @@
 - [x] bench: add a per-prompt tps (tokens/sec) column to the timing table
   from the logged generation timings; acceptance: bench --smoke-only
   prints a tps column alongside seconds.
-- [ ] check.sh --json: include a `warnings` array with the per-graphic
+- [x] check.sh --json: include a `warnings` array with the per-graphic
   ⚠ lines (currently graphicsWarnings exists but the top-level warnings
   list is absent); acceptance: --json output parses and the edge-clip
   ⚠ on dns-recursive-resolution appears in it.

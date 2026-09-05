@@ -203,7 +203,7 @@ const smokePerfect = skipGen || (smoke.length === 2 && !problems.some((p) => p.s
 const asJson = process.argv.includes("--json");
 const fast = process.argv.includes("--fast"); // --fast = quick mode (MG_QUICK=1 via check.sh); label only
 if (asJson) {
-  console.log(JSON.stringify({ ts: new Date().toISOString(), score, max: existingMax + smokeMax, graphics: graphics.length, graphicsScores, graphicsWarnings, problems }));
+  console.log(JSON.stringify({ ts: new Date().toISOString(), score, max: existingMax + smokeMax, graphics: graphics.length, graphicsScores, graphicsWarnings, warnings: Object.entries(graphicsWarnings).flatMap(([n, ws]) => ws.map((w) => n + ": " + w)), problems }));
 } else {
   console.log(`graphics: ${graphics.length}${skipGen ? "  [skip-gen]" : ""}${regen ? "  [regen]" : ""}${fast ? "  (quick)" : ""}  score: ${score}/${existingMax + smokeMax}`);
   for (const p of problems) console.log(`  ✗ ${p}`);
