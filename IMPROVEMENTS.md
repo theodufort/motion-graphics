@@ -372,7 +372,7 @@
   "dim-for-most-frames" warning tier; acceptance: a fixture whose label
   peaks at 0.3 but sits at 0.05 for 80% of frames triggers a new
   "dim label" warning.
-- [ ] bench.mjs: --compare should also diff the summary (wallMs) when
+- [x] bench.mjs: --compare should also diff the summary (wallMs) when
   both files were produced by check --json (not bench tables) — detect
   by the presence of a "summary" key and print "wall A->B"; acceptance:
   comparing two check --json payloads prints a wallMs delta line.

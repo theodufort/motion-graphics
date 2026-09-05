@@ -120,8 +120,19 @@ function parseTable(file) {
   }
   return out;
 }
+function readJsonMaybe(file) {
+  try { const d = JSON.parse(readFileSync(file, "utf8")); if (d && d.summary) return d; } catch {}
+  return null;
+}
 function compare(beforePath, afterPath) {
   const a = parseTable(beforePath), b = parseTable(afterPath);
+  // check --json payloads (not bench tables) also compare: wallMs delta
+  const ja = readJsonMaybe(beforePath), jb = readJsonMaybe(afterPath);
+  if (ja && jb) {
+    const dw = Math.round(((jb.summary.wallMs - ja.summary.wallMs) / ja.summary.wallMs) * 100);
+    console.log(`wall ${ja.summary.wallMs}ms -> ${jb.summary.wallMs}ms (${dw > 0 ? "+" : ""}${dw}%)  medianFrames ${ja.summary.medianFramesMs ?? "?"} -> ${jb.summary.medianFramesMs ?? "?"}`);
+    process.exit(0);
+  }
   const topics = [...new Set([...a.keys(), ...b.keys()])];
   let changed = 0;
   const hasTps = [...a.values()].some((x) => x.tps != null) || [...b.values()].some((x) => x.tps != null);
