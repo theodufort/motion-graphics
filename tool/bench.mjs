@@ -67,7 +67,7 @@ for (let i = 0; i < prompts.length; i++) {
     }
     if (g.pass) pass++;
     else failures.push(`${g.topic}: ${g.report.errors.slice(0, 2).join("; ")}`);
-    rows.push({ topic: g.topic, seconds: Math.round(g.seconds), fix: g.reused ? 0 : (g.fixPasses || 0), pass: g.pass });
+    rows.push({ topic: g.topic, seconds: Math.round(g.seconds), fix: g.reused ? 0 : (g.fixPasses || 0), pass: g.pass, tps: g.tps ?? null });
     process.stderr.write(`  -> ${g.pass ? "PASS" : "FAIL"} in ${Math.round(g.seconds)}s\n`);
   } catch (e) {
     failures.push(`${p.prompt.slice(0, 40)}: ${e.message}`);

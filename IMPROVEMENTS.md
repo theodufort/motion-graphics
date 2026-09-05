@@ -155,5 +155,5 @@
 - [x] check.sh: --since <git-rev> to validate only folders changed since
   a commit; acceptance: after touching one folder, --since HEAD~1
   validates exactly that folder.
-- [ ] bench.mjs: record per-prompt tps in bench-runs.jsonl (currently
+- [x] bench.mjs: record per-prompt tps in bench-runs.jsonl (currently
   only in generations.jsonl); acceptance: bench-runs rows carry tps.
