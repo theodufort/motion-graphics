@@ -344,3 +344,10 @@
   (contentsByTime as a small array) so a vision pass can see where the
   graphic is densest without re-running; acceptance: report.gain a
   contentCurve key with 4-6 [t, px] pairs.
+- [ ] check.mjs: --json should also emit a per-topic contentCurve map
+  (topic -> the report's [t, px] pairs) so consumers can see density
+  timing without re-running; acceptance: --json has a contentCurves
+  object keyed by topic.
+- [ ] bench.mjs: --trend should print the median tps across the run's
+  rows (not just pass counts) so model regressions show up; acceptance:
+  --trend lines gain a "tps: <median>" field.
