@@ -191,3 +191,15 @@
   section that lists fixtures near "dark-band-post" (it currently lives
   at the file bottom — move the row into the main table); acceptance:
   exactly one fixtures table contains seam-pop-in.
+- [ ] validate.mjs: the seam-pop-in and seamContinuity checks should also
+  run in MG_QUICK mode today (they do) — but the pop-in check needs a
+  matching quick-mode fixture regression run documented; acceptance:
+  README notes which checks quick mode skips and which it does not.
+- [ ] generate.mjs: after a successful generate, diff the new folder
+  against the 5 newest generated folders and log a "novelty" score
+  (fraction of label texts unseen in prior generations) to
+  logs/generations.jsonl; acceptance: two different prompts produce
+  different novelty values.
+- [ ] check.mjs: --watch should also re-run when the README.md of a
+  watched folder changes (H1 check depends on it); acceptance: editing
+  a watched README triggers a diff line without touching index.html.
