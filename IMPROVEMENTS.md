@@ -348,6 +348,6 @@
   (topic -> the report's [t, px] pairs) so consumers can see density
   timing without re-running; acceptance: --json has a contentCurves
   object keyed by topic.
-- [ ] bench.mjs: --trend should print the median tps across the run's
+- [x] bench.mjs: --trend should print the median tps across the run's
   rows (not just pass counts) so model regressions show up; acceptance:
   --trend lines gain a "tps: <median>" field.
