@@ -132,3 +132,11 @@
 - [x] generate.mjs: cap the fix loop's HTML at 260 lines before re-send
   (rule 15 target); acceptance: a 400-line generated file is trimmed in
   the fix prompt, not re-sent whole.
+- [ ] validate.mjs: collision check should also flag labels whose rects
+  cover >85% of another label's rect (containment, not just 15%+ IoU);
+  acceptance: a fixture with one label fully under another is flagged.
+- [ ] bench.mjs: --compare should also compare pass/FAIL status changes
+  (a row that went ok->FAIL is always printed, even with small delta).
+- [ ] check.mjs: --only <topic> --watch combo (watch a single folder's
+  index.html with per-file debounce); acceptance: editing the one file
+  re-validates only that folder.
