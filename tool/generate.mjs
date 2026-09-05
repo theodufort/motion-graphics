@@ -165,6 +165,37 @@ function rememberSlug(prompt, topic) {
     writeFileSync(slugMapPath, kept.join("\n") + "\n");
   } catch {}
 }
+// novelty: fraction of this graphic's fillText labels never seen in prior
+// generations (per logs/generations.jsonl topics) — low = repetitive output
+function noveltyOf(html, topic) {
+  // labels: fillText literals AND const/var assignments of 2+ word strings
+  // (generators often wrap fillText in a fitLabel(txt,...) helper)
+  const grab = (h) => {
+    const out = new Set();
+    for (const m of h.matchAll(/(?:fillText|fitLabel)\(\s*["'\`]([^"'\`]{2,40})["'\`]/g)) out.add(m[1].toLowerCase());
+    for (const m of h.matchAll(/(?:const|let|var)\s+\w+\s*=\s*["']([^"']{2,40})["']/g)) {
+      const t = m[1].trim();
+      if (t.split(/\s+/).length >= 2 && !/[=;{}()\d]/.test(t) && !/^[\s#]/.test(t)) out.add(t.toLowerCase());
+    }
+    return out;
+  };
+  const labels = grab(html);
+  if (labels.size === 0) return null;
+  const prior = new Set();
+  try {
+    const lines = readFileSync(path.join(ROOT, "logs", "generations.jsonl"), "utf8").trim().split("\n").filter(Boolean);
+    for (const l of lines.slice(-30)) {
+      let e;
+      try { e = JSON.parse(l); } catch { continue; }
+      if (!e.topic || e.topic === topic) continue;
+      const f = path.join(ROOT, e.topic, "index.html");
+      if (existsSync(f)) for (const s of grab(readFileSync(f, "utf8"))) prior.add(s);
+    }
+  } catch { /* no log yet */ }
+  if (prior.size === 0) return 1;
+  return Math.round((1 - [...labels].filter((l) => prior.has(l)).length / labels.size) * 100) / 100;
+}
+
 export async function generate(prompt, { force = false, allowExisting = process.env.MG_ALLOW_EXISTING === "1" } = {}) {
   const t0 = Date.now();
   // overwrite guard: same prompt previously generated an existing folder
@@ -236,7 +267,7 @@ Reply with the COMPLETE corrected file (every line, even parts not shown above) 
     pass = report.clean && report.seek && report.collisions && report.seam && report.readme;
   }
   const tps = first.usage?.completion_tokens && first.ms ? Math.round(first.usage.completion_tokens / (first.ms / 1000)) : null;
-  return { folder, topic, pass, report, seconds: (Date.now() - t0) / 1000, fixPasses, tps };
+  return { folder, topic, pass, report, seconds: (Date.now() - t0) / 1000, fixPasses, tps, novelty: noveltyOf(html, topic) };
 }
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
@@ -261,12 +292,12 @@ if (isMain) {
     console.error(`error: ${e.message}`);
     process.exit(2);
   }
-  console.log(JSON.stringify({ topic: g.topic, pass: g.pass, seconds: Math.round(g.seconds), errors: g.report.errors, checks: { clean: g.report.clean, seek: g.report.seek, collisions: g.report.collisions, seam: g.report.seam, readme: g.report.readme } }, null, 1));
+  console.log(JSON.stringify({ topic: g.topic, pass: g.pass, seconds: Math.round(g.seconds), errors: g.report.errors, novelty: g.novelty, checks: { clean: g.report.clean, seek: g.report.seek, collisions: g.report.collisions, seam: g.report.seam, readme: g.report.readme } }, null, 1));
   try {
     const html = readFileSync(path.join(g.folder, "index.html"), "utf8");
     appendFileSync(
       path.join(ROOT, "logs", "generations.jsonl"),
-      JSON.stringify({ ts: new Date().toISOString(), prompt, topic: g.topic, model: MODEL, seconds: Math.round(g.seconds), lines: html.split("\n").length, fixPasses: g.fixPasses, pass: g.pass, tps: g.tps ?? null }) + "\n"
+      JSON.stringify({ ts: new Date().toISOString(), prompt, topic: g.topic, model: MODEL, seconds: Math.round(g.seconds), lines: html.split("\n").length, fixPasses: g.fixPasses, pass: g.pass, tps: g.tps ?? null, novelty: g.novelty }) + "\n"
     );
   } catch {}
   console.log(g.folder);

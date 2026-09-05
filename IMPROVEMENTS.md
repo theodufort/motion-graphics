@@ -195,7 +195,7 @@
   run in MG_QUICK mode today (they do) — but the pop-in check needs a
   matching quick-mode fixture regression run documented; acceptance:
   README notes which checks quick mode skips and which it does not.
-- [ ] generate.mjs: after a successful generate, diff the new folder
+- [x] generate.mjs: after a successful generate, diff the new folder
   against the 5 newest generated folders and log a "novelty" score
   (fraction of label texts unseen in prior generations) to
   logs/generations.jsonl; acceptance: two different prompts produce

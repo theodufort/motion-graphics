@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+*{margin:0;box-sizing:border-box}
+body{background:var(--bg);overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+// setup
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+const LOOP=30000;
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+let W,H,dpr,nodes,mid;
+function buildLayout(){nodes=[{x:W*.28,y:H*.45,label:'Replica A'},{x:W*.72,y:H*.45,label:'Replica B'}];mid={x:W*.5,y:H*.72};}
+// easing
+const lerp=(a,b,t)=>a+(b-a)*t,clamp01=v=>Math.max(0,Math.min(1,v));
+const ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
+const quad=(a,c,b,t)=>({x:lerp(lerp(a.x,c.x,t),lerp(c.x,b.x,t),t),y:lerp(lerp(a.y,c.y,t),lerp(c.y,b.y,t),t)});
+function beatA(t,s,e,f=.05){const b=t/LOOP;if(b<s||b>=e)return 0;return Math.min(clamp01((b-s)/f),clamp01((e-b)/f));}
+// hooks
+let __seek=null;
+window.__time=v=>{__seek=v};
+window.__loop=LOOP;
+// clock values
+function getClock(beat){let a=0,b=0;if(beat>.17)a=Math.min(3,Math.floor((beat-.17)/.055)+1);if(beat>.33)b=Math.min(3,Math.floor((beat-.33)/.055)+1);if(beat>.62){a=3;b=4;}return[a,b];}
+// background
+function drawBg(t){ctx.fillStyle=rgba(PAL.bg,1);ctx.fillRect(0,0,W,H);ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;const s=W/20;for(let x=0;x<W;x+=s){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}for(let y=0;y<H;y+=s){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}}
+// connection (always visible, subtle pulse)
+function drawConn(t){const n0=nodes[0],n1=nodes[1],cx=(n0.x+n1.x)/2,cy=n0.y-H*.12;const a=.12+.04*Math.sin(t/600);ctx.strokeStyle=rgba(PAL.muted,a);ctx.lineWidth=1.5;ctx.setLineDash([4,6]);ctx.beginPath();ctx.moveTo(n0.x,n0.y);ctx.quadraticCurveTo(cx,cy,n1.x,n1.y);ctx.stroke();ctx.setLineDash([]);}
+// nodes (always visible)
+function drawNodes(t,beat){const pulse=Math.sin(t/400)*.06+1;nodes.forEach((n,i)=>{const r=W*.06*pulse;const g=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,r*1.8);g.addColorStop(0,rgba(PAL.accent,.12));g.addColorStop(1,rgba(PAL.accent,0));ctx.fillStyle=g;ctx.fillRect(n.x-r*2,n.y-r*2,r*4,r*4);ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);ctx.fillStyle=rgba(PAL.accent,.08);ctx.fill();ctx.strokeStyle=rgba(PAL.accent,.5);ctx.lineWidth=2;ctx.stroke();ctx.textAlign='center';ctx.textBaseline='middle';let fs=Math.floor(W*.018);ctx.font=`600 ${fs}px system-ui`;while(ctx.measureText(n.label).width>r*1.8&&fs>10){fs-=2;ctx.font=`600 ${fs}px system-ui`;}ctx.fillStyle=rgba(PAL.text,.9);ctx.fillText(n.label,n.x,n.y-r-W*.025);const c=getClock(beat);ctx.fillStyle=rgba(PAL.accent,.9);ctx.font=`700 ${Math.floor(W*.022)}px monospace`;ctx.fillText(`[${c[0]}, ${c[1]}]`,n.x,n.y+W*.01);});}
+// packets (transient)
+function drawPackets(t,beat){const s=.5,e=.62;if(beat<s||beat>e)return;const p=(beat-s)/(e-s),n0=nodes[0],n1=nodes[1],cx=(n0.x+n1.x)/2,cy=n0.y-H*.12,cp={x:cx,y:cy};for(let i=5;i>=1;i--){const tp=clamp01(p-i*.04);if(tp<=0)continue;const tp2=quad(n0,cp,n1,ease(tp));ctx.beginPath();ctx.arc(tp2.x,tp2.y,3-i*.4,0,Math.PI*2);ctx.fillStyle=rgba(PAL.accent,(1-i/6)*.6);ctx.fill();}const pos=quad(n0,cp,n1,ease(p));ctx.beginPath();ctx.arc(pos.x,pos.y,5,0,Math.PI*2);ctx.fillStyle=rgba(PAL.accent,.9);ctx.fill();}
+// HUD (title + rule always; causal transient)
+function drawHud(t,beat){ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=rgba(PAL.text,.9);ctx.font=`700 ${Math.floor(W*.028)}px system-ui`;ctx.fillText('Vector Clock Replicas',W*.5,H*.1);const ca=beatA(t,.67,.88,.04);if(ca>0){ctx.fillStyle=rgba(PAL.accent,ca);ctx.font=`700 ${Math.floor(W*.02)}px monospace`;ctx.fillText('A ⊂ B  (happens-before)',mid.x,mid.y);const mw=W*.2;ctx.fillStyle=rgba(PAL.muted,.2*ca);ctx.fillRect(mid.x-mw/2,mid.y+W*.02,mw,W*.008);ctx.fillStyle=rgba(PAL.accent,ca);ctx.fillRect(mid.x-mw/2,mid.y+W*.02,mw*ease(clamp01((beat-.67)/.15)),W*.008);}ctx.fillStyle=rgba(PAL.muted,.6);ctx.font=`400 ${Math.floor(W*.012)}px system-ui`;ctx.fillText('Causal ordering via vector clock comparison',W*.5,H*.92);}
+// frame
+function frame(now){if(__seek!=null)now=__seek;const t=now%LOOP,beat=t/LOOP;ctx.clearRect(0,0,W,H);drawBg(t);drawConn(t);drawNodes(t,beat);drawPackets(t,beat);drawHud(t,beat);requestAnimationFrame(frame);}
+// resize
+function resize(){dpr=window.devicePixelRatio||1;W=window.innerWidth;H=window.innerHeight;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0);buildLayout();}
+window.addEventListener('resize',resize);
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

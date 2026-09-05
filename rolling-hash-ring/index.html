@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+const LOOP=30000;
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+let W,H,dpr,cx,cy,R;
+function resize(){dpr=devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);cx=W*.5;cy=H*.5;R=Math.min(W,H)*.28}
+addEventListener('resize',resize);resize();
+const lerp=(a,b,t)=>a+(b-a)*t,clamp01=v=>Math.max(0,Math.min(1,v)),ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
+const NODES=[
+{id:'A',c:PAL.accent,v:[.05,.30,.55,.80]},
+{id:'B',c:[255,180,60],v:[.12,.37,.62,.87]},
+{id:'C',c:[120,160,255],v:[.18,.43,.68,.93]},
+{id:'D',c:[200,120,255],v:[.08,.33,.58,.83]}
+];
+const KEYS=[{l:'k1',p:.10},{l:'k2',p:.25},{l:'k3',p:.40},{l:'k4',p:.55},{l:'k5',p:.70},{l:'k6',p:.88}];
+function nodeAlpha(i,b){
+if(i!==1)return 1;
+if(b<.35||b>.65)return 1;
+if(b<.45)return 1-ease((b-.35)/.10)*.8;
+if(b<.55)return .2;
+return .2+ease((b-.55)/.10)*.8;
+}
+function findVnode(pos,ns){
+let best=null,bd=1;
+for(const n of ns)for(const v of n.v){const d=(v-pos+1)%1;if(d<bd){bd=d;best={n,v}}}
+return best;
+}
+let __seek=null;
+window.__time=v=>{__seek=v};
+window.__loop=LOOP;
+function fitLabel(txt,x,y,maxW,base,fill,align){
+let fs=base;ctx.font=`500 ${fs}px system-ui`;
+while(ctx.measureText(txt).width>maxW*.9&&fs>8){fs-=2;ctx.font=`500 ${fs}px system-ui`}
+ctx.fillStyle=fill;ctx.textAlign=align||'center';ctx.fillText(txt,x,y);
+}
+function frame(now){
+if(__seek!=null)now=__seek;
+const t=now%LOOP,b=t/LOOP;
+ctx.clearRect(0,0,W,H);
+// grid
+ctx.strokeStyle=rgba(PAL.text,.03);ctx.lineWidth=1;
+for(let x=0;x<W;x+=60){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+for(let y=0;y<H;y+=60){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+// ring
+const rot=t/LOOP*Math.PI*2;
+ctx.save();ctx.translate(cx,cy);ctx.rotate(rot*.05);
+ctx.beginPath();ctx.arc(0,0,R,0,Math.PI*2);
+ctx.strokeStyle=rgba(PAL.muted,.3);ctx.lineWidth=2;ctx.stroke();
+ctx.restore();
+// title
+fitLabel('Rolling Hash Ring',cx,cy-R-W*.04,W*.3,W*.022,rgba(PAL.text,.9));
+// vnodes
+const pulse=Math.sin(t/400)*.15+.85;
+NODES.forEach((n,i)=>{
+const na=nodeAlpha(i,b);
+if(na<.01)return;
+n.v.forEach(v=>{
+const ang=-Math.PI/2+v*Math.PI*2,x=cx+Math.cos(ang)*R,y=cy+Math.sin(ang)*R,r=W*.007*pulse*na;
+const g=ctx.createRadialGradient(x,y,0,x,y,r*3);
+g.addColorStop(0,rgba(n.c,.4*na));g.addColorStop(1,rgba(n.c,0));
+ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,r*3,0,Math.PI*2);ctx.fill();
+ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=rgba(n.c,na);ctx.fill();
+});
+const mid=(n.v[0]+n.v[n.v.length-1])/2;
+const la=-Math.PI/2+mid*Math.PI*2;
+const lx=cx+Math.cos(la)*(R+W*.03),ly=cy+Math.sin(la)*(R+W*.03);
+fitLabel(n.id,lx,ly,W*.03,W*.012,rgba(n.c,na));
+});
+// keys & packets
+const ns=NODES;
+KEYS.forEach((k,i)=>{
+const tgt=findVnode(k.p,ns);if(!tgt)return;
+const ang=-Math.PI/2+k.p*Math.PI*2,or=R*1.45;
+const kx=cx+Math.cos(ang)*or,ky=cy+Math.sin(ang)*or;
+const tx=cx+Math.cos(-Math.PI/2+tgt.v*Math.PI*2)*R,ty=cy+Math.sin(-Math.PI/2+tgt.v*Math.PI*2)*R;
+const ph=(t/900+i*.28)%1,pe=ease(ph);
+const mx=(kx+tx)/2,my=(ky+ty)/2;
+const px=lerp(lerp(kx,mx,pe),lerp(mx,tx,pe),pe),py=lerp(lerp(ky,my,pe),lerp(my,ty,pe),pe);
+ctx.beginPath();ctx.moveTo(kx,ky);ctx.quadraticCurveTo(mx,my,tx,ty);
+ctx.strokeStyle=rgba(tgt.n.c,.15);ctx.lineWidth=1;ctx.stroke();
+ctx.beginPath();ctx.arc(px,py,W*.004,0,Math.PI*2);ctx.fillStyle=rgba(tgt.n.c,.8*(1-ph*.5));ctx.fill();
+fitLabel(k.l,kx,ky-W*.012,W*.06,W*.011,rgba(PAL.text,.85));
+});
+// HUD
+const barW=W*.12,barH=W*.012,sx=W*.05,sy=H*.82;
+NODES.forEach((n,i)=>{
+const na=nodeAlpha(i,b);
+const y=sy+i*(barH+W*.02);
+let cnt=0;KEYS.forEach(k=>{const tg=findVnode(k.p,ns);if(tg&&tg.n===n)cnt++});
+fitLabel(n.id,sx,y+barH*.7,W*.02,W*.011,rgba(PAL.text,na),'left');
+ctx.fillStyle=rgba(PAL.muted,.15*na);ctx.fillRect(sx+W*.02,y,barW,barH);
+ctx.fillStyle=rgba(n.c,.7*na);ctx.fillRect(sx+W*.02,y,cnt/KEYS.length*barW,barH);
+fitLabel(cnt+'',sx+W*.02+barW+W*.01,y+barH*.7,W*.03,W*.011,rgba(PAL.muted,na),'left');
+});
+fitLabel('key → nearest vnode clockwise',cx,H*.92,W*.4,W*.01,rgba(PAL.muted,.6));
+requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
