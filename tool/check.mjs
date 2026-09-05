@@ -55,13 +55,13 @@ if (process.argv.includes("--watch")) {
   const bitsOf = (r) => [r.clean, r.seek, r.collisions, r.seam, r.readme, r.content, r.visibility, !r.frozen].map((x) => (x ? 1 : 0)).join("");
   const prev = new Map();
   const timers = new Map();
-  console.log(`watching ${root} (debounce 1s; Ctrl-C to stop)`);
+  console.log(`watching ${only ? path.join(root, only) + ' (single folder)' : root} (debounce 1s; Ctrl-C to stop)`);
   watch(root, { recursive: true }, (_evt, fname) => {
     if (!fname) return;
     const m = String(fname).match(/^(.+)\/index\.html$/);
     if (!m) return;
     const topic = m[1];
-    if (!dirs.has(topic)) return;
+    if (!dirs.has(topic) || (only && topic !== only)) return; // --only filters the watch set
     if (timers.get(topic)) clearTimeout(timers.get(topic));
     timers.set(topic, setTimeout(async () => {
       timers.delete(topic);

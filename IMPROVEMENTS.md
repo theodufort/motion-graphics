@@ -137,6 +137,6 @@
   acceptance: a fixture with one label fully under another is flagged.
 - [x] bench.mjs: --compare should also compare pass/FAIL status changes
   (a row that went ok->FAIL is always printed, even with small delta).
-- [ ] check.mjs: --only <topic> --watch combo (watch a single folder's
+- [x] check.mjs: --only <topic> --watch combo (watch a single folder's
   index.html with per-file debounce); acceptance: editing the one file
   re-validates only that folder.
