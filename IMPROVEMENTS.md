@@ -216,3 +216,13 @@
   content pixel within 8px of the canvas edge at any parked frame
   (clipped labels); acceptance: a fixture with a label flush at the
   right edge is flagged, real graphics pass.
+- [ ] check.mjs --watch: also re-validate when README.md changes (currently
+  index.html only); acceptance: editing a README fires a re-check and the
+  H1 topic-word check result updates.
+- [ ] tool/generate.mjs: cap fix-pass retries on repeated IDENTICAL errors
+  (if the same error string appears on 2 consecutive fix passes, stop and
+  report); acceptance: a mock-LLM loop that returns the same broken HTML
+  exits after 2 passes instead of 3.
+- [ ] bench: add a per-prompt tps (tokens/sec) column to the timing table
+  from the logged generation timings; acceptance: bench --smoke-only
+  prints a tps column alongside seconds.
