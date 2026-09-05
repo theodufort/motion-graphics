@@ -364,3 +364,7 @@
   (a retemp: true field on the entry) so the trend can count how often
   the stuck-fix escape fires; acceptance: a stuck-then-retemp run shows
   retemp: true in its log line.
+- [ ] check.mjs: --json should include a run summary object (graphics
+  count, total checks wall-time, median per-graphic framesMs) so callers
+  can track harness speed drift over time; acceptance: --json has a
+  "summary" key with those three fields.
