@@ -282,3 +282,7 @@
   labels that only overlap in the t near-LOOP seam window), to keep the
   collision detector honest across the wrap; acceptance: the fixture
   fails the collisions or seam check and a clean variant passes.
+- [ ] tool/fixtures: add a 13th fixture, label-collision-at-seam (two
+  labels that only overlap in the t near-LOOP seam window), to keep the
+  collision detector honest across the wrap; acceptance: the fixture
+  fails the collisions or seam check and a clean variant passes.
