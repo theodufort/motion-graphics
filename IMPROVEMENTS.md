@@ -248,7 +248,7 @@
   each full check run (it grows with every generated topic); acceptance:
   after a run with >10 topics, oldest dirs are removed and the newest 10
   remain.
-- [ ] generate.mjs: retry the FIRST LLM call (not only fix passes) with the
+- [x] generate.mjs: retry the FIRST LLM call (not only fix passes) with the
   validation errors appended when the first pass fails validation AND the
   first-pass response was truncated mid-file (===HTML=== without closing
   marker); acceptance: a mock LLM that truncates its first response and

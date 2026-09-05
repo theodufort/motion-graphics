@@ -210,10 +210,11 @@ export async function generate(prompt, { force = false, allowExisting = process.
   let out = first.content;
   let { topic, html, readme } = parse(out, slugify(prompt));
 
-  if (!/<!DOCTYPE html>/i.test(html) || !html.includes("requestAnimationFrame")) {
-    // one retry with the failure called out
+  const truncated = /<!DOCTYPE html>/i.test(html) && !/<\/script>/.test(html) && !/<\/html>/.test(html);
+  if (!/<!DOCTYPE html>/i.test(html) || !html.includes("requestAnimationFrame") || truncated) {
+    // one retry with the failure called out (truncation = file cut off mid-<script>)
     messages.push({ role: "assistant", content: out.slice(0, 2000) },
-      { role: "user", content: "That output was malformed. Reply again with the exact TOPIC/===README===/===HTML=== format and a complete, valid HTML file." });
+      { role: "user", content: (truncated ? "That file was TRUNCATED mid-<script> — it must end with </script></body></html>. " : "") + "Reply again with the exact TOPIC/===README===/===HTML=== format and a complete, valid HTML file." });
     out = (await llm(messages)).content;
     ({ topic, html, readme } = parse(out, slugify(prompt)));
   }
