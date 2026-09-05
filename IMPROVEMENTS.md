@@ -264,7 +264,7 @@
   so a save that touches index.html + README.md triggers one validation,
   not two; acceptance: editing both files in quick succession produces a
   single "revalidating" line.
-- [ ] bench: log a per-run `warnings` total into bench-runs.jsonl so
+- [x] bench: log a per-run `warnings` total into bench-runs.jsonl so
   --trend can show the warning trend alongside pass/fix=0; acceptance:
   --trend prints a warn column for the last 5 runs.
 - [ ] validate.mjs: record canvas CSS size (clientWidth/Height) in the

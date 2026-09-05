@@ -92,7 +92,7 @@ appendFileSync(path.join(ROOT, "logs", "iterations.jsonl"),
   JSON.stringify({ ts: new Date().toISOString(), kind: "bench", score: pass, max: total,
     failures, seconds, fix: "bench run" }) + "\n");
 const benchLog = path.join(ROOT, "logs", "bench-runs.jsonl");
-appendFileSync(benchLog, JSON.stringify({ ts: new Date().toISOString(), pass, total, seconds, rows }) + "\n");
+appendFileSync(benchLog, JSON.stringify({ ts: new Date().toISOString(), pass, total, seconds, warnings: rows.reduce((a, x) => a + (x.warn ?? 0), 0), rows }) + "\n");
 console.log(`BENCH: ${pass}/${total} in ${seconds}s`);
 for (const f of failures) console.log(`  ✗ ${f}`);
 // per-prompt timing table
@@ -161,7 +161,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const runs = lines.slice(-5).map((l) => JSON.parse(l));
     for (const r of runs) {
       const f0 = r.rows.filter((x) => (x.fix ?? 0) === 0).length;
-      console.log(r.ts.slice(0, 16).replace("T", " ") + "  " + r.pass + "/" + r.total + " pass  fix=0: " + f0 + "/" + r.rows.length);
+      console.log(r.ts.slice(0, 16).replace("T", " ") + "  " + r.pass + "/" + r.total + " pass  fix=0: " + f0 + "/" + r.rows.length + "  warn: " + (r.warnings ?? "-"));
     }
     process.exit(0);
   }
