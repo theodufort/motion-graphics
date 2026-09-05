@@ -466,3 +466,12 @@
   LATEST run (not just the total warn count) so a single --trend call
   shows the current warning mix; acceptance: the last trend line
   carries a "warns:" breakdown by class.
+- [ ] validate.mjs: the minor-overlap and full-collision checks should
+  also consider the FILL COLOR — two labels with the same fill color
+  overlapping is visually a single element (not a collision);
+  acceptance: a fixture with two same-color labels overlapping by 40px
+  does NOT trigger a collision error.
+- [ ] bench.mjs: --trend should also print the warningsByClass for the
+  LATEST run (not just the total warn count) so a single --trend call
+  shows the current warning mix; acceptance: the last trend line
+  carries a "warns:" breakdown by class.
