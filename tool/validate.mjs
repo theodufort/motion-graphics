@@ -354,6 +354,7 @@ export async function validateWithBrowser(browser, folderPath) {
 
   timings.resize = Date.now() - tRes;
   r.labels = [...labelMaxA.keys()].filter((x) => x.trim()).length; // distinct non-empty fillText strings captured
+  r.size = cw && ch ? `${cw}x${ch}` : null; // rendered CSS resolution (backing store may be d-scaled)
   r.errors = [...pageErrors, ...errors];
   r.timings = timings;
   await page.close();
@@ -368,7 +369,7 @@ export async function validateWithBrowser(browser, folderPath) {
         : contentsByTime[t] ?? null;
       return { file: base, t, contentPx: content, seam: isSeam };
     });
-    writeFileSync(path.join(shotDir, "manifest.json"), JSON.stringify({ topic: name, LOOP, labels: r.labels, shots: manifest }, null, 1) + "\n");
+    writeFileSync(path.join(shotDir, "manifest.json"), JSON.stringify({ topic: name, LOOP, labels: r.labels, size: r.size, shots: manifest }, null, 1) + "\n");
   }
   return r;
 }

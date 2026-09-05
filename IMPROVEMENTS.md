@@ -267,7 +267,7 @@
 - [x] bench: log a per-run `warnings` total into bench-runs.jsonl so
   --trend can show the warning trend alongside pass/fix=0; acceptance:
   --trend prints a warn column for the last 5 runs.
-- [ ] validate.mjs: record canvas CSS size (clientWidth/Height) in the
+- [x] validate.mjs: record canvas CSS size (clientWidth/Height) in the
   report so the manifest documents the rendered resolution, not just the
   backing store; acceptance: manifest.json entries gain a size field like
   "1280x720".
