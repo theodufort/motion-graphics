@@ -248,3 +248,15 @@
   each full check run (it grows with every generated topic); acceptance:
   after a run with >10 topics, oldest dirs are removed and the newest 10
   remain.
+- [ ] generate.mjs: retry the FIRST LLM call (not only fix passes) with the
+  validation errors appended when the first pass fails validation AND the
+  first-pass response was truncated mid-file (===HTML=== without closing
+  marker); acceptance: a mock LLM that truncates its first response and
+  returns a complete one on the retry yields pass=1.
+- [ ] validate.mjs: add a `labels` count to the report (distinct
+  full-opacity strings captured by fillText) so the manifest records how
+  many texts each graphic actually draws; acceptance: manifest.json
+  entries gain a labels field and existing graphics show counts > 0.
+- [ ] docs: skill README "Validation loop" section should list the
+  warning-tier checks (edge-clip, near-frozen) and where warnings print;
+  acceptance: SKILL.md names both warning classes.
