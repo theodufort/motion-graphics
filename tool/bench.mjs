@@ -24,11 +24,28 @@ const slugMap = (() => {
 })();
 
 async function main() {
-const prompts = readFileSync(path.join(ROOT, "tool", "bench", "prompts.jsonl"), "utf8")
+let prompts = readFileSync(path.join(ROOT, "tool", "bench", "prompts.jsonl"), "utf8")
   .split("\n").filter(Boolean)
   .map((l) => JSON.parse(l))
-  .filter((p) => (smokeOnly ? p.smoke : true))
-  .slice(0, limit ? +limit : Infinity);
+  .filter((p) => (smokeOnly ? p.smoke : true));
+const topicsIdx = process.argv.indexOf("--topics");
+if (topicsIdx >= 0 && process.argv[topicsIdx + 1]) {
+  const wanted = process.argv[topicsIdx + 1].split(",").map((t) => t.trim());
+  prompts.forEach((p) => (p._topicGuess = p.prompt.slice(0, 40)));
+  // match by slug-map topic or prompt keywords
+  const map = new Map();
+  try {
+    for (const l of readFileSync(path.join(ROOT, "logs", "slug-map.jsonl"), "utf8").split("\n"))
+      if (l.trim()) { const e = JSON.parse(l); map.set(e.prompt, e.topic); }
+  } catch {}
+  const match = (p) => {
+    const topic = map.get(p.prompt) || "";
+    return wanted.some((w) => topic.includes(w) || p.prompt.includes(w));
+  };
+  if (!wanted.length) process.exit(2);
+  prompts = prompts.filter(match);
+}
+if (limit) prompts = prompts.slice(0, +limit);
 
 const t0 = Date.now();
 let pass = 0;

@@ -71,6 +71,18 @@ regressed):
 | `MG_CONCURRENCY` | `4` | parallel validators in `check.mjs` |
 | `MG_ALLOW_EXISTING` | unset | `1` lets `generate`/`bench`/`check` refresh existing generated folders (set automatically by bench/check; manual `generate.sh` stays protected) |
 
+| `MG_QUICK` | unset | `1` = fast validation (2 frames, 5 frozen samples, no resize, 2 shots) — for `--only`/`--watch` loops |
+| `MG_DEBUG` | unset | `1` makes `validate.mjs` dump every parked frame's `fillText` rects to stderr (collision/containment debugging) |
+
+### Helper scripts
+
+- `./close.sh <unique-substring> [note...]` — close exactly one open
+  `IMPROVEMENTS.md` item, verifying the `[x]` line afterwards (fused-line
+  safe). Use it whenever you close an item.
+- `./check.sh [--skip-gen | --regen | --only <topic> | --watch | --quick | --json]`
+- `./tool/generate.sh "<prompt>" [--prompt-file <path>] [--force]`
+- `node tool/bench.mjs [limit] [--topics a,b,c] [--compare before.log after.log]`
+
 ### The vision pass
 
 Deterministic probes (JS errors, `fillText` collision rects, seam pixel
