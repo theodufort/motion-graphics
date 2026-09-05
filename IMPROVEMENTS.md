@@ -219,7 +219,7 @@
 - [x] check.mjs --watch: also re-validate when README.md changes (currently
   index.html only); acceptance: editing a README fires a re-check and the
   H1 topic-word check result updates.
-- [ ] tool/generate.mjs: cap fix-pass retries on repeated IDENTICAL errors
+- [x] tool/generate.mjs: cap fix-pass retries on repeated IDENTICAL errors
   (if the same error string appears on 2 consecutive fix passes, stop and
   report); acceptance: a mock-LLM loop that returns the same broken HTML
   exits after 2 passes instead of 3.

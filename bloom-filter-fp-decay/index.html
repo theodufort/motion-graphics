@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../css/brand.css" />
+<link rel="stylesheet" href="../css/motion.css" />
+<style>
+*{margin:0;box-sizing:border-box}
+body{background:var(--bg);overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const cv=document.getElementById('stage'),ctx=cv.getContext('2d');
+const LOOP=30000;
+const PAL={accent:[62,207,142],fail:[239,68,68],text:[237,237,237],muted:[143,143,143],bg:[9,9,9]};
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+let W,H,dpr,L={};
+function resize(){dpr=devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);L={titleY:H*.12,bitY:H*.35,hashY:H*.55,meterY:H*.75,bitW:W*.6,bitX:W*.2,hashX:W*.3,meterX:W*.25,meterW:W*.5};}
+addEventListener('resize',resize);resize();
+const lerp=(a,b,t)=>a+(b-a)*t,clamp01=v=>Math.max(0,Math.min(1,v));
+const ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
+const bf=(t,a,b,f=.3)=>{if(t<a||t>=b)return 0;const p=(t-a)/(b-a);return Math.min(clamp01(p/f),clamp01((1-p)/f));};
+const BITS=16,insertBits=[2,5,8,11,14],fpBits=[3,7,12];
+let __seek=null;
+window.__time=v=>{__seek=v};
+window.__loop=LOOP;
+function fitLabel(txt,x,y,maxW,baseSize,col,alpha){let s=baseSize;ctx.font=`${s}px monospace`;while(ctx.measureText(txt).width>maxW*.9&&s>8){s-=2;ctx.font=`${s}px monospace`;}ctx.fillStyle=rgba(col,alpha);ctx.fillText(txt,x,y);}
+function drawBg(t){ctx.fillStyle=rgba(PAL.bg,1);ctx.fillRect(0,0,W,H);ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;const st=W/20;for(let x=0;x<W;x+=st){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}for(let y=0;y<H;y+=st){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}}
+function drawBits(t){const a=bf(t,0,5000);if(a<=0)return;const bw=L.bitW/BITS,bh=H*.04,pu=Math.sin(t/400)*.05+1;for(let i=0;i<BITS;i++){const x=L.bitX+i*bw,y=L.bitY,ins=insertBits.includes(i)&&t>5000,fp=fpBits.includes(i)&&t>15000&&t<20000,c=fp?PAL.fail:ins?PAL.accent:PAL.muted,sz=bw*.7*pu;ctx.fillStyle=rgba(c,a*(ins||fp?.9:.3));ctx.fillRect(x+(bw-sz)/2,y+(bh-sz)/2,sz,sz);ctx.strokeStyle=rgba(c,a*.5);ctx.strokeRect(x+(bw-sz)/2,y+(bh-sz)/2,sz,sz);}ctx.textAlign='left';fitLabel('bit array [m]',L.bitX,L.bitY-H*.03,bw*3,H*.02,PAL.muted,a);}
+function drawHashes(t){const a=bf(t,3000,10000);if(a<=0)return;const r=H*.025;for(let i=0;i<3;i++){const x=L.hashX+i*W*.15,y=L.hashY,pu=Math.sin(t/400+i*2)*.1+1;ctx.beginPath();ctx.arc(x,y,r*pu,0,Math.PI*2);ctx.fillStyle=rgba(PAL.accent,a*.15);ctx.fill();ctx.strokeStyle=rgba(PAL.accent,a*.7);ctx.lineWidth=1.5;ctx.stroke();ctx.textAlign='center';fitLabel(`h${i+1}`,x,y+H*.005,r*2,H*.018,PAL.text,a);}}
+function drawPackets(t){const bw=L.bitW/BITS;const draw=(t0,dur,targets,col,a)=>{for(let i=0;i<3;i++){const px=L.hashX+i*W*.15,py=L.hashY,tx=L.bitX+targets[i]*bw+bw/2,ty=L.bitY+H*.02,cx=(px+tx)/2,cy=Math.min(py,ty)-H*.08,pt=clamp01((t-t0-i*700)/dur);if(pt<=0||pt>=1)continue;const e=ease(pt),qx=(1-e)*(1-e)*px+2*(1-e)*e*cx+e*e*tx,qy=(1-e)*(1-e)*py+2*(1-e)*e*cy+e*e*ty;for(let j=1;j<=4;j++){const tt=clamp01(e-j*.05),tx2=(1-tt)*(1-tt)*px+2*(1-tt)*tt*cx+tt*tt*tx,ty2=(1-tt)*(1-tt)*py+2*(1-tt)*tt*cy+tt*tt*ty;ctx.beginPath();ctx.arc(tx2,ty2,3-j*.5,0,Math.PI*2);ctx.fillStyle=rgba(col,a*(1-j*.2));ctx.fill();}ctx.beginPath();ctx.arc(qx,qy,4,0,Math.PI*2);ctx.fillStyle=rgba(col,a);ctx.fill();}};const a1=bf(t,5000,10000);if(a1>0)draw(5000,1500,insertBits,PAL.accent,a1);const a2=bf(t,15000,20000);if(a2>0)draw(15000,1200,fpBits,PAL.fail,a2);}
+function drawMeter(t){const a=bf(t,20000,28000);if(a<=0)return;const mx=L.meterX,my=L.meterY,mw=L.meterW,mh=H*.03,p=clamp01((t-20000)/8000),fp=(1-p)*.7+.02,fw=mw*(1-fp);ctx.fillStyle=rgba(PAL.muted,a*.2);ctx.fillRect(mx,my,mw,mh);ctx.fillStyle=rgba(PAL.accent,a*.6);ctx.fillRect(mx,my,fw,mh);ctx.strokeStyle=rgba(PAL.accent,a*.5);ctx.strokeRect(mx,my,mw,mh);const mV=Math.floor(lerp(16,256,p));ctx.textAlign='left';fitLabel(`m = ${mV}`,mx,my-H*.02,mw*.3,H*.022,PAL.text,a);ctx.textAlign='right';fitLabel(`P(FP) ${(fp*100).toFixed(1)}%`,mx+mw,my-H*.02,mw*.3,H*.022,PAL.fail,a);ctx.textAlign='center';fitLabel('false-positive probability decay',mx+mw/2,my+mh+H*.025,mw,H*.016,PAL.muted,a);}
+function drawHud(t){const a=Math.max(bf(t,0,4000,.4),bf(t,26000,30000,.4));if(a>0){ctx.textAlign='center';fitLabel('Bloom Filter FP Decay',W*.5,L.titleY,W*.5,H*.035,PAL.text,a);}const labels=[[5000,10000,'inserting elements',PAL.accent],[10000,15000,'true positive',PAL.accent],[15000,20000,'false positive',PAL.fail]];for(const[a0,a1,txt,col]of labels){const al=bf(t,a0,a1,.2);if(al>0){ctx.textAlign='center';fitLabel(txt,W*.5,L.hashY+H*.05,W*.3,H*.02,col,al);}}}
+function frame(now){if(__seek!=null)now=__seek;const t=now%LOOP;ctx.clearRect(0,0,W,H);drawBg(t);drawBits(t);drawHashes(t);drawPackets(t);drawMeter(t);drawHud(t);requestAnimationFrame(frame);}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

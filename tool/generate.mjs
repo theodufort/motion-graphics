@@ -230,9 +230,15 @@ export async function generate(prompt, { force = false, allowExisting = process.
   let fixPasses = 0;
 
   // self-improvement fix loop
+  let lastErrs = null; // early stop: same error set twice in a row = model stuck
   for (let i = 0; !pass && i < FIX_PASSES; i++) {
     fixPasses = i + 1;
     const errs = report.errors.slice(0, 8).join("; ");
+    if (fixPasses > 1 && errs === lastErrs) {
+      console.error(`fix loop: identical errors on ${fixPasses} passes - stopping early (model stuck)`);
+      break;
+    }
+    lastErrs = errs;
     // name the failing CHECK CLASS so the first fix pass targets it
     const HINTS = {
       clean: "fix every JS error above (pageerror/console) — one error kills the whole graphic",

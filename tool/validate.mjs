@@ -244,8 +244,8 @@ export async function validateWithBrowser(browser, folderPath) {
   });
   // three states so a fading clipped label can't hide at the probe moment
   const [cw, ch] = await page.evaluate(() => { const c = document.querySelector("canvas"); return [c.clientWidth, c.clientHeight]; });
-  let clip = await clipProbe();
-  for (const f of [0.3, 0.6]) {
+  let clip = hasSeek ? await clipProbe() : 0;
+  if (hasSeek) for (const f of [0.3, 0.6]) {
     await page.evaluate((t) => window.__time(t), Math.round(LOOP * f));
     clip = Math.max(clip, await clipProbe());
   }
