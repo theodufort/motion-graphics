@@ -290,3 +290,14 @@
   fails entirely (pass:0, error:<msg>) so failed attempts are countable
   in the trend; acceptance: a mock LLM that returns HTTP 500 leaves a
   line with an error field.
+- [ ] bench --trend: also print the failed-attempt count (generations.jsonl
+  lines with topic:null) for the same window so pass-rate and failure-rate
+  sit side by side; acceptance: --trend output gains a "failed:" column
+  sourced from generations.jsonl.
+- [ ] validate.mjs: capture a full-canvas screenshot at the densest frame
+  (t of max contentPx) as densest.png in the shots dir so a vision pass
+  starts from the most informative image; acceptance: manifest.json
+  lists densest.png with a t value.
+- [ ] check.sh: support --since <rev> passthrough to check.mjs (the flag
+  exists in check.mjs but check.sh has no documented mention); acceptance:
+  check.sh --since HEAD~2 validates only changed folders and docs updated.
