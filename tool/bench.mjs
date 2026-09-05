@@ -77,7 +77,7 @@ for (let i = 0; i < prompts.length; i++) {
           if (e.topic === known && e.tps) { origTps = e.tps; break; }
         }
       } catch { /* no log */ }
-      g = { topic: known, pass: report.clean && report.seek && report.collisions && report.seam && report.readme, report, seconds: (Date.now() - t) / 1000, reused: true, tps: origTps };
+      g = { topic: known, pass: report.clean && report.seek && report.collisions && report.seam && report.readme, report, seconds: (Date.now() - t) / 1000, reused: true, tps: origTps, labels: typeof report.labels === "number" ? report.labels : null };
     } else {
       g = await generate(p.prompt, { force: regen, allowExisting: true });
     }
@@ -102,9 +102,9 @@ appendFileSync(benchLog, JSON.stringify({ ts: new Date().toISOString(), pass, to
 console.log(`BENCH: ${pass}/${total} in ${seconds}s`);
 for (const f of failures) console.log(`  ✗ ${f}`);
 // per-prompt timing table
-console.log("\n" + "topic".padEnd(30) + " " + "sec".padStart(5) + " " + "fix".padStart(3) + " " + "pass".padStart(4) + " " + "tps".padStart(5) + " " + "warn".padStart(4));
+console.log("\n" + "topic".padEnd(30) + " " + "sec".padStart(5) + " " + "fix".padStart(3) + " " + "pass".padStart(4) + " " + "tps".padStart(5) + " " + "warn".padStart(4) + " " + "lbl".padStart(4));
 for (const r of rows)
-  console.log(r.topic.slice(0, 30).padEnd(30) + " " + String(r.seconds ?? "-").padStart(5) + " " + String(r.fix ?? "-").padStart(3) + " " + (r.pass ? "ok" : "FAIL") + " " + String(r.tps ?? "-").padStart(5) + " " + String(r.warn ?? 0).padStart(4));
+  console.log(r.topic.slice(0, 30).padEnd(30) + " " + String(r.seconds ?? "-").padStart(5) + " " + String(r.fix ?? "-").padStart(3) + " " + (r.pass ? "ok" : "FAIL") + " " + String(r.tps ?? "-").padStart(5) + " " + String(r.warn ?? 0).padStart(4) + " " + String(r.labels ?? "-").padStart(4));
 process.exit(pass === total ? 0 : 1);
 }
 
@@ -113,10 +113,10 @@ function parseTable(file) {
   const lines = readFileSync(file, "utf8").split("\n");
   const out = new Map();
   for (const l of lines) {
-    const m = l.match(/^\S.{4,29}\s+([0-9]+|-)\s+([0-9]+|-)\s+(ok|FAIL)\s+([0-9.]+|-)?\s*(\d+)?\s*$/);
+    const m = l.match(/^\S.{4,29}\s+([0-9]+|-)\s+([0-9]+|-)\s+(ok|FAIL)\s+([0-9.]+|-)?\s*(\d+)?\s*(\d+|-)?\s*$/);
     if (!m) continue;
     const topic = l.slice(0, 30).trimEnd();
-    out.set(topic, { sec: m[1] === "-" ? null : +m[1], fix: m[2] === "-" ? null : +m[2], pass: m[3] === "ok", tps: m[4] === undefined || m[4] === "-" ? null : +m[4], warn: m[5] === undefined ? null : +m[5] });
+    out.set(topic, { sec: m[1] === "-" ? null : +m[1], fix: m[2] === "-" ? null : +m[2], pass: m[3] === "ok", tps: m[4] === undefined || m[4] === "-" ? null : +m[4], warn: m[5] === undefined ? null : +m[5], labels: m[6] === undefined || m[6] === "-" ? null : +m[6] });
   }
   return out;
 }
@@ -136,8 +136,10 @@ function compare(beforePath, afterPath) {
     const d = x.sec == null || y.sec == null ? null : Math.round(((y.sec - x.sec) / x.sec) * 100);
     const status = x.pass === y.pass ? "" : `  STATUS ${x.pass ? "ok" : "FAIL"}->${y.pass ? "ok" : "FAIL"}`;
     const warn = x.warn != null && y.warn != null && x.warn !== y.warn ? `  warns ${x.warn}->${y.warn}` : "";
-    if (Math.abs(d ?? 999) > 10 || status || warn) {
-      console.log(t.slice(0, 30).padEnd(30) + String(x.sec ?? "-").padStart(8) + String(y.sec ?? "-").padStart(8) + (hasTps ? String(x.tps ?? "-").padStart(5) + String(y.tps ?? "-").padStart(5) : "") + `  ${d == null ? "" : `${d > 0 ? "+" : ""}${d}% ${d > 0 ? "(slower)" : "(faster)"}`}${status}${warn}`);
+    // text-density delta: "got shorter" regressions that timing alone misses
+    const lbl = x.labels != null && y.labels != null && x.labels !== y.labels ? `  labels ${x.labels}->${y.labels}${y.labels < x.labels ? " (shorter)" : " (denser)"}` : "";
+    if (Math.abs(d ?? 999) > 10 || status || warn || lbl) {
+      console.log(t.slice(0, 30).padEnd(30) + String(x.sec ?? "-").padStart(8) + String(y.sec ?? "-").padStart(8) + (hasTps ? String(x.tps ?? "-").padStart(5) + String(y.tps ?? "-").padStart(5) : "") + `  ${d == null ? "" : `${d > 0 ? "+" : ""}${d}% ${d > 0 ? "(slower)" : "(faster)"}`}${status}${warn}${lbl}`);
       changed++;
     }
   }
@@ -150,7 +152,7 @@ function compare(beforePath, afterPath) {
   const db = dist(a), da = dist(b);
   console.log("first-pass (fix=0): " + db[0] + " -> " + da[0] + (db[0] < da[0] ? " (improved)" : db[0] > da[0] ? " (regressed)" : ""));
   console.log("fix-pass mix      : " + ["0", "1", "2", "3"].map((k) => `${k}x:${db[k] || 0}`).join(" ") + "  ->  " + ["0", "1", "2", "3"].map((k) => `${k}x:${da[k] || 0}`).join(" "));
-  console.log(`\n${changed} row(s) changed >10% or flipped status (of ${topics.length})`);
+  console.log(`\n${changed} row(s) changed >10%, flipped status, or drifted in warns/labels (of ${topics.length})`);
   process.exit(0);
 }
 

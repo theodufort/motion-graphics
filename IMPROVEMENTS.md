@@ -325,7 +325,7 @@
   LOOP-300 and t = 300), since labels that fit mid-loop can overflow when
   they grow/shrink near the wrap; acceptance: a fixture whose label width
   grows toward the seam triggers a label-fit warning only at seam times.
-- [ ] bench.mjs: persist per-row shot counts (labels seen in the manifest)
+- [x] bench.mjs: persist per-row shot counts (labels seen in the manifest)
   so --compare can diff text density between runs, catching "got shorter"
   regressions that timing alone misses; acceptance: --compare prints a
   label-delta line when two runs disagree.
