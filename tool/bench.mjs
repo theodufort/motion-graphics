@@ -86,9 +86,9 @@ appendFileSync(benchLog, JSON.stringify({ ts: new Date().toISOString(), pass, to
 console.log(`BENCH: ${pass}/${total} in ${seconds}s`);
 for (const f of failures) console.log(`  ✗ ${f}`);
 // per-prompt timing table
-console.log("\n" + "topic".padEnd(30) + " " + "sec".padStart(5) + " " + "fix".padStart(3) + " " + "pass");
+console.log("\n" + "topic".padEnd(30) + " " + "sec".padStart(5) + " " + "fix".padStart(3) + " " + "pass".padStart(4) + " " + "tps".padStart(5));
 for (const r of rows)
-  console.log(r.topic.slice(0, 30).padEnd(30) + " " + String(r.seconds ?? "-").padStart(5) + " " + String(r.fix ?? "-").padStart(3) + " " + (r.pass ? "ok" : "FAIL"));
+  console.log(r.topic.slice(0, 30).padEnd(30) + " " + String(r.seconds ?? "-").padStart(5) + " " + String(r.fix ?? "-").padStart(3) + " " + (r.pass ? "ok" : "FAIL") + " " + String(r.tps ?? "-").padStart(5));
 process.exit(pass === total ? 0 : 1);
 }
 
@@ -97,10 +97,10 @@ function parseTable(file) {
   const lines = readFileSync(file, "utf8").split("\n");
   const out = new Map();
   for (const l of lines) {
-    const m = l.match(/^\S.{4,29}\s+([0-9]+|-)\s+([0-9]+|-)\s+(ok|FAIL)\s*$/);
+    const m = l.match(/^\S.{4,29}\s+([0-9]+|-)\s+([0-9]+|-)\s+(ok|FAIL)\s+([0-9.]+|-)\s*$/);
     if (!m) continue;
     const topic = l.slice(0, 30).trimEnd();
-    out.set(topic, { sec: m[1] === "-" ? null : +m[1], pass: m[3] === "ok" });
+    out.set(topic, { sec: m[1] === "-" ? null : +m[1], pass: m[3] === "ok", tps: m[4] === "-" ? null : +m[4] });
   }
   return out;
 }
@@ -108,7 +108,8 @@ function compare(beforePath, afterPath) {
   const a = parseTable(beforePath), b = parseTable(afterPath);
   const topics = [...new Set([...a.keys(), ...b.keys()])];
   let changed = 0;
-  console.log("topic".padEnd(30) + " before".padStart(8) + " after".padStart(8) + "  delta");
+  const hasTps = [...a.values()].some((x) => x.tps != null) || [...b.values()].some((x) => x.tps != null);
+  console.log("topic".padEnd(30) + " before".padStart(8) + " after".padStart(8) + (hasTps ? " tpsB".padStart(5) + " tpsA".padStart(5) : "") + "  delta");
   for (const t of topics) {
     const x = a.get(t), y = b.get(t);
     if (!x || !y || x.sec == null || y.sec == null) {
@@ -119,7 +120,7 @@ function compare(beforePath, afterPath) {
     const d = x.sec == null || y.sec == null ? null : Math.round(((y.sec - x.sec) / x.sec) * 100);
     const status = x.pass === y.pass ? "" : `  STATUS ${x.pass ? "ok" : "FAIL"}->${y.pass ? "ok" : "FAIL"}`;
     if (Math.abs(d ?? 999) > 10 || status) {
-      console.log(t.slice(0, 30).padEnd(30) + String(x.sec ?? "-").padStart(8) + String(y.sec ?? "-").padStart(8) + `  ${d == null ? "" : `${d > 0 ? "+" : ""}${d}% ${d > 0 ? "(slower)" : "(faster)"}`}${status}`);
+      console.log(t.slice(0, 30).padEnd(30) + String(x.sec ?? "-").padStart(8) + String(y.sec ?? "-").padStart(8) + (hasTps ? String(x.tps ?? "-").padStart(5) + String(y.tps ?? "-").padStart(5) : "") + `  ${d == null ? "" : `${d > 0 ? "+" : ""}${d}% ${d > 0 ? "(slower)" : "(faster)"}`}${status}`);
       changed++;
     }
   }
