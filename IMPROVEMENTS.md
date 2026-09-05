@@ -87,9 +87,11 @@
   with "(was ...)"); acceptance met: edited 1nf index.html -> line in
   ~6s (1s debounce + full validate); bit diff verified by swapping in the
   static-canvas fixture (11111110, frozen error) then restoring (was
-  11111110).- [ ] tool/generate.sh: --prompt-file flag (read prompt from a file,
-  newlines preserved); acceptance: a two-line prompt file generates the
-  same topic as the inline form.
+  11111110).
+- [x] generate.mjs --prompt-file <path> (newlines preserved); acceptance
+  met: two-line gossip-protocol file -> gossip-anti-entropy-sync/, pass,
+  slug equivalence with inline form verified. (generate.sh just execs
+  generate.mjs, so both pick up the flag.)
 - [x] PROGRESS.md refreshed: 1155/1155, 33 graphics, 8-bit --watch,
   manifest.json, tps logging, bench 20/20 + timing table, prompt-file
   flag, rules 1-18 — all facts present.- [x] validate.mjs: report.timings (frames/seam/collisions/frozen/resize
