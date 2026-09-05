@@ -1,0 +1,31 @@
+<!doctype html><html><head><meta charset="utf-8"><title>edge clip seam</title></head>
+<body style="margin:0"><canvas id="c" width="1280" height="720"></canvas>
+<script>
+const c = document.getElementById("c"), ctx = c.getContext("2d");
+const LOOP = 8000;
+function draw(t) {
+  const p = t / LOOP;
+  ctx.clearRect(0, 0, c.width, c.height);
+  // 160px inset frame: outside every edge band (64px) and still small enough
+  // that the moving dot/chip dominate the px-churn ratio
+  ctx.fillStyle = "#0b0d12"; ctx.fillRect(160, 160, c.width - 320, c.height - 320);
+  const dot = 300 + p * 500;
+  ctx.fillStyle = "#4da3ff"; ctx.beginPath(); ctx.arc(dot, 200, 14, 0, 7); ctx.fill();
+  ctx.font = "18px monospace"; ctx.fillStyle = "#fff";
+  ctx.fillText("edge clip seam", 300, 200);
+  // a badge/chip whose right half bleeds past the canvas edge ONLY near the
+  // wrap: center drifts 200 -> 1285, chip is 200px wide -> at p->1 it spans
+  // 1185..1385 (95px of it visible, contiguous) and mid-loop it sits fully
+  // on canvas. Text labels are unreliable fixtures (inter-letter gaps break
+  // contiguous runs), so the fixture uses a solid chip.
+  ctx.fillStyle = "#31c48d";
+  const cx = 200 + p * 1085;
+  ctx.fillRect(cx - 100, 400, 200, 28);
+  ctx.fillStyle = "#04120c";
+  ctx.fillText("wrap zone", cx - 33, 419);
+}
+let frozen = false;
+function loop() { if (!frozen) draw(performance.now() % LOOP); requestAnimationFrame(loop); }
+loop();
+window.__time = (t) => { t = t % LOOP; frozen = true; draw(t); };
+</script></body></html>

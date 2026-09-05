@@ -321,7 +321,7 @@
   promotes ⚠ warnings to errors for CI gate runs; acceptance:
   dns-recursive-resolution fails under MG_STRICT=1 (edge-clip) and
   passes under the default.
-- [ ] validate.mjs: run the label-fit check at the seam window too (t =
+- [x] validate.mjs: run the label-fit check at the seam window too (t =
   LOOP-300 and t = 300), since labels that fit mid-loop can overflow when
   they grow/shrink near the wrap; acceptance: a fixture whose label width
   grows toward the seam triggers a label-fit warning only at seam times.

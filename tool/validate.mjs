@@ -247,33 +247,61 @@ export async function validateWithBrowser(browser, folderPath) {
   const clipProbe = () => page.evaluate(() => {
     const c = document.querySelector("canvas");
     const d = c.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, c.width, c.height).data;
-    const W = c.clientWidth, H = c.clientHeight, M = 8, S = 4; // CSS px (backing store may be d-scaled)
+    const W = c.clientWidth, H = c.clientHeight, M = 8, S = 4, BW = 64; // CSS px (backing store may be d-scaled)
     const row = (x, y) => d[(y * W + x) * 4 + 3] > 64; // ignore hairline grids (~.045 alpha)
-    let cluster = 0, run = 0, x, y;
-    for (x = 0; x < W; x += S) { if (row(x, 0) || row(x, M)) { run++; cluster = Math.max(cluster, run); } else run = 0; }
-    for (y = 0; y < H; y += S) { if (row(0, y) || row(M, y)) { run++; cluster = Math.max(cluster, run); } else run = 0; }
-    for (x = 0; x < W; x += S) { if (row(x, H - 1) || row(x, H - 1 - M)) { run++; cluster = Math.max(cluster, run); } else run = 0; }
-    for (y = 0; y < H; y += S) { if (row(W - 1, y) || row(W - 1 - M, y)) { run++; cluster = Math.max(cluster, run); } else run = 0; }
-    return cluster;
+    let cluster = 0, run = 0, x, y; // cluster is in px
+    // top/bottom edges: horizontal runs (sampled, ×S to true px)
+    for (x = 0; x < W; x += S) { if (row(x, 0) || row(x, M)) { run++; if (run * S > cluster) cluster = run * S; } else run = 0; }
+    for (x = 0; x < W; x += S) { if (row(x, H - 1) || row(x, H - 1 - M)) { run++; if (run * S > cluster) cluster = run * S; } else run = 0; }
+    // left/right edges: vertical runs
+    for (y = 0; y < H; y += S) { if (row(0, y) || row(M, y)) { run++; if (run * S > cluster) cluster = run * S; } else run = 0; }
+    for (y = 0; y < H; y += S) { if (row(W - 1, y) || row(W - 1 - M, y)) { run++; if (run * S > cluster) cluster = run * S; } else run = 0; }
+    // left/right edges: horizontal runs inside a WIDE band (a clipped text row
+    // is only ~14px TALL -> the vertical scan never sees >32px; its visible
+    // part extends up to BW px INTO the band). Step 1 so runs are true px.
+    let bandRun = 0, bandCount = 0; // wide-band: a clipped LABEL spans >=2 y-samples;
+    // a 1px hairline divider/hairline grid row spans exactly 1 -> ignore it
+    for (y = 0; y < H; y += S) {
+      let rowBest = 0, r = 0;
+      for (x = BW - 1; x >= 0; x--) { if (row(x, y)) { if (++r > rowBest) rowBest = r; } else r = 0; }
+      r = 0;
+      for (x = W - 1; x >= W - 1 - BW; x--) { if (row(x, y)) { if (++r > rowBest) rowBest = r; } else r = 0; }
+      if (rowBest >= 20) { bandRun = Math.max(bandRun, rowBest); bandCount++; }
+    }
+    return { cluster, bandRun, bandCount };
   });
   // three states so a fading clipped label can't hide at the probe moment
   const [cw, ch] = await page.evaluate(() => { const c = document.querySelector("canvas"); return [c.clientWidth, c.clientHeight]; });
   const tClip = Date.now();
-  let clip = hasSeek ? await clipProbe() : 0;
-  if (hasSeek) for (const f of [0.3, 0.6]) {
-    await page.evaluate((t) => window.__time(t), Math.round(LOOP * f));
-    clip = Math.max(clip, await clipProbe());
+  let clip = 0, bandRun = 0, bandCount = 0;
+  const probeAll = (pr) => { clip = Math.max(clip, pr.cluster); bandRun = Math.max(bandRun, pr.bandRun); bandCount = Math.max(bandCount, pr.bandCount); };
+  if (hasSeek) {
+    probeAll(await clipProbe());
+    for (const f of process.env.MG_QUICK === "1" ? [0.3, 0.6] : [0.005, 0.3, 0.6, 0.995]) {
+      // 0.005/0.995 straddle the wrap: a label that drifts off-canvas only
+      // near the seam is exactly what the mid-loop probes miss
+      await page.evaluate((t) => window.__time(t), Math.round(LOOP * f));
+      probeAll(await clipProbe());
+    }
   }
-  if (process.env.MG_DEBUG) console.error(`[debug clip] run=${clip * 4} css-px`);
+  if (process.env.MG_DEBUG) console.error(`[debug clip] cluster=${clip} band=${bandRun}px x${bandCount}rows`);
   r.edgeClip = 1;
-  // 20px ≈ one text row; full-bleed backgrounds/bars span >25% of the edge
+  // 32px ≈ one text row; full-bleed backgrounds/bars span >25% of the edge
   const longest = Math.max(cw, ch);
   timings.clipMs = Date.now() - tClip;
-  if (clip * 4 >= 32 && clip * 4 < 0.25 * longest) {
+  if (clip >= 32 && clip < 0.25 * longest) {
     // warning, not error: legit designs also hug the edge (progress bars,
     // corner tags, edge nodes) — a clipped LABEL is the case a human should check
-    r.edgeClip = 0; r.warnings.push(`edge-clip: ${clip * 4}px+ contiguous content along canvas edge — verify no label is clipped`);
+    r.edgeClip = 0; r.warnings.push(`edge-clip: ${clip}px+ contiguous content along canvas edge — verify no label is clipped`);
   } // 32px ≈ one text row
+  // wide-band rule: >=2 text-row samples of 20px+ hugging a vertical edge =
+  // a clipped label (hairline dividers span exactly 1 sample -> never fire)
+  // full-bleed backgrounds fill EVERY edge sample (bandCount ~ H/S) — a clipped
+  // label occupies only a few rows; cap at 25% of edge samples
+  const rowSamples = Math.round(ch / 4);
+  if (r.edgeClip && bandRun >= 20 && bandCount >= 2 && bandCount < 0.25 * rowSamples && bandRun < 0.25 * longest) {
+    r.edgeClip = 0; r.warnings.push(`edge-clip: ${bandRun}px label-width content on canvas edge (${bandCount} rows) — verify no label is clipped`);
+  }
   const seamPx = Math.max(...seamPts.map((p) => p?.content || 0));
   // a moving element (spinner, marquee, ping) crossing the wrap can keep a seam
   // frame's content high while it is visually dark — a churn-gated variant of
