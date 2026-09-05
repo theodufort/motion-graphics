@@ -124,6 +124,23 @@ Any failure → fix the layout/timing in the single `index.html` (and keep the
 Only report done when the full loop passes. Do not declare success from a
 single screenshot.
 
+## Warning tier (⚠ — verify, don't auto-fail)
+
+`tool/validate.mjs` has two warning-tier checks that print `⚠` lines instead
+of failing, because legitimate designs can trip them:
+
+- **edge-clip** — ≥32px of contiguous content hugging a canvas edge in at
+  least two parked states (and <25% of that edge). Clipped labels are the
+  case to confirm; progress bars and edge nodes are often intentional.
+- **near-frozen** — px churn 0.5–2% across the loop: real but subtle motion.
+  Warns instead of failing the frozen check so slow pulses aren't "fixed"
+  into jumpy ones.
+
+Warnings surface in the human verdict (`⚠ <topic>: <warning>`), in
+`check --json` (`warnings` + `graphicsWarnings`), in the bench `warn`
+column, and as fix-loop hints. A clean ⚠-free pass is the quality bar even
+though the score ignores warnings.
+
 ## Known false alarms (don't "fix" these)
 
 - **Frozen canvas / stuck counters in an unfocused tab** — idle integrated-

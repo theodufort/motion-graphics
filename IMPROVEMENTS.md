@@ -257,6 +257,6 @@
   full-opacity strings captured by fillText) so the manifest records how
   many texts each graphic actually draws; acceptance: manifest.json
   entries gain a labels field and existing graphics show counts > 0.
-- [ ] docs: skill README "Validation loop" section should list the
+- [x] docs: skill README "Validation loop" section should list the
   warning-tier checks (edge-clip, near-frozen) and where warnings print;
   acceptance: SKILL.md names both warning classes.
