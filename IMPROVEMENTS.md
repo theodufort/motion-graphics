@@ -123,7 +123,7 @@
   quick run and manifest lists exactly 2.
 - [x] bench: --compare <before.log> <after.log> diffing per-prompt
   timing tables; acceptance: prints rows where seconds changed by >10%.
-- [ ] validate.mjs: seam pixel cross-check should also probe at seam-b+600ms
+- [x] validate.mjs: seam pixel cross-check should also probe at seam-b+600ms
   (asymmetry: a dark frame just after the wrap is currently caught only if
   it lands in the 4-point window); acceptance: a fixture with a dark band
   at 300-900ms after wrap is flagged.

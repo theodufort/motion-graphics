@@ -56,6 +56,8 @@ regressed):
 | `blank-canvas/` | content (densest frame < 500 px) |
 | `static-canvas/` | frozen (near-zero content-px delta across the loop) |
 | `invisible-label/` | visibility (all-frames label at alpha 0) |
+| `lost-label-seam/` | seamContinuity (label vanishes at wrap, never reappears) |
+| `dark-band-post/` | seam (dark band 300-900ms *after* the wrap) |
 
 ## Environment knobs
 

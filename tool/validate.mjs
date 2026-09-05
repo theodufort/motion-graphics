@@ -126,7 +126,7 @@ export async function validateWithBrowser(browser, folderPath) {
   const tSeam = Date.now();
   // seam window: max content across the wrap neighbourhood (crossfades dip
   // briefly at the exact seam but a real dark frame stays empty over the window)
-  const seamProbes = [LOOP - 900, LOOP - 300, 300, 900];
+  const seamProbes = [LOOP - 900, LOOP - 300, 300, 900, 300 + Math.min(600, Math.floor(LOOP * 0.05))]; // +1: post-wrap dark-band probe
   const seamPts = [];
   for (const sp of seamProbes) seamPts.push(await park(sp));
   const seamA = seamPts[1], seamB = seamPts[2];
@@ -185,9 +185,9 @@ export async function validateWithBrowser(browser, folderPath) {
   r.content = midPx >= 500 ? 1 : 0;
   if (!r.content) errors.push(`content: densest frame only ${midPx} px (blank canvas?)`);
   const seamPx = Math.max(...seamPts.map((p) => p?.content || 0));
-  const darkSeam = midPx > 1000 && seamPx < 0.3 * midPx;
+  const darkSeam = midPx > 1000 && Math.min(seamPx, seamPts[4]?.content ?? seamPx) < 0.3 * midPx;
   r.seam = hasSeek && !emptySeam && !collapsed && !darkSeam ? 1 : 0;
-  if (darkSeam) errors.push(`seam: dark frame at loop wrap (content px ${seamPx} vs mid ${midPx})`);
+  if (darkSeam) { const darkPx = Math.min(seamPx, seamPts[4]?.content ?? seamPx); errors.push(`seam: dark frame at loop wrap (darkest seam probe ${darkPx}px vs mid ${midPx}px)`); }
   else if (emptySeam) errors.push("seam: near-empty frames at loop wrap");
   else if (collapsed) errors.push("seam: label density collapses at loop wrap");
 

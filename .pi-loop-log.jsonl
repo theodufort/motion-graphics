@@ -38,3 +38,8 @@
 {"ts":"2026-09-05T00:58:06.335Z","iteration":38,"event":"continue","stuckStreak":0}
 {"ts":"2026-09-05T01:03:26.252Z","iteration":39,"event":"continue","stuckStreak":0}
 {"ts":"2026-09-05T01:06:20.393Z","iteration":40,"event":"continue","stuckStreak":0}
+{"ts":"2026-09-05T01:08:51.130Z","iteration":41,"event":"continue","stuckStreak":0}
+{"ts":"2026-09-05T01:10:58.803Z","iteration":41,"event":"error","stuckStreak":0,"notice":"Model/provider error (Connection error.); retry #1 in 5s.","reason":"Connection error."}
+{"ts":"2026-09-05T01:11:00.877Z","iteration":41,"event":"error","stuckStreak":0,"notice":"Model/provider error (Connection error.); retry #2 in 10s.","reason":"Connection error."}
+{"ts":"2026-09-05T01:11:04.936Z","iteration":41,"event":"error","stuckStreak":0,"notice":"Model/provider error (Connection error.); retry #3 in 20s.","reason":"Connection error."}
+{"ts":"2026-09-05T01:11:12.999Z","iteration":41,"event":"error","stuckStreak":0,"notice":"Model/provider error (Connection error.); retry #4 in 40s.","reason":"Connection error."}

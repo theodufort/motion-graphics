@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>dark band post fixture</title>
+<style>body{margin:0;background:#090909}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+const LOOP = 8000;
+window.__loop = LOOP;
+let W = 960, H = 540, __seek = null;
+canvas.width = W; canvas.height = H;
+window.__time = (v) => { __seek = v; };
+function frame(now) {
+  if (__seek != null) now = __seek;
+  const t = now % LOOP;
+  ctx.clearRect(0, 0, W, H);
+  // dark band 300..900ms after the wrap: nothing drawn there
+  if (t < 300 || t > 900) {
+    ctx.fillStyle = "rgba(62,207,142,0.9)";
+    ctx.fillRect(W * 0.3 + Math.sin(t / 400) * 40, H * 0.45, 300, 120);
+    ctx.font = "700 22px monospace"; ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(237,237,237,0.95)";
+    ctx.fillText("alive elsewhere", 480, 200);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
