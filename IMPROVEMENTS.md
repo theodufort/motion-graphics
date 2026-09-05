@@ -121,5 +121,5 @@
 - [x] validate.mjs: cut PNG output in --quick (skip t-seam PNGs, keep 2
   frames + manifest); acceptance: tool/shots/<topic> has 2 PNGs after a
   quick run and manifest lists exactly 2.
-- [ ] bench: --compare <before.log> <after.log> diffing per-prompt
+- [x] bench: --compare <before.log> <after.log> diffing per-prompt
   timing tables; acceptance: prints rows where seconds changed by >10%.

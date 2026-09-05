@@ -64,6 +64,8 @@ mkdirSync(path.join(ROOT, "logs"), { recursive: true });
 appendFileSync(path.join(ROOT, "logs", "iterations.jsonl"),
   JSON.stringify({ ts: new Date().toISOString(), kind: "bench", score: pass, max: total,
     failures, seconds, fix: "bench run" }) + "\n");
+const benchLog = path.join(ROOT, "logs", "bench-runs.jsonl");
+appendFileSync(benchLog, JSON.stringify({ ts: new Date().toISOString(), pass, total, seconds, rows }) + "\n");
 console.log(`BENCH: ${pass}/${total} in ${seconds}s`);
 for (const f of failures) console.log(`  ✗ ${f}`);
 // per-prompt timing table
@@ -73,6 +75,46 @@ for (const r of rows)
 process.exit(pass === total ? 0 : 1);
 }
 
+// --- --compare <before> <after>: diff two bench timing tables ---------------
+function parseTable(file) {
+  const lines = readFileSync(file, "utf8").split("\n");
+  const out = new Map();
+  for (const l of lines) {
+    const m = l.match(/^\S.{4,29}\s+([0-9]+|-)\s+([0-9]+|-)\s+(ok|FAIL)\s*$/);
+    if (!m) continue;
+    const topic = l.slice(0, 30).trimEnd();
+    out.set(topic, { sec: m[1] === "-" ? null : +m[1], pass: m[3] === "ok" });
+  }
+  return out;
+}
+function compare(beforePath, afterPath) {
+  const a = parseTable(beforePath), b = parseTable(afterPath);
+  const topics = [...new Set([...a.keys(), ...b.keys()])];
+  let changed = 0;
+  console.log("topic".padEnd(30) + " before".padStart(8) + " after".padStart(8) + "  delta");
+  for (const t of topics) {
+    const x = a.get(t), y = b.get(t);
+    if (!x || !y || x.sec == null || y.sec == null) {
+      console.log(t.slice(0, 30).padEnd(30) + String(x?.sec ?? "-").padStart(8) + String(y?.sec ?? "-").padStart(8) + "  " + (x ? "only-in-before" : "only-in-after"));
+      changed++;
+      continue;
+    }
+    const d = Math.round(((y.sec - x.sec) / x.sec) * 100);
+    if (Math.abs(d) > 10) {
+      console.log(t.slice(0, 30).padEnd(30) + String(x.sec).padStart(8) + String(y.sec).padStart(8) + `  ${d > 0 ? "+" : ""}${d}% ${d > 0 ? "(slower)" : "(faster)"}`);
+      changed++;
+    }
+  }
+  console.log(`\n${changed} row(s) changed >10% (of ${topics.length})`);
+  process.exit(0);
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const ci = process.argv.indexOf("--compare");
+  if (ci !== -1) {
+    const before = process.argv[ci + 1], after = process.argv[ci + 2];
+    if (!before || !after) { console.error("usage: node tool/bench.mjs --compare <before.log> <after.log>"); process.exit(2); }
+    compare(before, after);
+  }
   main().catch((e) => { console.error(e.message); process.exit(1); });
 }
