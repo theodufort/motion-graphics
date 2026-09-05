@@ -58,6 +58,7 @@ regressed):
 | `invisible-label/` | visibility (all-frames label at alpha 0) |
 | `lost-label-seam/` | seamContinuity (label vanishes at wrap, never reappears) |
 | `dark-band-post/` | seam (dark band 300-900ms *after* the wrap) |
+| `contained-label/` | collisions (small label fully inside a much bigger one) |
 
 ## Environment knobs
 

@@ -144,12 +144,16 @@ export async function validateWithBrowser(browser, folderPath) {
   const tCol = Date.now();
   // collision check at every parked frame
   const overlap = (a, b) => {
-    const ax = { l: a.x, r: a.x + a.w }, ay = { t: a.y - a.asc, b: a.y + a.desc };
-    const bx = { l: b.x, r: b.x + b.w }, by = { t: b.y - b.asc, b: b.y + b.desc };
+    // ft rects store y = TOP edge (patch converts baseline->top)
+    const ax = { l: a.x, r: a.x + a.w }, ay = { t: a.y, b: a.y + a.asc + a.desc };
+    const bx = { l: b.x, r: b.x + b.w }, by = { t: b.y, b: b.y + b.asc + b.desc };
     const ox = Math.min(ax.r, bx.r) - Math.max(ax.l, bx.l);
     const oy = Math.min(ay.b, by.b) - Math.max(ay.t, by.t);
     return { ox, oy };
   };
+  if (process.env.MG_DEBUG)
+    for (const [t, rects] of Object.entries(rectsByTime))
+      console.error(`[debug t=${t}]`, JSON.stringify(rects.map((r) => ({ s: r.s, x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.w), asc: Math.round(r.asc), desc: Math.round(r.desc), a: +r.a.toFixed(2) }))));
   const cullMap = new Map(); // pair key -> Set of t's
   for (const [t, rects] of Object.entries(rectsByTime)) {
     for (let i = 0; i < rects.length; i++)
@@ -159,7 +163,12 @@ export async function validateWithBrowser(browser, folderPath) {
         const mh = Math.min(a.asc + a.desc, b.asc + b.desc);
         // skip crossfades: a fading-out / fading-in pair is intentional
         if (Math.min(a.a, b.a) < 0.6) continue;
-        if (ox > 5 && oy > 0.6 * mh && a.s !== b.s && !a.s.includes(b.s) && !b.s.includes(a.s)) {
+        const interA = Math.max(0, ox) * Math.max(0, oy);
+        const aArea = (a.asc + a.desc) * a.w, bArea = (b.asc + b.desc) * b.w;
+        const contained = interA >= 0.85 * Math.min(aArea, bArea) &&
+          Math.max(a.asc + a.desc, b.asc + b.desc) > 1.6 * Math.min(a.asc + a.desc, b.asc + b.desc);
+        if (ox > 5 && a.s !== b.s && !a.s.includes(b.s) && !b.s.includes(a.s) &&
+          (oy > 0.6 * mh || (contained && a.a >= 0.6 && b.a >= 0.6))) {
           const key = [a.s, b.s].sort().join("\u0000");
           if (!cullMap.has(key)) cullMap.set(key, new Set());
           cullMap.get(key).add(t);
