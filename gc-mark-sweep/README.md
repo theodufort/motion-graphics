@@ -1,4 +1,4 @@
-# Garbage Collection Mark Sweep
+# GC Mark Sweep — Garbage Collection
 Visualizes the two-phase GC algorithm: a mark pass traces reachable objects from roots, then a sweep pass reclaims unreachable memory.
 ## Story beats
 | Time (s) | Beat | What's on screen |

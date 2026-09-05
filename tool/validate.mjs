@@ -296,6 +296,9 @@ export async function validateWithBrowser(browser, folderPath) {
     const words = name.split(/[-_]/).filter((w) => w.length >= 4 && !STOP.has(w.toLowerCase()));
     if (!words.length) return 1;
     const hl = h1.toLowerCase();
+    // title word (first 3-6+ char word of the H1) must also appear in the folder name
+    const tmatch = h1.replace(/^#\s+/, "").split(/[^a-z0-9]+/i).find((w) => w.length >= 3 && !STOP.has(w.toLowerCase())) || "";
+    if (tmatch && !name.toLowerCase().includes(tmatch.toLowerCase())) return 0; // title word must appear in the folder name
     return words.some((w) => { const x = w.toLowerCase(); return hl.includes(x) || hl.includes(x.replace(/s$/, "")); }) ? 1 : 0;
   })();
   if (!r.readme) errors.push("README.md missing, trivial, or H1 doesn't match the topic words");

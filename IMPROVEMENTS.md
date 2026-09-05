@@ -216,7 +216,7 @@
   content pixel within 8px of the canvas edge at any parked frame
   (clipped labels); acceptance: a fixture with a label flush at the
   right edge is flagged, real graphics pass.
-- [ ] check.mjs --watch: also re-validate when README.md changes (currently
+- [x] check.mjs --watch: also re-validate when README.md changes (currently
   index.html only); acceptance: editing a README fires a re-check and the
   H1 topic-word check result updates.
 - [ ] tool/generate.mjs: cap fix-pass retries on repeated IDENTICAL errors

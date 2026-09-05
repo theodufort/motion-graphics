@@ -1,4 +1,4 @@
-# Creator Pipe — Auth Schema ERD
+# Auth Schema ERD
 
 An entity-relationship diagram of a hand-rolled auth schema (users,
 sessions, password_resets) beside the public app schema, animated through
