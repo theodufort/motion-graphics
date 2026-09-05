@@ -157,3 +157,12 @@
   validates exactly that folder.
 - [x] bench.mjs: record per-prompt tps in bench-runs.jsonl (currently
   only in generations.jsonl); acceptance: bench-runs rows carry tps.
+- [ ] check.mjs: print warnings[] from any graphic in the human (non-json)
+  verdict too, so near-frozen notices are visible without --json;
+  acceptance: near-frozen fixture via --only shows the warning line.
+- [ ] bench.mjs: reuse-path rows should carry validate timings (median of
+  the last N runs from bench-runs.jsonl) for --compare; acceptance:
+  --compare shows a timings column when both logs have it.
+- [ ] AGENTS.md: document the new tools (close.sh, MG_DEBUG, --since,
+  --watch --only, near-frozen band) in the tooling section; acceptance:
+  AGENTS.md mentions all five.
