@@ -309,7 +309,7 @@
   MG_NO_SHOTS=1 writes no new PNGs and the manifest's shots list is empty.
 - [x] bench.mjs: --topics should accept a comma-separated list (currently
   one topic per run); acceptance: --topics a,b validates both in one run.
-- [ ] bench --topics: when a wanted keyword matches no bench prompt, print
+- [x] bench --topics: when a wanted keyword matches no bench prompt, print
   a stderr hint listing the closest topics (slug-map + prompt prefixes) so
   "matched nothing" stops being a silent 1-of-2 surprise; acceptance:
   --topics "nonexistent-topic" prints a hint naming the available topics.

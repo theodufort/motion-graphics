@@ -44,6 +44,12 @@ if (topicsIdx >= 0 && process.argv[topicsIdx + 1]) {
   };
   if (!wanted.length) process.exit(2);
   prompts = prompts.filter(match);
+  if (!prompts.length) {
+    // "matched nothing" should not be silent — name what IS available
+    const avail = [...new Set([...map.values()].filter(Boolean))].slice(0, 12);
+    console.error(`warning: no bench prompt matches ${wanted.map((w) => `"${w}"`).join(", ")}\navailable topics: ${avail.join(", ")}`);
+    process.exit(2);
+  }
 }
 if (limit) prompts = prompts.slice(0, +limit);
 
