@@ -113,6 +113,7 @@ const CONCURRENCY = +(process.env.MG_CONCURRENCY || 4);
 let cursor = 0;
 const graphicsScores = {};
 const graphicsWarnings = {};
+const graphicsTimings = {};
 async function worker() {
   while (cursor < graphics.length) {
     const name = graphics[cursor++];
@@ -129,6 +130,7 @@ async function worker() {
     score += pts;
     graphicsScores[name] = pts;
     if (r.warnings?.length) graphicsWarnings[name] = r.warnings;
+    if (r.timings) graphicsTimings[name] = r.timings;
     if (pts < 35 || r.resize === 0 || r.content === 0 || r.frozen || r.visibility === 0 || r.seamContinuity === 0) problems.push(`${name}: ${pts}/35 (${(r.errors || []).join("; ") || (r.resize === 0 ? "resize check failed" : r.content === 0 ? "content check failed" : r.frozen ? "frozen animation" : r.visibility === 0 ? "invisible labels" : r.seamContinuity === 0 ? "seam label continuity" : r.edgeClip === 0 ? "edge-clip" : "check bits failed")})`);
   }
 }
@@ -218,7 +220,7 @@ const smokePerfect = skipGen || (smoke.length === 2 && !problems.some((p) => p.s
 const asJson = process.argv.includes("--json");
 const fast = process.argv.includes("--fast"); // --fast = quick mode (MG_QUICK=1 via check.sh); label only
 if (asJson) {
-  console.log(JSON.stringify({ ts: new Date().toISOString(), score, max: existingMax + smokeMax, graphics: graphics.length, graphicsScores, graphicsWarnings, warnings: Object.entries(graphicsWarnings).flatMap(([n, ws]) => ws.map((w) => n + ": " + w)), problems }));
+  console.log(JSON.stringify({ ts: new Date().toISOString(), score, max: existingMax + smokeMax, graphics: graphics.length, graphicsScores, graphicsTimings, graphicsWarnings, warnings: Object.entries(graphicsWarnings).flatMap(([n, ws]) => ws.map((w) => n + ": " + w)), problems }));
 } else {
   console.log(`graphics: ${graphics.length}${skipGen ? "  [skip-gen]" : ""}${regen ? "  [regen]" : ""}${fast ? "  (quick)" : ""}  score: ${score}/${existingMax + smokeMax}`);
   for (const p of problems) console.log(`  ✗ ${p}`);

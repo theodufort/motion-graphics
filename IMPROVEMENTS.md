@@ -271,7 +271,7 @@
   report so the manifest documents the rendered resolution, not just the
   backing store; acceptance: manifest.json entries gain a size field like
   "1280x720".
-- [ ] check.mjs --json: include per-graphic per-check timings (from
+- [x] check.mjs --json: include per-graphic per-check timings (from
   validateFolder's report.timings) so a JSON consumer can see where the
   wall time goes without running --timings separately; acceptance:
   --json output has a timings object per graphic with a frames key.
