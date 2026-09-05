@@ -123,3 +123,12 @@
   quick run and manifest lists exactly 2.
 - [x] bench: --compare <before.log> <after.log> diffing per-prompt
   timing tables; acceptance: prints rows where seconds changed by >10%.
+- [ ] validate.mjs: seam pixel cross-check should also probe at seam-b+600ms
+  (asymmetry: a dark frame just after the wrap is currently caught only if
+  it lands in the 4-point window); acceptance: a fixture with a dark band
+  at 300-900ms after wrap is flagged.
+- [ ] check.mjs: --json should include per-graphic score map (topic -> pts)
+  for downstream tooling; acceptance: JSON has "graphicsScores" object.
+- [ ] generate.mjs: cap the fix loop's HTML at 260 lines before re-send
+  (rule 15 target); acceptance: a 400-line generated file is trimmed in
+  the fix prompt, not re-sent whole.
