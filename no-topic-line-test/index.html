@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+<link rel="stylesheet" href="../css/brand.css">
+<link rel="stylesheet" href="../css/motion.css">
+<style>html,body{margin:0;background:#0b0e14}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c" width="1280" height="720"></canvas>
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+window.LOOP = 8000;
+function frame(now) {
+  const t = ((now % window.LOOP) + window.LOOP) % window.LOOP;
+  ctx.clearRect(0, 0, c.width, c.height);
+  ctx.fillStyle = "#7aa2f7";
+  ctx.beginPath();
+  ctx.arc(640 + Math.sin(t / 400) * 180, 360, 26 + 6 * Math.sin(t / 200), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.font = "22px system-ui";
+  ctx.textAlign = "center";
+  ctx.fillText("TRUNC RETRY", 640, 120);
+  ctx.fillText("pass 2 ok", 640, 640);
+}
+window.__time = (ms) => frame(ms);
+window.__loop = window.LOOP;
+function loop(n) { frame(n); requestAnimationFrame(loop); }
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

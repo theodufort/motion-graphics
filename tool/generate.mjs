@@ -133,6 +133,7 @@ function slugify(s) {
 
 function parse(out, fallbackSlug) {
   const topicM = out.match(/^TOPIC:\s*(.+)$/m);
+  if (!topicM) console.error(`warning: no TOPIC line in LLM response — using prompt slug "${fallbackSlug}" (topic may drift from the design)`);
   const htmlM = out.indexOf("===HTML===");
   const readmeM = out.indexOf("===README===");
   let html = htmlM >= 0 ? out.slice(htmlM + 10) : out;
