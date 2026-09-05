@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>dim label fixture</title>
+<style>body{margin:0;background:#090909}canvas{display:block}</style></head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+const LOOP = 8000;
+window.__loop = LOOP;
+let W = 960, H = 540, __seek = null;
+canvas.width = W; canvas.height = H;
+window.__time = (v) => { __seek = v; };
+function frame(now) {
+  if (__seek != null) now = __seek;
+  const t = now % LOOP;
+  const beat = t / LOOP;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "#0b0d12"; ctx.fillRect(96, 96, W - 192, H - 192);
+  const x = 250 + beat * 460;
+  ctx.fillStyle = "#4da3ff"; ctx.beginPath(); ctx.arc(x, 200, 14, 0, 7); ctx.fill();
+  ctx.font = "18px monospace"; ctx.fillStyle = "#fff";
+  ctx.fillText("dim label test", 250, 320);
+  // peaks at a=0.3 for the middle 20% of the loop, sits at a=0.05 for
+  // the other 80%: passes the always-invisible error (peak >= 0.15) but
+  // triggers the new dim-for-most-frames warning
+  const a = beat > 0.38 && beat < 0.42 ? 0.3 : 0.05;
+  ctx.globalAlpha = a; ctx.fillStyle = "#31c48d";
+  ctx.fillText("faint watermark", 520, 420);
+  ctx.globalAlpha = 1;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

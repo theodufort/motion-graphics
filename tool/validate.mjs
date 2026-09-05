@@ -115,7 +115,7 @@ export async function validateWithBrowser(browser, folderPath) {
 
   const timings = {};
   const tFrames = Date.now();
-  const labelMaxA = new Map(); // label -> { a: max alpha, n: frames seen }
+  const labelMaxA = new Map(); // label -> { a: max alpha, n: frames seen, low: frames below 0.15 }
   const rectsByTime = {};
   const contentsByTime = {};
   for (const f of FRAMES) {
@@ -127,8 +127,8 @@ export async function validateWithBrowser(browser, folderPath) {
     if (p) {
       rectsByTime[t] = p.ft; contentsByTime[t] = p.content;
       for (const f of p.ft) if (f && f.s) {
-        const o = labelMaxA.get(f.s) || { a: 0, n: 0 };
-        labelMaxA.set(f.s, { a: Math.max(o.a, f.a), n: o.n + 1 });
+        const o = labelMaxA.get(f.s) || { a: 0, n: 0, low: 0 };
+        labelMaxA.set(f.s, { a: Math.max(o.a, f.a), n: o.n + 1, low: o.low + (f.a < 0.15 ? 1 : 0) });
       }
     }
   }
@@ -142,8 +142,8 @@ export async function validateWithBrowser(browser, folderPath) {
       if (p) {
         rectsByTime[t] = p.ft; contentsByTime[t] = p.content;
         for (const f2 of p.ft) if (f2 && f2.s) {
-          const o2 = labelMaxA.get(f2.s) || { a: 0, n: 0 };
-          labelMaxA.set(f2.s, { a: Math.max(o2.a, f2.a), n: o2.n + 1 });
+          const o2 = labelMaxA.get(f2.s) || { a: 0, n: 0, low: 0 };
+          labelMaxA.set(f2.s, { a: Math.max(o2.a, f2.a), n: o2.n + 1, low: o2.low + (f2.a < 0.15 ? 1 : 0) });
         }
       }
     }
@@ -367,6 +367,12 @@ export async function validateWithBrowser(browser, folderPath) {
   if (hasSeek && invisible.length === 0) r.visibility = 1;
   if (r.visibility === 0 && invisible.length)
     errors.push(`visibility: always-invisible labels: ${invisible.slice(0, 3).map(([s, o]) => `"${s}" (max a=${o.a.toFixed(2)}, ${o.n} frames)`).join(", ")}`);
+  // dim-for-most-frames: a label that DOES peak above 0.15 (so the error
+  // above passes) but sits below 0.15 for >=80% of its frames — a watermark
+  // that is effectively invisible most of the time. Warning tier: a
+  // deliberately dim secondary label is a legitimate design choice
+  const dim = [...labelMaxA.entries()].filter(([s, o]) => o.a >= 0.15 && o.a < 0.6 && o.n >= 3 && o.low / o.n >= 0.75 && s.trim());
+  if (dim.length) r.warnings.push(`dim label: present but below a=0.15 for >=75% of frames: ${dim.slice(0, 3).map(([s, o]) => `"${s}" (peak a=${o.a.toFixed(2)}, ${o.low}/${o.n} frames dim)`).join(", ")}`);
 
   const tFrozen = Date.now();
   // frozen probe: uses the loop-wide churn sampled above — churn (not a

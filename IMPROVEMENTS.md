@@ -364,7 +364,7 @@
   count, total checks wall-time, median per-graphic framesMs) so callers
   can track harness speed drift over time; acceptance: --json has a
   "summary" key with those three fields.
-- [ ] validate.mjs: the visibility check should distinguish a label that
+- [x] validate.mjs: the visibility check should distinguish a label that
   is ALWAYS at low alpha (a permanently dim watermark — fine) from one
   that NEVER exceeds 0.15 (truly invisible — the current error); the
   current rule already does this, but a label that dips to 0.05 for >80%
