@@ -333,7 +333,7 @@
   retry ONCE with a fresh temperature (MG_LLM_TEMPERATURE=0.8 default)
   before giving up; acceptance: a mock LLM that fails identically twice
   then passes shows pass=1 with 3 fix passes.
-- [ ] check.mjs --watch: also revalidate when a NEW topic folder appears
+- [x] check.mjs --watch: also revalidate when a NEW topic folder appears
   (fs.watch with recursive on the root misses newly-created directories
   until a file inside them changes); acceptance: creating a new folder
   with index.html triggers one validation line without touching other files.

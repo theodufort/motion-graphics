@@ -62,7 +62,9 @@ if (process.argv.includes("--watch")) {
     const m = String(fname).match(/^(?:([^/]+)\/)?(index\.html|README\.md)$/);
     if (!m) return;
     const topic = m[1] || only;
-    if (!dirs.has(topic) || (only && topic !== only)) return; // --only filters the watch set
+    // live check (not the startup `dirs` snapshot): a brand-new topic folder
+    // arrives with its index.html event and must be validated immediately
+    if (!existsSync(path.join(root, topic, "index.html")) || (only && topic !== only)) return; // --only filters the watch set
     // debounce ~250ms per topic: a save touching index.html + README.md
     // coalesces into one validation, not two
     if (timers.get(topic)) clearTimeout(timers.get(topic));
