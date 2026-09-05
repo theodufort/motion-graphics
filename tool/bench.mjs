@@ -77,7 +77,7 @@ for (let i = 0; i < prompts.length; i++) {
     }
     if (g.pass) pass++;
     else failures.push(`${g.topic}: ${g.report.errors.slice(0, 2).join("; ")}`);
-    rows.push({ topic: g.topic, seconds: Math.round(g.seconds), fix: g.reused ? 0 : (g.fixPasses || 0), pass: g.pass, tps: g.tps ?? null });
+    rows.push({ topic: g.topic, seconds: Math.round(g.seconds), fix: g.reused ? 0 : (g.fixPasses || 0), pass: g.pass, tps: g.tps ?? null, warn: g.report?.warnings?.length ?? 0 });
     process.stderr.write(`  -> ${g.pass ? "PASS" : "FAIL"} in ${Math.round(g.seconds)}s\n`);
   } catch (e) {
     failures.push(`${p.prompt.slice(0, 40)}: ${e.message}`);
@@ -96,9 +96,9 @@ appendFileSync(benchLog, JSON.stringify({ ts: new Date().toISOString(), pass, to
 console.log(`BENCH: ${pass}/${total} in ${seconds}s`);
 for (const f of failures) console.log(`  ✗ ${f}`);
 // per-prompt timing table
-console.log("\n" + "topic".padEnd(30) + " " + "sec".padStart(5) + " " + "fix".padStart(3) + " " + "pass".padStart(4) + " " + "tps".padStart(5));
+console.log("\n" + "topic".padEnd(30) + " " + "sec".padStart(5) + " " + "fix".padStart(3) + " " + "pass".padStart(4) + " " + "tps".padStart(5) + " " + "warn".padStart(4));
 for (const r of rows)
-  console.log(r.topic.slice(0, 30).padEnd(30) + " " + String(r.seconds ?? "-").padStart(5) + " " + String(r.fix ?? "-").padStart(3) + " " + (r.pass ? "ok" : "FAIL") + " " + String(r.tps ?? "-").padStart(5));
+  console.log(r.topic.slice(0, 30).padEnd(30) + " " + String(r.seconds ?? "-").padStart(5) + " " + String(r.fix ?? "-").padStart(3) + " " + (r.pass ? "ok" : "FAIL") + " " + String(r.tps ?? "-").padStart(5) + " " + String(r.warn ?? 0).padStart(4));
 process.exit(pass === total ? 0 : 1);
 }
 
@@ -107,10 +107,10 @@ function parseTable(file) {
   const lines = readFileSync(file, "utf8").split("\n");
   const out = new Map();
   for (const l of lines) {
-    const m = l.match(/^\S.{4,29}\s+([0-9]+|-)\s+([0-9]+|-)\s+(ok|FAIL)\s+(?:([0-9.]+|-)\s*)?$/);
+    const m = l.match(/^\S.{4,29}\s+([0-9]+|-)\s+([0-9]+|-)\s+(ok|FAIL)\s+([0-9.]+|-)?\s*(\d+)?\s*$/);
     if (!m) continue;
     const topic = l.slice(0, 30).trimEnd();
-    out.set(topic, { sec: m[1] === "-" ? null : +m[1], fix: m[2] === "-" ? null : +m[2], pass: m[3] === "ok", tps: m[4] === undefined || m[4] === "-" ? null : +m[4] });
+    out.set(topic, { sec: m[1] === "-" ? null : +m[1], fix: m[2] === "-" ? null : +m[2], pass: m[3] === "ok", tps: m[4] === undefined || m[4] === "-" ? null : +m[4], warn: m[5] === undefined ? null : +m[5] });
   }
   return out;
 }
@@ -129,8 +129,9 @@ function compare(beforePath, afterPath) {
     }
     const d = x.sec == null || y.sec == null ? null : Math.round(((y.sec - x.sec) / x.sec) * 100);
     const status = x.pass === y.pass ? "" : `  STATUS ${x.pass ? "ok" : "FAIL"}->${y.pass ? "ok" : "FAIL"}`;
-    if (Math.abs(d ?? 999) > 10 || status) {
-      console.log(t.slice(0, 30).padEnd(30) + String(x.sec ?? "-").padStart(8) + String(y.sec ?? "-").padStart(8) + (hasTps ? String(x.tps ?? "-").padStart(5) + String(y.tps ?? "-").padStart(5) : "") + `  ${d == null ? "" : `${d > 0 ? "+" : ""}${d}% ${d > 0 ? "(slower)" : "(faster)"}`}${status}`);
+    const warn = x.warn != null && y.warn != null && x.warn !== y.warn ? `  warns ${x.warn}->${y.warn}` : "";
+    if (Math.abs(d ?? 999) > 10 || status || warn) {
+      console.log(t.slice(0, 30).padEnd(30) + String(x.sec ?? "-").padStart(8) + String(y.sec ?? "-").padStart(8) + (hasTps ? String(x.tps ?? "-").padStart(5) + String(y.tps ?? "-").padStart(5) : "") + `  ${d == null ? "" : `${d > 0 ? "+" : ""}${d}% ${d > 0 ? "(slower)" : "(faster)"}`}${status}${warn}`);
       changed++;
     }
   }

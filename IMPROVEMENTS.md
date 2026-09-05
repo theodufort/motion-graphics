@@ -237,7 +237,7 @@
 - [x] docs: GOAL.md "measurable criteria" should mention the warning-tier
   checks (edge-clip, near-frozen) so the criteria match the current
   validator; acceptance: GOAL.md lists both warning classes.
-- [ ] bench --compare: also diff the warnings count per topic between two
+- [x] bench --compare: also diff the warnings count per topic between two
   runs (currently only sec/fix/tps/status); acceptance: two bench logs
   where one has an edge-clip ⚠ on a topic print a warning-count delta.
 - [ ] generate.mjs: include the graphic's current per-check timings in the
