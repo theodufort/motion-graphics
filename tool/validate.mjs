@@ -213,7 +213,8 @@ export async function validateWithBrowser(browser, folderPath) {
   if (process.env.MG_DEBUG)
     for (const [t, rects] of Object.entries(rectsByTime))
       console.error(`[debug t=${t}]`, JSON.stringify(rects.map((r) => ({ s: r.s, x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.w), asc: Math.round(r.asc), desc: Math.round(r.desc), a: +r.a.toFixed(2) }))));
-  const cullMap = new Map(); // pair key -> Set of t's
+  const cullMap = new Map(); // pair key -> {ts, area}
+  const minorMap = new Map(); // minor overlaps (hairline touch)
   for (const [t, rects] of Object.entries(rectsByTime)) {
     for (let i = 0; i < rects.length; i++)
       for (let j = i + 1; j < rects.length; j++) {
@@ -229,15 +230,31 @@ export async function validateWithBrowser(browser, folderPath) {
         if (ox > 5 && a.s !== b.s && !a.s.includes(b.s) && !b.s.includes(a.s) &&
           (oy > 0.6 * mh || (contained && a.a >= 0.6 && b.a >= 0.6))) {
           const key = [a.s, b.s].sort().join("\u0000");
-          if (!cullMap.has(key)) cullMap.set(key, new Set());
-          cullMap.get(key).add(t);
+          if (!cullMap.has(key)) cullMap.set(key, { ts: new Set(), area: 0 });
+          cullMap.get(key).ts.add(t);
+          cullMap.get(key).area = Math.max(cullMap.get(key).area, Math.round(interA));
+        }
+        // minor overlap: 5px < ox <= 20px, oy > 0.5*mh — hairline touch
+        else if (ox > 5 && ox <= 20 && a.s !== b.s && !a.s.includes(b.s) && !b.s.includes(a.s) &&
+          oy > 0.5 * mh && Math.min(a.a, b.a) >= 0.6) {
+          const key = [a.s, b.s].sort().join("\u0000");
+          if (!minorMap.has(key)) minorMap.set(key, { ts: new Set(), area: 0 });
+          minorMap.get(key).ts.add(t);
+          minorMap.get(key).area = Math.max(minorMap.get(key).area, Math.round(interA));
         }
       }
   }
-  const culls = [...cullMap.entries()].map(([key, ts]) => {
+  const culls = [...cullMap.entries()].map(([key, v]) => {
     const [x, y] = key.split("\u0000");
-    return ts.size > 1 ? `"${x}" x "${y}" ×${ts.size}` : `t=${[...ts][0]}: "${x}" x "${y}"`;
+    const area = v.area != null ? ` (${v.area}px overlap)` : "";
+    return v.ts.size > 1 ? `"${x}" x "${y}" ×${v.ts.size}${area}` : `t=${[...v.ts][0]}: "${x}" x "${y}"${area}`;
   });
+  const minorCulls = [...minorMap.entries()].map(([key, v]) => {
+    const [x, y] = key.split("\u0000");
+    return `"${x}" x "${y}" (${v.area}px overlap, minor)`;
+  });
+  if (minorCulls.length)
+    r.warnings.push(`minor label overlap: ${minorCulls.slice(0, 3).join(", ")}`);
   r.collisions = culls.length === 0 && hasSeek ? 1 : 0;
   timings.collisions = Date.now() - tCol;
   if (culls.length) errors.push(`collisions: ${culls.slice(0, 5).join("; ")}`);

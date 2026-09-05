@@ -448,7 +448,7 @@
   beat and the sparsest beat visually intentional (not an accident of
   a half-faded beat); acceptance: a mock LLM receives "densest" and
   "sparsest" in the first-pass prompt.
-- [ ] validate.mjs: the collision check should report the PIXEL
+- [x] validate.mjs: the collision check should report the PIXEL
   OVERLAP AREA (not just boolean) — a label that overlaps another by
   2px (a hairline touch) is visually fine, but a 40px overlap is not;
   acceptance: a fixture with two labels overlapping by 40px triggers
