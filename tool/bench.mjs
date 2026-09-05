@@ -144,5 +144,15 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     if (!before || !after) { console.error("usage: node tool/bench.mjs --compare <before.log> <after.log>"); process.exit(2); }
     compare(before, after);
   }
+  if (process.argv.includes("--trend")) {
+    // first-pass (fix=0) rate over the last 5 bench runs
+    const lines = readFileSync(path.join(ROOT, "logs", "bench-runs.jsonl"), "utf8").trim().split("\n").filter(Boolean);
+    const runs = lines.slice(-5).map((l) => JSON.parse(l));
+    for (const r of runs) {
+      const f0 = r.rows.filter((x) => (x.fix ?? 0) === 0).length;
+      console.log(r.ts.slice(0, 16).replace("T", " ") + "  " + r.pass + "/" + r.total + " pass  fix=0: " + f0 + "/" + r.rows.length);
+    }
+    process.exit(0);
+  }
   main().catch((e) => { console.error(e.message); process.exit(1); });
 }

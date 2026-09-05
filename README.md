@@ -83,7 +83,7 @@ regressed):
   safe). Use it whenever you close an item.
 - `./check.sh [--skip-gen | --regen | --only <topic> | --watch | --quick | --json]`
 - `./tool/generate.sh "<prompt>" [--prompt-file <path>] [--force]`
-- `node tool/bench.mjs [limit] [--topics a,b,c] [--compare before.log after.log]`
+- `node tool/bench.mjs [limit] [--topics a,b,c] [--compare before.log after.log] [--trend]` — `--trend` prints the last 5 bench runs' first-pass (fix=0) counts
 
 ### The vision pass
 

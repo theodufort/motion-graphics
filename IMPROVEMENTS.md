@@ -207,7 +207,7 @@
   mode (MG_QUICK=1) and labels the score line "(quick)"; acceptance:
   ./check.sh --skip-gen --fast prints a quick score line and matches a
   plain quick run.
-- [ ] bench: track first-pass rate over time in a one-line trend in
+- [x] bench: track first-pass rate over time in a one-line trend in
   PROGRESS.md (read the last N bench-runs.jsonl entries and print
   fix=0 ratio); acceptance: running the bench appends nothing but a
   helper `node tool/bench.mjs --trend` prints the last 5 runs' fix=0
