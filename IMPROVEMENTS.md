@@ -382,7 +382,7 @@
   reads as "not frozen" because the px churn exceeds the threshold;
   acceptance: a fixture whose only animation is a single-digit counter
   decrement triggers a "nearly-frozen" warning.
-- [ ] generate.mjs: the fix-pass prompt should include the densest.png
+- [x] generate.mjs: the fix-pass prompt should include the densest.png
   timestamp + contentPx (from the shot manifest) so the model can reason
   about which beat is most visually important when fixing layout;
   acceptance: a mock LLM receives "densest: t=9600px=35852" in the

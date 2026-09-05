@@ -157,6 +157,7 @@ export async function validateWithBrowser(browser, folderPath) {
     await page.evaluate(() => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)))).catch(() => {});
     if (!NO_SHOTS) await page.screenshot({ path: path.join(shotDir, "densest.png") });
     r.shots.push(path.join(shotDir, "densest.png"));
+    r.densest = { t: denseT, contentPx: contentsByTime[denseT] };
   }
 
   // loop-wide px churn (sampled before the seam check, which may reference it)
