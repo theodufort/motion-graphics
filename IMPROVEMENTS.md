@@ -92,10 +92,9 @@
   same topic as the inline form.
 - [x] PROGRESS.md refreshed: 1155/1155, 33 graphics, 8-bit --watch,
   manifest.json, tps logging, bench 20/20 + timing table, prompt-file
-  flag, rules 1-18 — all facts present.- [ ] tool/validate.mjs: expose per-check timings in the JSON report
-  (seek/collisions/seam/visibility ms); acceptance: report has a
-  "timings" object with 4+ numeric keys.
-- [ ] check.sh: --quick mode (validate with MG_QUICK=1: 3 park frames
+  flag, rules 1-18 — all facts present.- [x] validate.mjs: report.timings (frames/seam/collisions/frozen/resize
+  ms); acceptance met: 5 numeric keys (1nf: frames 1158, seam 651,
+  collisions 3, frozen 1244, resize 309); 1155/1155 after patch.- [ ] check.sh: --quick mode (validate with MG_QUICK=1: 3 park frames
   instead of 4, no resize step); acceptance: --quick on 33 graphics
   finishes < 12s and reports a quick-mode marker.
 - [ ] tool/validate.mjs: seam label continuity — entity labels present at

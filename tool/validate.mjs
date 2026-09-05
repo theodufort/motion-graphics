@@ -103,6 +103,8 @@ async function validateFolder(folderPath) {
     });
   }
 
+  const timings = {};
+  const tFrames = Date.now();
   const labelMaxA = new Map(); // label -> { a: max alpha, n: frames seen }
   const rectsByTime = {};
   const contentsByTime = {};
@@ -120,6 +122,8 @@ async function validateFolder(folderPath) {
       }
     }
   }
+  timings.frames = Date.now() - tFrames;
+  const tSeam = Date.now();
   // seam window: max content across the wrap neighbourhood (crossfades dip
   // briefly at the exact seam but a real dark frame stays empty over the window)
   const seamProbes = [LOOP - 900, LOOP - 300, 300, 900];
@@ -131,6 +135,8 @@ async function validateFolder(folderPath) {
   await page.screenshot({ path: shotB });
   r.shots.push(shotA, shotB);
 
+  timings.seam = Date.now() - tSeam;
+  const tCol = Date.now();
   // collision check at every parked frame
   const overlap = (a, b) => {
     const ax = { l: a.x, r: a.x + a.w }, ay = { t: a.y - a.asc, b: a.y + a.desc };
@@ -160,6 +166,7 @@ async function validateFolder(folderPath) {
     return ts.size > 1 ? `"${x}" x "${y}" ×${ts.size}` : `t=${[...ts][0]}: "${x}" x "${y}"`;
   });
   r.collisions = culls.length === 0 && hasSeek ? 1 : 0;
+  timings.collisions = Date.now() - tCol;
   if (culls.length) errors.push(`collisions: ${culls.slice(0, 5).join("; ")}`);
 
   // seam: content density at both sides must not collapse vs densest frame
@@ -197,6 +204,7 @@ async function validateFolder(folderPath) {
   if (r.visibility === 0 && invisible.length)
     errors.push(`visibility: always-invisible labels: ${invisible.slice(0, 3).map(([s, o]) => `"${s}" (max a=${o.a.toFixed(2)}, ${o.n} frames)`).join(", ")}`);
 
+  const tFrz = Date.now();
   // frozen-animation probe: sample evenly across the loop; a real graphic
   // shows a big content-px delta at least once (beat transitions), so freeze
   // only when the MAX delta is near zero (beat-hold regions are fine)
@@ -212,7 +220,9 @@ async function validateFolder(folderPath) {
     }
   }
 
+  timings.frozen = Date.now() - tFrz;
   r.resize = 0;
+  const tRes = Date.now();
   try {
     const before = pageErrors.length;
     await page.setViewportSize({ width: 1366, height: 768 });
@@ -226,7 +236,9 @@ async function validateFolder(folderPath) {
     errors.push(`resize: ${e.message}`);
   }
 
+  timings.resize = Date.now() - tRes;
   r.errors = [...pageErrors, ...errors];
+  r.timings = timings;
   await browser.close();
   // shot manifest for vision-review tooling: one entry per saved PNG
   if (shotDir) {
