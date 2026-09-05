@@ -420,3 +420,12 @@
   which invariants are already satisfied and must not be broken by the
   fix; acceptance: a mock LLM receives "already passing:" in the
   fix-pass prompt.
+- [ ] check.mjs: --json should include a per-warning breakdown
+  (warning-class → count, e.g. { "edge-clip": 1, "seam-pop-out": 5 })
+  so a CI gate can trend warning categories over time without parsing
+  the human-readable lines; acceptance: --json has a "warningsByClass"
+  object.
+- [ ] validate.mjs: the densest-frame capture should also record the
+  SHOT of the sparsest frame (min contentPx) so a vision pass can
+  compare the densest vs sparsest beats side-by-side; acceptance: the
+  shot manifest gains a "sparsest.png" entry with t + contentPx.
