@@ -56,7 +56,7 @@ export async function validateWithBrowser(browser, folderPath) {
         const rm = fstr.match(/rgba\(([^)]+)\)/);
         if (rm) a *= parseFloat(rm[1].split(",")[3]) ?? 1;
         else { const hx = fstr.match(/^#([0-9a-f]{8})$/i); if (hx) a *= parseInt(hx[1].slice(6), 16) / 255; } // #rrggbbAA only — 3/6-digit hex is opaque (slice(-2) on 6-digit read the BLUE channel as alpha)
-        window.__ft.push({ s: String(s).slice(0, 40), x: left, y: top, w: m.width, asc, desc, a, id: (window.__ftId = (window.__ftId || 0) + 1) });
+        window.__ft.push({ s: String(s).slice(0, 40), x: left, y: top, w: m.width, asc, desc, a, color: fstr, id: (window.__ftId = (window.__ftId || 0) + 1) });
       } catch {}
       return orig.call(this, s, x, y);
     };
@@ -227,7 +227,9 @@ export async function validateWithBrowser(browser, folderPath) {
         const aArea = (a.asc + a.desc) * a.w, bArea = (b.asc + b.desc) * b.w;
         const contained = interA >= 0.85 * Math.min(aArea, bArea) &&
           Math.max(a.asc + a.desc, b.asc + b.desc) > 1.6 * Math.min(a.asc + a.desc, b.asc + b.desc);
-        if (ox > 5 && a.s !== b.s && !a.s.includes(b.s) && !b.s.includes(a.s) &&
+        // same-color labels are visually one element (multi-line label)
+        const sameColor = a.color && b.color && a.color.toLowerCase() === b.color.toLowerCase();
+        if (ox > 5 && !sameColor && a.s !== b.s && !a.s.includes(b.s) && !b.s.includes(a.s) &&
           (oy > 0.6 * mh || (contained && a.a >= 0.6 && b.a >= 0.6))) {
           const key = [a.s, b.s].sort().join("\u0000");
           if (!cullMap.has(key)) cullMap.set(key, { ts: new Set(), area: 0 });
@@ -235,7 +237,7 @@ export async function validateWithBrowser(browser, folderPath) {
           cullMap.get(key).area = Math.max(cullMap.get(key).area, Math.round(interA));
         }
         // minor overlap: 5px < ox <= 20px, oy > 0.5*mh — hairline touch
-        else if (ox > 5 && ox <= 20 && a.s !== b.s && !a.s.includes(b.s) && !b.s.includes(a.s) &&
+        else if (ox > 5 && ox <= 20 && !sameColor && a.s !== b.s && !a.s.includes(b.s) && !b.s.includes(a.s) &&
           oy > 0.5 * mh && Math.min(a.a, b.a) >= 0.6) {
           const key = [a.s, b.s].sort().join("\u0000");
           if (!minorMap.has(key)) minorMap.set(key, { ts: new Set(), area: 0 });
