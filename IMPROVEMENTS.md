@@ -212,7 +212,7 @@
   fix=0 ratio); acceptance: running the bench appends nothing but a
   helper `node tool/bench.mjs --trend` prints the last 5 runs' fix=0
   counts.
-- [ ] validate.mjs: add an optional pixel-margin check — flag any
+- [x] validate.mjs: add an optional pixel-margin check — flag any
   content pixel within 8px of the canvas edge at any parked frame
   (clipped labels); acceptance: a fixture with a label flush at the
   right edge is flagged, real graphics pass.

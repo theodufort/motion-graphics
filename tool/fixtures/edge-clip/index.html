@@ -1,0 +1,28 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../css/brand.css"><link rel="stylesheet" href="../../css/motion.css">
+<style>html,body{margin:0;background:#0b0e14}canvas{display:block;margin:40px auto}</style></head><body>
+<canvas id="c"></canvas><script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d');
+const W=1280,H=720,LOOP=8000;window.LOOP=LOOP;
+canvas.width=W;canvas.height=H;canvas.style.width=W+'px';canvas.style.height=H+'px';
+function ease(x){return x<.5?2*x*x:1-Math.pow(-2*x+2,2)/2}
+function draw(now){
+  const t=now%LOOP;ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#0f141f';ctx.fillRect(20,20,W-40,H-40);
+  ctx.fillStyle='rgba(148,163,184,.8)';ctx.font='600 22px system-ui';ctx.textAlign='center';
+  ctx.fillText('Flush Right Clip',W*0.5,60);
+  // a label drawn flush at the right edge — its right half is cut off
+  ctx.fillStyle='#38bdf8';ctx.font='800 56px system-ui';ctx.textAlign='right';
+  const a=ease((t%4000)/2000)*.95+.05;
+  ctx.globalAlpha=a;
+  ctx.fillText('TRUNCATED PAYLOAD VALUE',W+120,H*0.55);
+  ctx.fillText('TRUNCATED PAYLOAD VALUE',W+120,H*0.5);
+  ctx.globalAlpha=1;
+  // healthy motion elsewhere
+  ctx.fillStyle='#34d399';ctx.beginPath();
+  ctx.arc(W*0.5+Math.sin(t/900)*200,H*0.75,14,0,7);ctx.fill();
+}
+function frame(now){draw(now);requestAnimationFrame(frame)}
+window.__time=(ms)=>{window.__cur=ms%LOOP;draw(window.__cur)};
+requestAnimationFrame(frame);
+</script></body></html>

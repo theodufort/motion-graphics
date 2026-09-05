@@ -226,6 +226,38 @@ export async function validateWithBrowser(browser, folderPath) {
   // min-area sanity: a real graphic fills its densest frame; blank-but-quiet is a bug
   r.content = midPx >= 500 ? 1 : 0;
   if (!r.content) errors.push(`content: densest frame only ${midPx} px (blank canvas?)`);
+  // canvas-edge clip: content pixels within 8px of any edge at any parked frame
+  // (clipped labels/graphics bleed off-canvas and read as cut-off text)
+  // a clipped label produces a LOCAL cluster (hundreds of contiguous edge px);
+  // full-bleed grids/backgrounds are sparse and evenly spread — ignore those
+  const clipProbe = () => page.evaluate(() => {
+    const c = document.querySelector("canvas");
+    const d = c.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, c.width, c.height).data;
+    const W = c.clientWidth, H = c.clientHeight, M = 8, S = 4; // CSS px (backing store may be d-scaled)
+    const row = (x, y) => d[(y * W + x) * 4 + 3] > 64; // ignore hairline grids (~.045 alpha)
+    let cluster = 0, run = 0, x, y;
+    for (x = 0; x < W; x += S) { if (row(x, 0) || row(x, M)) { run++; cluster = Math.max(cluster, run); } else run = 0; }
+    for (y = 0; y < H; y += S) { if (row(0, y) || row(M, y)) { run++; cluster = Math.max(cluster, run); } else run = 0; }
+    for (x = 0; x < W; x += S) { if (row(x, H - 1) || row(x, H - 1 - M)) { run++; cluster = Math.max(cluster, run); } else run = 0; }
+    for (y = 0; y < H; y += S) { if (row(W - 1, y) || row(W - 1 - M, y)) { run++; cluster = Math.max(cluster, run); } else run = 0; }
+    return cluster;
+  });
+  // three states so a fading clipped label can't hide at the probe moment
+  const [cw, ch] = await page.evaluate(() => { const c = document.querySelector("canvas"); return [c.clientWidth, c.clientHeight]; });
+  let clip = await clipProbe();
+  for (const f of [0.3, 0.6]) {
+    await page.evaluate((t) => window.__time(t), Math.round(LOOP * f));
+    clip = Math.max(clip, await clipProbe());
+  }
+  if (process.env.MG_DEBUG) console.error(`[debug clip] run=${clip * 4} css-px`);
+  r.edgeClip = 1;
+  // 20px ≈ one text row; full-bleed backgrounds/bars span >25% of the edge
+  const longest = Math.max(cw, ch);
+  if (clip * 4 >= 32 && clip * 4 < 0.25 * longest) {
+    // warning, not error: legit designs also hug the edge (progress bars,
+    // corner tags, edge nodes) — a clipped LABEL is the case a human should check
+    r.edgeClip = 0; r.warnings.push(`edge-clip: ${clip * 4}px+ contiguous content along canvas edge — verify no label is clipped`);
+  } // 32px ≈ one text row
   const seamPx = Math.max(...seamPts.map((p) => p?.content || 0));
   // a moving element (spinner, marquee, ping) crossing the wrap can keep a seam
   // frame's content high while it is visually dark — a churn-gated variant of

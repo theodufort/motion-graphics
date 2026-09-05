@@ -126,7 +126,7 @@ async function worker() {
     score += pts;
     graphicsScores[name] = pts;
     if (r.warnings?.length) graphicsWarnings[name] = r.warnings;
-    if (pts < 35 || r.resize === 0 || r.content === 0 || r.frozen || r.visibility === 0 || r.seamContinuity === 0) problems.push(`${name}: ${pts}/35 (${(r.errors || []).join("; ") || (r.resize === 0 ? "resize check failed" : r.content === 0 ? "content check failed" : r.frozen ? "frozen animation" : r.visibility === 0 ? "invisible labels" : r.seamContinuity === 0 ? "seam label continuity" : "check bits failed")})`);
+    if (pts < 35 || r.resize === 0 || r.content === 0 || r.frozen || r.visibility === 0 || r.seamContinuity === 0) problems.push(`${name}: ${pts}/35 (${(r.errors || []).join("; ") || (r.resize === 0 ? "resize check failed" : r.content === 0 ? "content check failed" : r.frozen ? "frozen animation" : r.visibility === 0 ? "invisible labels" : r.seamContinuity === 0 ? "seam label continuity" : r.edgeClip === 0 ? "edge-clip" : "check bits failed")})`);
   }
 }
 await Promise.all(Array.from({ length: Math.min(CONCURRENCY, graphics.length) }, worker));

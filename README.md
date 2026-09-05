@@ -61,6 +61,7 @@ regressed):
 | `dark-band-post/` | seam (dark band 300-900ms *after* the wrap) |
 | `contained-label/` | collisions (small label fully inside a much bigger one) |
 | `seam-pop-in/` | seam (label pops in at the wrap with no fade) |
+| `edge-clip/` | edge-clip warning (label flush at the right edge; soft warning since legit designs also hug the edge) |
 
 ## Environment knobs
 
