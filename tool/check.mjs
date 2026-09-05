@@ -19,7 +19,7 @@
 //     (partial: folder exists + clean load = 10)
 //   exit 0  <=>  all existing graphics pass every check AND both smoke gens fully pass.
 
-import { existsSync, readdirSync, readFileSync, watch } from "node:fs";
+import { existsSync, readdirSync, readFileSync, watch, rmSync, statSync as fsStat } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
@@ -195,6 +195,19 @@ try {
   appendFileSync(path.join(root, "logs", "iterations.jsonl"),
     JSON.stringify({ ts: new Date().toISOString(), kind: "check", score,
       max: existingMax + smokeMax, failures: problems, fix: "check run" }) + "\n");
+} catch {}
+
+// --- prune tool/shots to the 10 newest topic dirs (it grows per validation) ---
+try {
+  const shotRoot = path.join(root, "tool", "shots");
+  if (existsSync(shotRoot) && !process.argv.includes("--only")) {
+    const dirs = readdirSync(shotRoot, { withFileTypes: true }).filter((e) => e.isDirectory());
+    if (dirs.length > 10) {
+      const sorted = dirs.map((e) => ({ name: e.name, m: fsStat(path.join(shotRoot, e.name)).mtimeMs }))
+        .sort((a, b) => b.m - a.m);
+      for (const d of sorted.slice(10)) rmSync(path.join(shotRoot, d.name), { recursive: true, force: true });
+    }
+  }
 } catch {}
 
 // --- verdict ------------------------------------------------------------------

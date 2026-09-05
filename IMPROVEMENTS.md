@@ -244,7 +244,7 @@
   fix-pass context so the model knows which check is expensive (a hint
   that e.g. a huge seam window means its LOOP is long); acceptance: the
   second fix-pass prompt contains a "timings:" line.
-- [ ] tool/shots: prune the shots/ tree to the 10 newest topic dirs after
+- [x] tool/shots: prune the shots/ tree to the 10 newest topic dirs after
   each full check run (it grows with every generated topic); acceptance:
   after a run with >10 topics, oldest dirs are removed and the newest 10
   remain.
