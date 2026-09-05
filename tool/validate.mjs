@@ -242,6 +242,15 @@ export async function validateWithBrowser(browser, folderPath) {
   // min-area sanity: a real graphic fills its densest frame; blank-but-quiet is a bug
   r.content = midPx >= 500 ? 1 : 0;
   if (!r.content) errors.push(`content: densest frame only ${midPx} px (blank canvas?)`);
+  // seam content hard-cut: total contentPx drops >90% between the two seam
+  // probes (even if no individual label pops — a beat whose entire drawing
+  // collapses at the wrap). Warning tier: some designs legitimately clear
+  // the canvas at the seam for a "breath" beat.
+  if (seamA?.content != null && seamB?.content != null) {
+    const lo = Math.min(seamA.content, seamB.content), hi = Math.max(seamA.content, seamB.content);
+    if (hi > 1000 && lo < 0.1 * hi)
+      r.warnings.push(`seam: content hard-cut at the wrap (density ${hi} px -> ${lo} px, ${Math.round((1 - lo / hi) * 100)}% drop) — verify no beat visually resets`);
+  }
   // canvas-edge clip: content pixels within 8px of any edge at any parked frame
   // (clipped labels/graphics bleed off-canvas and read as cut-off text)
   // a clipped label produces a LOCAL cluster (hundreds of contiguous edge px);

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>seam hard cut fixture</title>
+<style>body{margin:0;background:#090909}canvas{display:block}</style></head>
+<body>
+<canvas id="stage"></canvas>
+<script>
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+const LOOP = 8000;
+window.__loop = LOOP;
+let W = 960, H = 540, __seek = null;
+canvas.width = W; canvas.height = H;
+window.__time = (v) => { __seek = v; };
+function frame(now) {
+  if (__seek != null) now = __seek;
+  const t = now % LOOP;
+  const beat = t / LOOP;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "#0b0d12"; ctx.fillRect(0, 0, W, H);
+  // DENSE content for beat 0..0.9 (fills the canvas)
+  if (beat < 0.9) {
+    for (let i = 0; i < 20; i++) {
+      const x = 100 + (i % 4) * 220, y = 100 + Math.floor(i / 4) * 120;
+      ctx.fillStyle = i % 2 ? "#3ecf8e" : "#4da3ff";
+      ctx.beginPath(); ctx.arc(x, y, 30, 0, 7); ctx.fill();
+    }
+    ctx.fillStyle = "#fff"; ctx.font = "20px monospace";
+    ctx.fillText("seam test", 400, 400);
+  }
+  // SPARSE content for beat 0.9..1.0 (only a tiny dot)
+  // At the seam (t=LOOP-300 → beat 0.9625) the canvas is sparse;
+  // at t=300 (beat 0.0375) it's dense. The content drops >90% at the wrap.
+  if (beat >= 0.9) {
+    ctx.fillStyle = "#f00"; ctx.beginPath(); ctx.arc(480, 270, 5, 0, 7); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.font = "20px monospace";
+    ctx.fillText("seam test", 400, 400);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
