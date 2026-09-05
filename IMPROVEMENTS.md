@@ -409,3 +409,14 @@
   avoids the top 5 failure classes up front instead of learning them
   via the fix loop; acceptance: a mock LLM receives "pitfalls:" in
   the first-pass prompt.
+- [ ] validate.mjs: the seam pop-in/pop-out checks should also run on
+  the content CURVE (not just label alphas) — a beat whose contentPx
+  jumps from 5000 to 200 between t=LOOP-300 and t=300 is a visual
+  "hard cut" even if no individual label pops; acceptance: a fixture
+  where the total content drops 95% at the seam (but no single label
+  is absent) triggers a "seam content hard-cut" warning.
+- [ ] generate.mjs: the fix-pass prompt should include the list of
+  PASSED check classes (not just the failing ones) so the model knows
+  which invariants are already satisfied and must not be broken by the
+  fix; acceptance: a mock LLM receives "already passing:" in the
+  fix-pass prompt.
