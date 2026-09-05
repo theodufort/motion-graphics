@@ -158,7 +158,11 @@ function readSlugMap() {
 }
 function rememberSlug(prompt, topic) {
   try {
-    appendFileSync(slugMapPath, JSON.stringify({ prompt, topic }) + "\n");
+    // dedupe: one canonical entry per prompt (last topic wins)
+    const lines = existsSync(slugMapPath) ? readFileSync(slugMapPath, "utf8").split("\n") : [];
+    const kept = lines.filter((l) => l.trim() && !l.includes(`"prompt":"${prompt}"`));
+    kept.push(JSON.stringify({ prompt, topic }));
+    writeFileSync(slugMapPath, kept.join("\n") + "\n");
   } catch {}
 }
 export async function generate(prompt, { force = false, allowExisting = process.env.MG_ALLOW_EXISTING === "1" } = {}) {
