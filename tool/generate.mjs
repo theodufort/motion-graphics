@@ -280,6 +280,7 @@ Timings (ms per check; a big number means that check is sampling heavily — don
 Densest beat: ${report.densest ? `t=${report.densest.t}ms (contentPx=${report.densest.contentPx}) — keep that frame visually rich; a fix that empties it is a regression` : "unknown (no densest captured)"}.
 General: zero JS errors, window.__time + window.__loop defined, no overlapping full-opacity
 text, no dark frame at the loop seam, all elements animate.
+Already passing (do not break): ${["clean", "seek", "collisions", "seam", "readme", "content", "frozen", "visibility", "seamContinuity", "resize"].filter((k) => report[k] === 1).join(", ") || "(none — everything is failing)"}. 
 Reply with the COMPLETE corrected file (every line, even parts not shown above) between ===HTML=== markers (keep TOPIC and ===README=== too).` });
     const fix = (await llm(messages)).content;
     const p2 = parse(fix, topic);

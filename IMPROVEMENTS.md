@@ -415,7 +415,7 @@
   "hard cut" even if no individual label pops; acceptance: a fixture
   where the total content drops 95% at the seam (but no single label
   is absent) triggers a "seam content hard-cut" warning.
-- [ ] generate.mjs: the fix-pass prompt should include the list of
+- [x] generate.mjs: the fix-pass prompt should include the list of
   PASSED check classes (not just the failing ones) so the model knows
   which invariants are already satisfied and must not be broken by the
   fix; acceptance: a mock LLM receives "already passing:" in the
