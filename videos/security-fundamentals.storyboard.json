@@ -1,0 +1,22 @@
+{
+  "title": "security-fundamentals-demo",
+  "fps": 30,
+  "width": 1920,
+  "height": 1080,
+  "crossfade": 500,
+  "voice": "en_US-lessac-medium",
+  "segments": [
+    {
+      "graphic": "pgsodium-salted-hashing",
+      "narration": "Never store a password in plaintext. pgsodium feeds the password, a unique per-user salt, and a site-wide pepper into argon2id, a memory-hard function designed to resist GPU and ASIC attacks. The resulting hash is what gets written to the database. At login time, the server re-derives the hash from the submitted password and the stored salt and pepper, then compares. A match means the password is correct; the plaintext never lives at rest."
+    },
+    {
+      "graphic": "jwt-verification-flow",
+      "narration": "A JSON Web Token is three parts. The header declares the signing algorithm, the payload carries the claims, like the user's role and expiry, and the signature proves the token came from a trusted issuer and hasn't been tampered with. When a request arrives, the server decodes the token, verifies its signature against the shared secret, and only once that check passes does it trust the claims inside. Tampering with even a single character breaks the signature and the token is rejected."
+    },
+    {
+      "graphic": "kafka-exactly-once-path",
+      "narration": "In Kafka, a producer's partitioner routes each record to a partition based on its key, keeping related records together. A consumer group reads from those partitions and tracks its progress with offsets. The tricky part is commits: a consumer writes data and its offset in one transactional unit, so if it fails partway through, nothing is committed and the record is replayed, rather than being processed twice or dropped. That transactional commit path is what delivers exactly-once semantics end to end."
+    }
+  ]
+}

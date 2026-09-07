@@ -1,3 +1,9 @@
 tool/node_modules/
 tool/shots/
 logs/
+
+# makevideo
+tool/voices/
+videos/*.mp4
+videos/*.log
+

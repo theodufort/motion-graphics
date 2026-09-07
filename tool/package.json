@@ -5,7 +5,8 @@
   "scripts": {
     "validate": "node validate.mjs",
     "generate": "node generate.mjs",
-    "check": "node check.mjs"
+    "check": "node check.mjs",
+    "makevideo": "node makevideo.mjs"
   },
   "dependencies": {
     "playwright": "^1.62.1"

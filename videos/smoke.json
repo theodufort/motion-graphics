@@ -1,0 +1,13 @@
+{
+  "title": "security-demo",
+  "fps": 24,
+  "width": 1280,
+  "height": 720,
+  "crossfade": 500,
+  "segments": [
+    { "graphic": "pgsodium-salted-hashing",
+      "narration": "Pgsodium salts each password before hashing it with argon2id. Because the salt is random per user, the same password stored twice produces two different hashes. When a user logs in, the server re-computes the hash and compares it. If they match, access is granted. If they don't, access is denied." },
+    { "graphic": "jwt-verification-flow",
+      "narration": "A JSON Web Token has three parts. The header says which signing algorithm to use. The payload carries claims about the user, like their role and expiry. The signature proves the token came from a trusted source and hasn't been tampered with. When a request arrives, the server verifies the signature, checks the expiry, and only then trusts the claims inside." }
+  ]
+}

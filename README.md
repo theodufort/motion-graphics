@@ -85,6 +85,7 @@ regressed):
 - `./check.sh [--skip-gen | --regen | --only <topic> | --watch | --quick | --json]`
 - `./tool/generate.sh "<prompt>" [--prompt-file <path>] [--force]`
 - `node tool/bench.mjs [limit] [--topics a,b,c] [--compare before.log after.log] [--trend]` — `--trend` prints the last 5 bench runs' first-pass (fix=0) counts
+- `node tool/makevideo.mjs videos/<name>.storyboard.json` — compose a narrated multi-graphic video (see below)
 
 ### The vision pass
 
@@ -110,6 +111,26 @@ vision tool instead of guessing filenames.
 over labels, elements covering content, anything frozen or clipped, and
 seam darkness. If a shot looks wrong but probes passed, report it — the
 probe thresholds in `tool/validate.mjs` then get tightened.
+
+## Making a video from several graphics
+
+`node tool/makevideo.mjs <storyboard.json>` turns a list of graphics into a
+single narrated video for YouTube: each segment is rendered frame-by-frame in
+headless chromium (seeking `window.__time`), narrated with Piper TTS (local,
+offline), encoded to a per-segment clip, and the clips are joined with
+crossfades (video `xfade`, audio `acrossfade`). Fully local. Storyboards live
+in `videos/` — see `videos/README.md` for the full schema, env knobs, and
+install steps.
+
+```sh
+node tool/makevideo.mjs videos/security-fundamentals.storyboard.json
+# → videos/security-fundamentals-demo.mp4
+```
+
+A storyboard is a JSON file: `title`/`fps`/`width`/`height`/`crossfade`/
+`voice` plus a `segments` array, where each segment names a graphic folder
+and supplies either `narration` (Piper text) or `audio` (a file path) or
+neither (silent + `duration`).
 
 ## Building or changing a graphic
 

@@ -13,8 +13,7 @@ motion-graphics/
 ├── AGENTS.md
 ├── css/
 │   ├── brand.css    ← design tokens: colors, gradients, radii, glows, fonts
-│   └── motion.css   ← reusable components: #stage, .scene, .node, .req, …
-└── <topic-name>/
+│   └── motion.css   ← reusable components: #stage, .scene, .node, .req, …├── videos/          ← storyboard JSONs that compose narrated multi-graphic videos (see videos/README.md)└── <topic-name>/
     ├── index.html   ← the graphic itself
     └── README.md    ← standard description of what the visual is (kept in sync)
 ```
